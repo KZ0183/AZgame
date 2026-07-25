@@ -28,7 +28,7 @@
     { "word": "BUG",   "length": 3, "damage": 4,  "effect": "相手のデッキの上から2枚を墓地へ送る。" },
     { "word": "AIR",   "length": 3, "damage": 4,  "effect": "自分のスペルライン上のカードを好きな順に並べ替える。" },
     { "word": "GEM",   "length": 3, "damage": 4,  "effect": "最大エナジーを1増やす。" },
-    { "word": "MAP",   "length": 3, "damage": 4,  "effect": "相手の手札を見る。次の自分のターン、ワードのダメージ+6。" },
+    { "word": "MAP",   "length": 3, "damage": 4,  "effect": "相手の手札を見る。次に発動するワードのダメージ+6。" },
     { "word": "ROT",   "length": 3, "damage": 6,  "effect": "相手のシールドをすべて失わせる。" },
     { "word": "VOW",   "length": 3, "damage": 4,  "effect": "LPを5回復し、シールドを5得る。" },
 
