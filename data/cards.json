@@ -1,0 +1,297 @@
+{
+  "version": "0.1.0",
+  "note": "cost はスクラブル文字スコアの圧縮値（8点→7 / 10点→8）。power は母音が cost+1、子音が cost*2。deckLimit はスクラブルの文字枚数から導出。",
+  "abilityTriggers": {
+    "onPlace": "スペルラインに配置した瞬間に発動",
+    "passive": "スペルライン上にある間、常に有効",
+    "onWord": "このカードを含むワードが成立したときに発動"
+  },
+  "cards": [
+    {
+      "letter": "A",
+      "rank": 1,
+      "cost": 1,
+      "power": 2,
+      "class": "vowel",
+      "deckLimit": 4,
+      "abilityName": "エース",
+      "abilityTrigger": "onWord",
+      "abilityText": "このカードがワードの先頭にあるとき、そのワードのダメージ+3。"
+    },
+    {
+      "letter": "B",
+      "rank": 2,
+      "cost": 3,
+      "power": 6,
+      "class": "heavy",
+      "deckLimit": 2,
+      "abilityName": "バリア",
+      "abilityTrigger": "onPlace",
+      "abilityText": "シールドを3得る。"
+    },
+    {
+      "letter": "C",
+      "rank": 3,
+      "cost": 3,
+      "power": 6,
+      "class": "heavy",
+      "deckLimit": 2,
+      "abilityName": "サイクル",
+      "abilityTrigger": "onPlace",
+      "abilityText": "カードを1枚ドローする。"
+    },
+    {
+      "letter": "D",
+      "rank": 4,
+      "cost": 2,
+      "power": 4,
+      "class": "core",
+      "deckLimit": 3,
+      "abilityName": "ディフェンド",
+      "abilityTrigger": "onPlace",
+      "abilityText": "シールドを2得る。"
+    },
+    {
+      "letter": "E",
+      "rank": 5,
+      "cost": 1,
+      "power": 2,
+      "class": "vowel",
+      "deckLimit": 4,
+      "abilityName": "エコー",
+      "abilityTrigger": "onWord",
+      "abilityText": "ワード成立時、このカードは墓地へ送られずスペルラインに残る。"
+    },
+    {
+      "letter": "F",
+      "rank": 6,
+      "cost": 4,
+      "power": 8,
+      "class": "heavy",
+      "deckLimit": 2,
+      "abilityName": "フレイム",
+      "abilityTrigger": "onPlace",
+      "abilityText": "相手に2ダメージ。"
+    },
+    {
+      "letter": "G",
+      "rank": 7,
+      "cost": 2,
+      "power": 4,
+      "class": "core",
+      "deckLimit": 2,
+      "abilityName": "グロウス",
+      "abilityTrigger": "onPlace",
+      "abilityText": "最大エナジーを1増やす。"
+    },
+    {
+      "letter": "H",
+      "rank": 8,
+      "cost": 4,
+      "power": 8,
+      "class": "heavy",
+      "deckLimit": 2,
+      "abilityName": "ヒール",
+      "abilityTrigger": "onPlace",
+      "abilityText": "LPを3回復する。"
+    },
+    {
+      "letter": "I",
+      "rank": 9,
+      "cost": 1,
+      "power": 2,
+      "class": "vowel",
+      "deckLimit": 4,
+      "abilityName": "インサイト",
+      "abilityTrigger": "onPlace",
+      "abilityText": "デッキの上3枚を見て1枚を手札に加え、残りをデッキの底へ送る。"
+    },
+    {
+      "letter": "J",
+      "rank": 10,
+      "cost": 7,
+      "power": 14,
+      "class": "rare",
+      "deckLimit": 1,
+      "abilityName": "ジョルト",
+      "abilityTrigger": "onPlace",
+      "abilityText": "相手のスペルライン上のカード1枚を破壊する。"
+    },
+    {
+      "letter": "K",
+      "rank": 11,
+      "cost": 5,
+      "power": 10,
+      "class": "heavy",
+      "deckLimit": 1,
+      "abilityName": "ナイト",
+      "abilityTrigger": "passive",
+      "abilityText": "このカードがワードに含まれていない間、パワー+4。"
+    },
+    {
+      "letter": "L",
+      "rank": 12,
+      "cost": 1,
+      "power": 2,
+      "class": "core",
+      "deckLimit": 3,
+      "abilityName": "リンク",
+      "abilityTrigger": "passive",
+      "abilityText": "シークエンス判定において、このカードの順位を任意の値として扱える。"
+    },
+    {
+      "letter": "M",
+      "rank": 13,
+      "cost": 3,
+      "power": 6,
+      "class": "heavy",
+      "deckLimit": 2,
+      "abilityName": "ミラー",
+      "abilityTrigger": "onPlace",
+      "abilityText": "相手が直前に発動したワードの効果をコピーして発動する。"
+    },
+    {
+      "letter": "N",
+      "rank": 14,
+      "cost": 1,
+      "power": 2,
+      "class": "core",
+      "deckLimit": 3,
+      "abilityName": "ヌル",
+      "abilityTrigger": "onPlace",
+      "abilityText": "相手のシールドをすべて失わせる。"
+    },
+    {
+      "letter": "O",
+      "rank": 15,
+      "cost": 1,
+      "power": 2,
+      "class": "vowel",
+      "deckLimit": 3,
+      "abilityName": "オービット",
+      "abilityTrigger": "onPlace",
+      "abilityText": "自分のスペルライン上のカードを好きな順に並べ替える。"
+    },
+    {
+      "letter": "P",
+      "rank": 16,
+      "cost": 3,
+      "power": 6,
+      "class": "heavy",
+      "deckLimit": 2,
+      "abilityName": "ピアース",
+      "abilityTrigger": "onWord",
+      "abilityText": "このカードを含むワードのダメージはシールドを無視する。"
+    },
+    {
+      "letter": "Q",
+      "rank": 17,
+      "cost": 8,
+      "power": 16,
+      "class": "rare",
+      "deckLimit": 1,
+      "abilityName": "クエスト",
+      "abilityTrigger": "onPlace",
+      "abilityText": "手札をすべて捨て、5枚ドローする。"
+    },
+    {
+      "letter": "R",
+      "rank": 18,
+      "cost": 1,
+      "power": 2,
+      "class": "core",
+      "deckLimit": 3,
+      "abilityName": "ラッシュ",
+      "abilityTrigger": "onPlace",
+      "abilityText": "このターン、追加でカードを1枚配置できる。"
+    },
+    {
+      "letter": "S",
+      "rank": 19,
+      "cost": 1,
+      "power": 2,
+      "class": "core",
+      "deckLimit": 3,
+      "abilityName": "ストーム",
+      "abilityTrigger": "onWord",
+      "abilityText": "このカードを含むワードのダメージ+50%。"
+    },
+    {
+      "letter": "T",
+      "rank": 20,
+      "cost": 1,
+      "power": 2,
+      "class": "core",
+      "deckLimit": 3,
+      "abilityName": "タワー",
+      "abilityTrigger": "passive",
+      "abilityText": "このカードがスペルライン上にある間、受けるダメージを2減らす。"
+    },
+    {
+      "letter": "U",
+      "rank": 21,
+      "cost": 1,
+      "power": 2,
+      "class": "vowel",
+      "deckLimit": 3,
+      "abilityName": "ユナイト",
+      "abilityTrigger": "onPlace",
+      "abilityText": "自分の墓地から文字カード1枚を手札に戻す。"
+    },
+    {
+      "letter": "V",
+      "rank": 22,
+      "cost": 4,
+      "power": 8,
+      "class": "heavy",
+      "deckLimit": 2,
+      "abilityName": "ヴォルト",
+      "abilityTrigger": "onPlace",
+      "abilityText": "エナジーを2回復する。"
+    },
+    {
+      "letter": "W",
+      "rank": 23,
+      "cost": 4,
+      "power": 8,
+      "class": "heavy",
+      "deckLimit": 2,
+      "abilityName": "ウェーブ",
+      "abilityTrigger": "onPlace",
+      "abilityText": "相手のスペルライン上のカードをすべて1マスずつ右へずらす（はみ出したカードは破壊）。"
+    },
+    {
+      "letter": "X",
+      "rank": 24,
+      "cost": 7,
+      "power": 14,
+      "class": "rare",
+      "deckLimit": 1,
+      "abilityName": "クロス",
+      "abilityTrigger": "onPlace",
+      "abilityText": "相手のスペルライン上のカードをすべて破壊する。"
+    },
+    {
+      "letter": "Y",
+      "rank": 25,
+      "cost": 4,
+      "power": 8,
+      "class": "heavy",
+      "deckLimit": 2,
+      "abilityName": "イールド",
+      "abilityTrigger": "onPlace",
+      "abilityText": "LPを3失い、カードを3枚ドローする。"
+    },
+    {
+      "letter": "Z",
+      "rank": 26,
+      "cost": 8,
+      "power": 16,
+      "class": "rare",
+      "deckLimit": 1,
+      "abilityName": "ゼニス",
+      "abilityTrigger": "onPlace",
+      "abilityText": "相手に10ダメージ。さらにこのカードを含むワードのダメージ+15。"
+    }
+  ]
+}
