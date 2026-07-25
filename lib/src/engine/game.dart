@@ -14,9 +14,6 @@ enum PlacementError {
   /// エナジーが足りない。
   notEnoughEnergy,
 
-  /// 指定したマスがすでに埋まっている。
-  slotOccupied,
-
   /// その文字が手札にない。
   notInHand,
 
@@ -85,7 +82,7 @@ class Game {
     _shuffle(state.first.deck);
     _shuffle(state.second.deck);
     state.first.draw(kStartingHandSize);
-    state.second.draw(kStartingHandSize + 1);
+    state.second.draw(kStartingHandSize + 2);
     log.add('対戦開始。先攻は ${state.first.name}');
     beginTurn();
   }
@@ -114,7 +111,6 @@ class Game {
     final active = state.active;
     if (!active.hand.contains(letter)) return PlacementError.notInHand;
     if (active.remainingPlacements <= 0) return PlacementError.noPlacementsLeft;
-    if (!active.line.isEmptyAt(slotIndex)) return PlacementError.slotOccupied;
     if (active.energy < cardCatalog[letter]!.cost) {
       return PlacementError.notEnoughEnergy;
     }
@@ -122,6 +118,10 @@ class Game {
   }
 
   /// 手番プレイヤーが [letter] を [slotIndex] に配置する。
+  ///
+  /// 埋まっているマスにも置ける。その場合、元のカードは墓地へ送られる。
+  /// これがないと、単語にならない文字でラインが埋まった時点で手詰まりになる
+  /// （docs/game-design.md 4.1）。
   ///
   /// 配置に成功すると `onPlace` の固有能力が即座に発動する。
   /// 配置できない場合は [StateError] を投げるため、事前に
@@ -135,8 +135,15 @@ class Game {
     final active = state.active;
     active.hand.remove(letter);
     active.energy -= cardCatalog[letter]!.cost;
+
+    final replaced = active.line.removeAt(slotIndex);
+    if (replaced != null) {
+      active.graveyard.add(replaced);
+      log.add('${active.name} が $replaced を $letter で上書き');
+    }
     active.line.place(slotIndex, letter);
     active.placementsUsed++;
+    active.slotsPlacedThisTurn.add(slotIndex);
     log.add('${active.name} が $letter をマス $slotIndex に配置');
 
     final ability = cardAbilities[letter];
@@ -171,7 +178,11 @@ class Game {
     final actor = state.active;
     final opponent = state.inactive;
 
-    final sequences = findSequences(actor.line);
+    // このターン伸びたシークエンスだけがダメージを出す。盤面に置きっぱなしの
+    // 並びが毎ターン削り続けると、単語を作る動機が消えてしまう。
+    final sequences = findSequences(actor.line)
+        .where((hit) => hit.indices.any(actor.slotsPlacedThisTurn.contains))
+        .toList();
     var sequenceDamage = 0;
     for (final hit in sequences) {
       sequenceDamage += dealDamage(opponent, hit.damage, log: log);

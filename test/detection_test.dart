@@ -63,27 +63,27 @@ void main() {
       expect(hits[1].letters, ['B', 'D']);
     });
 
-    test('5 マスすべてが連番ならラン倍率 6.0 が適用される', () {
-      // A B C D E: パワー合計 2+6+6+4+2 = 20 → 20 * 6.0 = 120
+    test('5 マスすべてが連番ならラン倍率 1.5 が適用される', () {
+      // A B C D E: パワー合計 2+6+6+4+2 = 20 → 20 * 1.5 = 30
       final hit = findSequences(lineOf('ABCDE')).single;
       expect(hit.length, 5);
       expect(hit.isRun, isTrue);
       expect(hit.powerSum, 20);
-      expect(hit.damage, 120);
+      expect(hit.damage, 30);
     });
 
     test('K はワードに含まれないときパワー +4 される', () {
-      // A(2) K(10+4=14) → 昇順、長さ 2、倍率 1.0
+      // A(2) K(10+4=14) → 昇順、長さ 2、倍率 0.25
       final hit = findSequences(lineOf('AK___')).single;
       expect(hit.powerSum, 2 + 14);
-      expect(hit.damage, 16);
+      expect(hit.damage, 4);
     });
 
     test('ダメージは切り捨てで計算される', () {
-      // A(2) B(6) → ラン長 2、倍率 1.5 → 8 * 1.5 = 12
-      expect(findSequences(lineOf('AB___')).single.damage, 12);
-      // A(2) C(6) → 昇順長 2、倍率 1.0 → 8
-      expect(findSequences(lineOf('AC___')).single.damage, 8);
+      // A(2) B(6) → ラン長 2、倍率 0.4 → 8 * 0.4 = 3.2 → 3
+      expect(findSequences(lineOf('AB___')).single.damage, 3);
+      // A(2) C(6) → 昇順長 2、倍率 0.25 → 2
+      expect(findSequences(lineOf('AC___')).single.damage, 2);
     });
   });
 

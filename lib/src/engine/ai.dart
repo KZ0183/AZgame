@@ -56,7 +56,7 @@ class SimpleAi {
 
     AiMove? best;
     for (final letter in me.hand.toSet()) {
-      for (final slot in me.line.emptyIndices) {
+      for (var slot = 0; slot < SpellLine.slotCount; slot++) {
         if (game.validatePlacement(letter, slot) != null) continue;
         final score = _score(me, letter, slot);
         if (best == null || score > best.score) {
@@ -68,8 +68,13 @@ class SimpleAi {
   }
 
   int _score(PlayerState me, String letter, int slot) {
-    final simulated = me.line.copy()..place(slot, letter);
+    final simulated = me.line.copy()
+      ..removeAt(slot)
+      ..place(slot, letter);
     var score = 0;
+
+    // 上書きは既存のカードを失うぶん、明確に得でなければ選ばない。
+    if (!me.line.isEmptyAt(slot)) score -= 30;
 
     final word = findBestWord(simulated);
     if (word != null) {

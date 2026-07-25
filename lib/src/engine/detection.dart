@@ -11,18 +11,18 @@ import 'models.dart';
 ///
 /// docs/game-design.md 6.1 の表に対応する。
 const Map<int, double> sequenceMultiplier = {
-  2: 1.0,
-  3: 1.5,
-  4: 2.0,
-  5: 3.0,
+  2: 0.25,
+  3: 0.4,
+  4: 0.55,
+  5: 0.75,
 };
 
 /// 全ステップが連番だった場合（ラン）の倍率。
 const Map<int, double> runMultiplier = {
-  2: 1.5,
-  3: 2.5,
-  4: 4.0,
-  5: 6.0,
+  2: 0.4,
+  3: 0.65,
+  4: 1.0,
+  5: 1.5,
 };
 
 /// ワイルドカードとして振る舞う文字。
@@ -57,6 +57,9 @@ class SequenceHit {
   final int damage;
 
   int get length => letters.length;
+
+  /// このシークエンスが占有しているマスの索引一覧。
+  List<int> get indices => [for (var i = 0; i < length; i++) start + i];
 
   double get multiplier =>
       (isRun ? runMultiplier[length] : sequenceMultiplier[length]) ?? 1.0;

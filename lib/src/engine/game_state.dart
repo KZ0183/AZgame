@@ -7,7 +7,7 @@ import '../data/catalog.g.dart';
 import 'models.dart';
 
 /// 初期ライフポイント。
-const int kStartingLp = 50;
+const int kStartingLp = 80;
 
 /// 1 ターンに配置できるカードの基本枚数。
 ///
@@ -56,6 +56,13 @@ class PlayerState {
   /// このターン限定の追加配置枚数（`R` / `GO`）。
   int bonusPlacements = 0;
 
+  /// このターンにカードを置いたマスの索引。
+  ///
+  /// シークエンスは「このターン伸びたもの」だけがダメージを出す。
+  /// 盤面を寝かせているだけで毎ターン削れてしまうと、単語を作るという
+  /// ゲームの核が機能しなくなるため（docs/game-design.md 6.1）。
+  final Set<int> slotsPlacedThisTurn = {};
+
   /// 今後のターンに課される配置制限のキュー。索引 0 が次の自分のターン。
   ///
   /// `ICE` は `[1]`、`FROST` は `[1, 1]`、`LOCK` は `[0]` を課す。
@@ -98,6 +105,7 @@ class PlayerState {
     }
     placementsUsed = 0;
     bonusPlacements = 0;
+    slotsPlacedThisTurn.clear();
   }
 
   /// [turns] ターンのあいだ、配置枚数を [limit] 以下に制限する。

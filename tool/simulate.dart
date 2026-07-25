@@ -24,11 +24,15 @@ class MatchRecord {
     required this.wordUsage,
     required this.wordDamage,
     required this.sequenceDamage,
+    required this.byDeckOut,
   });
 
   final int turns;
   final bool firstWon;
   final bool decided;
+
+  /// LP ではなくデッキ切れで決着したか。
+  final bool byDeckOut;
   final Map<String, int> wordUsage;
   final int wordDamage;
   final int sequenceDamage;
@@ -72,6 +76,7 @@ MatchRecord playMatch(DeckList firstDeck, DeckList secondDeck, int seed) {
     turns: turns,
     firstWon: identical(state.winner, state.first),
     decided: state.isOver,
+    byDeckOut: state.first.deckedOut || state.second.deckedOut,
     wordUsage: wordUsage,
     wordDamage: wordDamage,
     sequenceDamage: sequenceDamage,
@@ -104,6 +109,16 @@ void main(List<String> args) {
           '（≒ ${(_avg(turns) / 2).toStringAsFixed(1)} ターン）')
       ..writeln('  中央値      : ${turns[turns.length ~/ 2]} 手番')
       ..writeln('  最短 / 最長 : ${turns.first} / ${turns.last} 手番');
+  }
+
+  final deckOuts = decided.where((r) => r.byDeckOut).length;
+  stdout.writeln('  デッキ切れ決着: ${_pct(deckOuts / decided.length)}'
+      '（高いほど「殴り合いで決着しない」ことを意味する）');
+
+  final byLp = decided.where((r) => !r.byDeckOut).map((r) => r.turns).toList()
+    ..sort();
+  if (byLp.isNotEmpty) {
+    stdout.writeln('  LP 決着のみの中央値: ${byLp[byLp.length ~/ 2]} 手番');
   }
 
   final firstWins = decided.where((r) => r.firstWon).length;

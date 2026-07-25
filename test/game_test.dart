@@ -36,11 +36,17 @@ Game buildGame({
 }
 
 /// スペルラインを `'ACE__'` 形式で直接セットする。
+///
+/// シークエンスは「このターン置かれたマス」を含むものだけがダメージを出すため、
+/// 置いたマスを [PlayerState.slotsPlacedThisTurn] にも登録する。
 void setLine(PlayerState player, String pattern) {
   player.line.clear();
+  player.slotsPlacedThisTurn.clear();
   for (var i = 0; i < pattern.length; i++) {
     final char = pattern[i];
-    if (char != '_') player.line.place(i, char);
+    if (char == '_') continue;
+    player.line.place(i, char);
+    player.slotsPlacedThisTurn.add(i);
   }
 }
 
@@ -196,11 +202,11 @@ void main() {
 
       expect(result.sequences.length, 1);
       expect(result.sequences.single.letters, ['A', 'C', 'E']);
-      // パワー合計 10 × 倍率 1.5 = 15
-      expect(result.sequences.single.damage, 15);
-      expect(result.sequenceDamage, 15);
+      // パワー合計 10 × 倍率 0.4 = 4
+      expect(result.sequences.single.damage, 4);
+      expect(result.sequenceDamage, 4);
       expect(result.wordDamage, 21);
-      expect(game.state.second.lp, kStartingLp - 15 - 21);
+      expect(game.state.second.lp, kStartingLp - 4 - 21);
     });
   });
 
@@ -228,12 +234,13 @@ void main() {
       expect(game.state.first.maxEnergy, kMaxEnergyCap);
     });
 
-    test('後攻は先攻より 1 枚多く初期手札を持つ', () {
+    test('後攻は先攻より 2 枚多く初期手札を持つ（先攻有利の補正）', () {
       final game = buildGame();
       game.start();
       // 先攻は 5 枚配って 1 ターン目に 1 枚引くので 6 枚
       expect(game.state.first.hand.length, kStartingHandSize + 1);
-      expect(game.state.second.hand.length, kStartingHandSize + 1);
+      // 後攻は 7 枚配られ、自分のターンが来た時点でさらに 1 枚引く
+      expect(game.state.second.hand.length, kStartingHandSize + 2);
     });
 
     test('エナジーが足りないカードは配置できない', () {
@@ -266,13 +273,17 @@ void main() {
       expect(game.state.first.remainingPlacements, kBasePlacementsPerTurn);
     });
 
-    test('埋まっているマスには置けない', () {
+    test('埋まっているマスには上書きでき、元のカードは墓地へ送られる', () {
       final game = buildGame();
       game.start();
       game.state.first.energy = 10;
-      game.state.first.hand.addAll(['A', 'A']);
+      game.state.first.hand.addAll(['A', 'B']);
       game.placeCard('A', 0);
-      expect(game.validatePlacement('A', 0), PlacementError.slotOccupied);
+      expect(game.validatePlacement('B', 0), isNull);
+
+      game.placeCard('B', 0);
+      expect(game.state.first.line[0], 'B');
+      expect(game.state.first.graveyard, contains('A'));
     });
 
     test('ICE は相手の次のターンの配置枚数を 1 に制限する', () {
