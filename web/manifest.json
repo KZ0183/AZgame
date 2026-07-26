@@ -1,11 +1,11 @@
 {
-    "name": "azgame",
-    "short_name": "azgame",
+    "name": "AZ GAME",
+    "short_name": "AZ GAME",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#12141C",
+    "theme_color": "#12141C",
+    "description": "A〜Z の文字カードを並べて単語を紡ぐ対戦カードゲーム",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

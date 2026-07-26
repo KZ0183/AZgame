@@ -1,0 +1,103 @@
+name: Android APK を配布
+
+# Android 実機にインストールして確認するための導線。
+#
+# GitHub の「Artifacts」は必ず zip で固められて配布されるため、スマホから
+# 直接インストールできない。そこで Release の添付ファイルとしても置く。
+# Release の添付は .apk のまま配信されるので、スマホのブラウザから
+# ダウンロードしてそのままインストールできる。
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'claude/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: 3.44.8
+  # 開発ビルドを置いておく固定タグ。毎回同じ場所が最新になる。
+  DEV_TAG: dev-build
+
+jobs:
+  build:
+    name: APK をビルド
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: APK をビルド
+        # android/app/build.gradle.kts の release は debug キーで署名される
+        # 設定になっているため、署名鍵を用意しなくてもインストールできる。
+        # ストア配信の際は正式な署名設定に差し替える必要がある。
+        run: flutter build apk --release
+
+      - name: ビルド情報を添えてリネーム
+        id: rename
+        run: |
+          SHORT_SHA="$(git rev-parse --short HEAD)"
+          NAME="azgame-${SHORT_SHA}.apk"
+          mv build/app/outputs/flutter-apk/app-release.apk "build/app/outputs/flutter-apk/${NAME}"
+          echo "apk_path=build/app/outputs/flutter-apk/${NAME}" >> "$GITHUB_OUTPUT"
+          echo "apk_name=${NAME}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: azgame-apk
+          path: ${{ steps.rename.outputs.apk_path }}
+          if-no-files-found: error
+
+      - name: 開発ビルドの Release を更新
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          NOTES="ブランチ \`${GITHUB_REF_NAME}\` の \`${{ steps.rename.outputs.short_sha }}\` から自動生成した開発ビルドです。
+
+          このリンクを Android のブラウザで開くと、そのままインストールできます。
+          「提供元不明のアプリ」の許可を求められた場合は、ブラウザに対して許可してください。
+
+          デバッグ鍵で署名しているため、ストア配信には使えません。"
+
+          if gh release view "${DEV_TAG}" >/dev/null 2>&1; then
+            gh release edit "${DEV_TAG}" --notes "${NOTES}" --prerelease
+          else
+            gh release create "${DEV_TAG}" \
+              --title "開発ビルド（最新）" \
+              --notes "${NOTES}" \
+              --prerelease
+          fi
+
+          # 同名の添付が残っていると衝突するため、いったん全部消してから貼り直す。
+          gh release view "${DEV_TAG}" --json assets --jq '.assets[].name' \
+            | while read -r asset; do
+                [ -n "$asset" ] && gh release delete-asset "${DEV_TAG}" "$asset" --yes || true
+              done
+          gh release upload "${DEV_TAG}" "${{ steps.rename.outputs.apk_path }}" --clobber
+
+      - name: インストール手順を表示
+        run: |
+          {
+            echo '## Android 実機にインストール'
+            echo ''
+            echo "1. スマホのブラウザで **${{ github.server_url }}/${{ github.repository }}/releases/tag/${DEV_TAG}** を開く"
+            echo "2. \`${{ steps.rename.outputs.apk_name }}\` をタップしてダウンロード"
+            echo '3. 通知またはダウンロード一覧からタップしてインストール'
+          } >> "$GITHUB_STEP_SUMMARY"

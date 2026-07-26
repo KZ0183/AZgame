@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: 3.44.8
+
+jobs:
+  verify:
+    name: 静的解析とテスト
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: 依存関係を取得
+        run: flutter pub get
+
+      - name: カタログが data/*.json と一致しているか確認
+        # lib/src/data/catalog.g.dart は data/*.json から生成される。
+        # JSON だけ編集して再生成を忘れると、実装と設計がずれたまま進んでしまう。
+        run: |
+          dart run tool/generate_catalog.dart
+          if ! git diff --quiet -- lib/src/data/catalog.g.dart; then
+            echo "::error::catalog.g.dart が data/*.json と一致していません。"
+            echo "::error::dart run tool/generate_catalog.dart を実行してコミットしてください。"
+            git diff -- lib/src/data/catalog.g.dart
+            exit 1
+          fi
+
+      - name: 静的解析
+        run: flutter analyze
+
+      - name: テスト
+        run: flutter test
+
+      - name: バランス実測
+        # 数値をいじった結果、試合時間や決着率が壊れていないかを毎回見る。
+        # 閾値で落とすのではなく、変化をログに残して気づけるようにする。
+        run: |
+          {
+            echo '## バランス実測'
+            echo '```'
+            dart run tool/simulate.dart 300
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

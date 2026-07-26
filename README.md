@@ -16,6 +16,7 @@ A〜Z の 26 種の文字カードでデッキを組み、盤面に文字を並�
 | ファイル | 内容 |
 | --- | --- |
 | [`docs/game-design.md`](docs/game-design.md) | ゲームデザイン仕様書。コンセプト、ルール、判定処理 |
+| [`docs/testing-on-device.md`](docs/testing-on-device.md) | スマホ実機で確認する手順 |
 | [`data/cards.json`](data/cards.json) | 全 26 文字のステータスと固有能力 |
 | [`data/words.json`](data/words.json) | コンボワードと効果（初期 48 語） |
 
@@ -53,6 +54,26 @@ flutter test                          # テスト
 dart run tool/generate_catalog.dart   # data/*.json を編集したら再生成
 dart run tool/simulate.dart 500       # バランス実測
 ```
+
+## スマホで確認する
+
+push すると GitHub Actions が自動でビルドし、2 つの経路で実機から触れるようになる。
+手順は [`docs/testing-on-device.md`](docs/testing-on-device.md) を参照。
+
+| 経路 | 対応端末 | 入口 |
+| --- | --- | --- |
+| Web（推奨） | iPhone / Android | GitHub Pages の URL をブラウザで開く |
+| APK | Android のみ | Releases の「開発ビルド（最新）」から `.apk` を落とす |
+
+初回だけ **Settings → Pages → Source** を **GitHub Actions** に変える必要がある。
+
+### CI
+
+| ワークフロー | 内容 |
+| --- | --- |
+| `ci.yml` | 静的解析・テスト・カタログ整合チェック・バランス実測 |
+| `deploy-web.yml` | Web をビルドして GitHub Pages に公開 |
+| `android-apk.yml` | APK をビルドして Release に添付 |
 
 ## 既知の制約
 
