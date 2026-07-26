@@ -1,8 +1,9 @@
-/// 非同期対戦で相手デッキを操作する AI。
+/// 対戦相手を務める AI。
+///
+/// 完全情報ゲームなので隠された情報はなく、AI は人間と同じ盤面を見る。
 library;
 
 import '../data/catalog.g.dart';
-import 'board.dart';
 import 'detection.dart';
 import 'game.dart';
 import 'models.dart';
@@ -11,125 +12,117 @@ import 'models.dart';
 class AiMove {
   const AiMove({
     required this.letter,
-    required this.lane,
+    required this.cell,
     required this.score,
   });
 
   final String letter;
-  final int lane;
+  final Cell cell;
   final int score;
 
   @override
-  String toString() => 'AiMove($letter → レーン$lane, score $score)';
+  String toString() => 'AiMove($letter → $cell, score $score)';
 }
 
-/// 1 手先を評価する貪欲な AI。
+/// 1 手先までを評価する貪欲な AI。
 ///
-/// 陣形の価値、レーンの相性、マナ基盤の 3 つを重み付けして最善手を選ぶ。
-/// 深い読みはしないが、「相手の弱い文字を討ち取れるレーンに置く」「陣形が
-/// 伸びる位置に置く」という基本的な判断は成立する。
+/// 「今この手で何枚奪えるか」を最優先し、次に並びの長さ、
+/// 最後に将来単語を作れる見込みを見る。読みの深さはないが、
+/// 見えている捕獲を逃さない程度には打てる。
 class SimpleAi {
   const SimpleAi();
 
-  /// 手番が終わるまで文字を出し続ける。
-  ///
-  /// 出すたびに登場時能力が盤面を変えるため、毎回評価し直す。
-  void playTurn(Game game) {
-    while (true) {
-      final move = bestMove(game);
-      if (move == null) break;
-      game.playCard(move.letter, move.lane);
-    }
-  }
-
-  /// 現在の盤面で最善と評価される手を返す。出せる手がなければ `null`。
-  AiMove? bestMove(Game game) {
-    final me = game.state.active;
+  /// 現在の局面で最善と評価される手を返す。置ける手がなければ `null`。
+  AiMove? bestMove(AzGame game) {
+    final me = game.turn;
     AiMove? best;
 
-    for (final letter in me.hand.toSet()) {
-      for (final lane in me.field.emptyIndices) {
-        if (game.validatePlay(letter, lane) != null) continue;
-        final score = _score(game, letter, lane);
+    for (final letter in game.distinctHandOf(me)) {
+      for (final cell in game.legalCells) {
+        final score = _score(game, letter, cell, me);
         if (best == null || score > best.score) {
-          best = AiMove(letter: letter, lane: lane, score: score);
+          best = AiMove(letter: letter, cell: cell, score: score);
         }
       }
     }
     return best;
   }
 
-  int _score(Game game, String letter, int lane) {
-    final me = game.state.active;
-    final foe = game.state.inactive;
-    final card = cardCatalog[letter]!;
+  /// 手番が終わるまで 1 手打つ。
+  MoveResult? playTurn(AzGame game) {
+    final move = bestMove(game);
+    if (move == null) return null;
+    return game.play(move.letter, move.cell);
+  }
 
-    final simulated = me.field.copy()..place(lane, Permanent(letter));
-    final formations = findFormations(simulated);
+  int _score(AzGame game, String letter, Cell cell, Owner me) {
+    final board = game.board.copy()..place(cell, Piece(letter, me));
+    final formations = findFormationsAt(board, cell, me);
 
     var score = 0;
 
-    // 陣形の価値。ワードは維持するほど効くので重く見る。
-    for (final formation in formations.words) {
-      score += _effectValue(formation.word.effect) * 4;
+    // 実際に奪える枚数。盤上の駒数を競うルールなので、1 枚の捕獲は
+    // 相手 −1・自分 +1 の 2 点ぶんに相当する。最優先で評価する。
+    final taken = <Cell>{};
+    for (final formation in formations) {
+      final candidates = captureCandidates(board, formation, me)
+          .where((c) => !taken.contains(c))
+          .take(formation.captureLimit);
+      taken.addAll(candidates);
     }
-    for (final sequence in formations.sequences) {
-      score += sequence.powerBonus * 3;
+    score += taken.length * 24;
+
+    // 並びそのものの価値。奪う相手がいなくても、長い並びは
+    // 次の手で捕獲網になるため評価しておく。
+    for (final formation in formations) {
+      score += formation.cells.length * 5;
     }
 
-    // レーンの相性。相手と対峙するか、素通しで殴れるか。
-    final blocker = foe.field[lane];
-    if (blocker == null) {
-      score += card.power * 3;
-    } else {
-      final blockerCard = cardCatalog[blocker.letter]!;
-      // 討ち取れるなら大きな得
-      if (card.power >= blockerCard.toughness) score += 18;
-      // 一方的に討ち取られるなら避けたい
-      if (blockerCard.power >= card.toughness) score -= 14;
-    }
+    // 将来の見込み。この駒が縦横で自分の駒と繋がるほど、単語が伸びやすい。
+    score += _adjacentOwn(board, cell, me) * 3;
 
-    // マナ基盤。母音は序盤ほど価値が高い。
-    if (card.isVowel) {
-      score += 30 - me.energyIncome * 4;
-    } else {
-      // 重い文字を早く置けるならそれ自体が強み
-      score += card.cost * 2;
-    }
+    // 相手の並びの隣は危険地帯。置けば次の手で奪われうる。
+    score -= _adjacentOpponentFormation(game.board, cell, me) * 8;
+
+    // 同じ文字を複数持っているなら、余っている方から使う。
+    if (game.countInHand(me, letter) > 1) score += 2;
+
+    // 中央は縦横どちらの並びにも関与しやすい。
+    score += (2 - (cell.row - 2).abs()) + (2 - (cell.col - 2).abs());
 
     return score;
   }
 
-  /// ワード陣形の効果を大まかな点数に均す。
+  int _adjacentOwn(Board board, Cell cell, Owner me) => cell.neighbours
+      .where((neighbour) => board.at(neighbour)?.owner == me)
+      .length;
+
+  /// [cell] の隣に、相手の駒が何枚あるか。
   ///
-  /// 継続効果どうしを比べるための粗い指標。厳密さより、AI が「強い陣形を
-  /// 優先する」という方向に動くことを重視している。
-  int _effectValue(WordEffect effect) {
-    var value = 0;
-    value += effect.powerBonus * 4;
-    value += effect.toughnessBonus * 3;
-    value += effect.upkeepDamage * 4;
-    value += effect.upkeepHeal * 2;
-    value += effect.upkeepShield * 2;
-    value += effect.upkeepEnergy * 3;
-    value += effect.upkeepDraw * 5;
-    value += effect.freeze * 5;
-    if (effect.pierce) value += 6;
-    return value;
-  }
+  /// 相手の駒が固まっている場所ほど、相手が単語を成立させたときに
+  /// 巻き込まれて奪われやすい。
+  int _adjacentOpponentFormation(Board board, Cell cell, Owner me) =>
+      cell.neighbours
+          .where((neighbour) => board.at(neighbour)?.owner == me.opponent)
+          .length;
 }
 
-/// 盤面評価をデバッグ表示するための補助。
-String describeBoard(BoardView board) {
-  final buffer = StringBuffer('${board.player.name}: ');
-  for (var lane = 0; lane < Battlefield.laneCount; lane++) {
-    final permanent = board.field[lane];
-    if (permanent == null) {
-      buffer.write('[ ] ');
-      continue;
+/// 盤面を人間が読める形に整える。デバッグとログ表示に使う。
+String describeBoard(Board board) {
+  final buffer = StringBuffer();
+  for (var row = 0; row < Board.size; row++) {
+    for (var col = 0; col < Board.size; col++) {
+      final piece = board.at(Cell(row, col));
+      buffer.write(piece == null
+          ? ' . '
+          : piece.owner == Owner.first
+              ? ' ${piece.letter} '
+              : '(${piece.letter})');
     }
-    buffer.write('[${permanent.letter} '
-        '${board.powerOf(lane)}/${board.toughnessOf(lane)}] ');
+    buffer.writeln();
   }
-  return buffer.toString().trimRight();
+  return buffer.toString();
 }
+
+/// 文字が母音かどうか。序盤の駒選びで参照する。
+bool isVowel(String letter) => cardCatalog[letter]!.isVowel;

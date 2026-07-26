@@ -1,364 +1,194 @@
-/// ターン進行と戦闘の解決。エンジンの入口となるクラス。
+/// 対戦の進行。エンジンの入口となるクラス。
 library;
 
-import '../data/catalog.g.dart';
-import 'board.dart';
 import 'detection.dart';
-import 'effects.dart';
-import 'game_state.dart';
 import 'models.dart';
 
-/// 文字を出せなかった理由。
-enum PlayError {
-  /// その文字が手札にない。
+/// 駒を置けなかった理由。
+enum MoveError {
+  /// その文字を持ち駒に持っていない。
   notInHand,
 
-  /// このターンの母音はもう出している。
-  vowelLimitReached,
-
-  /// エナジーが足りない。
-  notEnoughEnergy,
-
-  /// 指定したレーンがすでに埋まっている。
-  laneOccupied,
+  /// 指定したマスがすでに埋まっている。
+  cellOccupied,
 
   /// すでに決着がついている。
   gameOver,
 }
 
-/// レーン 1 本ぶんの戦闘結果。UI の演出に使う。
-class LaneCombat {
-  const LaneCombat({
-    required this.lane,
-    required this.attacker,
-    required this.power,
-    required this.blocker,
-    required this.damageToPlayer,
-    required this.attackerDestroyed,
-    required this.blockerDestroyed,
+/// 1 手の結果。
+class MoveResult {
+  const MoveResult({
+    required this.letter,
+    required this.cell,
+    required this.formations,
+    required this.captured,
   });
 
-  final int lane;
-  final String attacker;
-  final int power;
+  final String letter;
+  final Cell cell;
 
-  /// 対峙していた相手の文字。いなければ `null`。
-  final String? blocker;
+  /// この手で成立した並び。
+  final List<Formation> formations;
 
-  /// 相手 LP に通ったダメージ。
-  final int damageToPlayer;
+  /// 奪った駒（文字）。
+  final List<String> captured;
 
-  final bool attackerDestroyed;
-  final bool blockerDestroyed;
+  bool get scored => formations.isNotEmpty;
 
   @override
-  String toString() => 'LaneCombat($lane: $attacker($power) '
-      'vs ${blocker ?? "本体"} → $damageToPlayer)';
+  String toString() => '$letter→$cell'
+      '${formations.isEmpty ? "" : " ${formations.join(",")}"}'
+      '${captured.isEmpty ? "" : " 捕獲:${captured.join()}"}';
 }
 
-/// 1 ターンぶんの戦闘結果。
-class CombatResult {
-  const CombatResult({required this.lanes, required this.totalDamage});
+/// 捕獲する駒を選ぶ関数。候補から [limit] 枚までを選んで返す。
+typedef CaptureChooser = List<Cell> Function(
+  Formation formation,
+  List<Cell> candidates,
+  int limit,
+);
 
-  final List<LaneCombat> lanes;
+/// 既定の捕獲選択。読む順に先頭から取る。
+List<Cell> takeInReadingOrder(
+  Formation formation,
+  List<Cell> candidates,
+  int limit,
+) =>
+    candidates.take(limit).toList();
 
-  /// 相手 LP に通った合計ダメージ。
-  final int totalDamage;
+/// 対戦中に起きた出来事の記録。
+class GameLog {
+  final List<String> entries = [];
+
+  void add(String message) => entries.add(message);
 
   @override
-  String toString() =>
-      'CombatResult(${lanes.length} レーン, 合計 $totalDamage ダメージ)';
+  String toString() => entries.join('\n');
 }
 
 /// 対戦を進行させるエンジン。
-class Game {
-  Game({
-    required this.state,
-    required this.firstChooser,
-    required this.secondChooser,
-    GameLog? log,
-  }) : log = log ?? GameLog();
+///
+/// 乱数を一切使わない。同じ手順を再生すれば必ず同じ局面になる。
+class AzGame {
+  AzGame({GameLog? log}) : log = log ?? GameLog() {
+    for (final owner in Owner.values) {
+      _hands[owner] = [
+        for (var i = 0; i < 26; i++) String.fromCharCode(65 + i),
+      ];
+    }
+  }
 
-  final GameState state;
-  final Chooser firstChooser;
-  final Chooser secondChooser;
+  /// 手数の上限。これを超えたら盤上の駒数で決着する。
+  static const int maxMoves = 24;
+
+  final Board board = Board();
   final GameLog log;
 
-  Chooser chooserFor(PlayerState player) =>
-      identical(player, state.first) ? firstChooser : secondChooser;
+  final Map<Owner, List<String>> _hands = {};
 
-  /// 手番プレイヤーの盤面評価。
-  BoardView get activeBoard => buildBoard(state.active, state.inactive);
+  /// 手番。
+  Owner turn = Owner.first;
 
-  /// 相手の盤面評価。
-  BoardView get inactiveBoard => buildBoard(state.inactive, state.active);
+  /// これまでに指された手数。
+  int moveCount = 0;
 
-  BoardView boardOf(PlayerState player) =>
-      buildBoard(player, state.opponentOf(player));
+  /// [owner] の持ち駒。読み取り専用。
+  List<String> handOf(Owner owner) => List<String>.unmodifiable(_hands[owner]!);
 
-  /// 対戦を開始する。デッキをシャッフルし、初期手札を配り、先攻の 1 手番目を始める。
-  void start() {
-    _shuffle(state.first.deck);
-    _shuffle(state.second.deck);
-    state.first.draw(kStartingHandSize);
-    state.second.draw(kStartingHandSize);
-    log.add('対戦開始。先攻は ${state.first.name}');
-    beginTurn();
+  /// [owner] が持っている文字の種類（重複を除く）。表示と探索に使う。
+  List<String> distinctHandOf(Owner owner) {
+    final letters = _hands[owner]!.toSet().toList()..sort();
+    return letters;
   }
 
-  /// 手番プレイヤーのターンを開始する。
-  ///
-  /// マナ回復 → 召喚酔い解除 → 相手陣形による拘束 → 毎ターン能力 →
-  /// 陣形の継続効果 → ドロー の順に処理する。
-  void beginTurn() {
-    if (state.isOver) return;
-    state.turnNumber++;
-    final active = state.active;
-    final opponent = state.inactive;
+  /// [owner] が同じ文字を何枚持っているか。
+  int countInHand(Owner owner, String letter) =>
+      _hands[owner]!.where((l) => l == letter).length;
 
-    active.vowelsPlayedThisTurn = 0;
+  bool _canMove(Owner owner) =>
+      _hands[owner]!.isNotEmpty && !board.isFull;
 
-    // 前のターンから戦場にいる文字は召喚酔いが解ける。
-    for (final permanent in active.field.occupants) {
-      permanent.summoningSick = false;
-      permanent.frozen = false;
-    }
+  bool get isOver =>
+      moveCount >= maxMoves ||
+      board.isFull ||
+      (!_canMove(Owner.first) && !_canMove(Owner.second));
 
-    // マナ。エナジーは持ち越さず、戦場の母音が生む量に戻る。
-    active.energy = active.energyIncome;
-
-    // 相手のワード陣形による拘束（FROST など）を受ける。
-    _applyFreeze(active, opponent);
-
-    // 毎ターン能力。左のレーンから順に解決する。
-    for (final lane in active.field.occupiedIndices) {
-      final permanent = active.field[lane];
-      if (permanent == null) continue;
-      final ability = upkeepAbilities[permanent.letter];
-      if (ability == null) continue;
-      ability(AbilityContext(
-        game: state,
-        actor: active,
-        opponent: opponent,
-        chooser: chooserFor(active),
-        log: log,
-        lane: lane,
-      ));
-    }
-
-    // ワード陣形の継続効果のうち、ターン開始時に働くもの。
-    final effect = boardOf(active).effect;
-    if (effect.upkeepDamage > 0) {
-      dealDamage(opponent, effect.upkeepDamage, log: log);
-    }
-    if (effect.upkeepHeal > 0) active.heal(effect.upkeepHeal);
-    if (effect.upkeepShield > 0) active.gainShield(effect.upkeepShield);
-    if (effect.upkeepEnergy > 0) active.gainEnergy(effect.upkeepEnergy);
-    if (effect.upkeepDraw > 0) active.draw(effect.upkeepDraw);
-
-    // 先攻の 1 手番目はドローしない。MTG と同じ先攻有利の是正。
-    if (state.turnNumber > 1) active.draw(1);
-    _cleanUpDestroyed();
-
-    log.add('--- 手番 ${state.turnNumber}: ${active.name} '
-        '(E ${active.energy}) ---');
+  /// 勝者。引き分けなら `null`。
+  Owner? get winner {
+    if (!isOver) return null;
+    final first = board.countOf(Owner.first);
+    final second = board.countOf(Owner.second);
+    if (first == second) return null;
+    return first > second ? Owner.first : Owner.second;
   }
 
-  /// 相手のワード陣形が持つ拘束を、手番プレイヤーの文字に割り当てる。
-  ///
-  /// パワーの高い文字から順に止める。放っておけば一番痛い文字を止めるのが
-  /// 拘束側の意図に沿うため。
-  void _applyFreeze(PlayerState active, PlayerState opponent) {
-    final freeze = boardOf(opponent).effect.freeze;
-    if (freeze <= 0) return;
+  /// 手番プレイヤーが置けるマス。
+  List<Cell> get legalCells => board.emptyCells;
 
-    final board = boardOf(active);
-    final lanes = active.field.occupiedIndices
-      ..sort((a, b) => board.powerOf(b).compareTo(board.powerOf(a)));
-    for (final lane in lanes.take(freeze)) {
-      active.field[lane]!.frozen = true;
-    }
-    if (lanes.isNotEmpty) {
-      log.add('${active.name} の文字 ${lanes.take(freeze).length} 体が拘束された');
-    }
-  }
-
-  /// [letter] を [lane] に出せるか判定する。出せるなら `null` を返す。
-  PlayError? validatePlay(String letter, int lane) {
-    if (state.isOver) return PlayError.gameOver;
-    final active = state.active;
-    if (!active.hand.contains(letter)) return PlayError.notInHand;
-    if (!active.field.isEmptyAt(lane)) return PlayError.laneOccupied;
-
-    final card = cardCatalog[letter]!;
-    if (card.isVowel) {
-      if (!active.canPlayVowel) return PlayError.vowelLimitReached;
-      return null;
-    }
-    if (active.energy < card.cost) return PlayError.notEnoughEnergy;
+  /// [letter] を [cell] に置けるか。置けるなら `null` を返す。
+  MoveError? validate(String letter, Cell cell) {
+    if (isOver) return MoveError.gameOver;
+    if (!_hands[turn]!.contains(letter)) return MoveError.notInHand;
+    if (!board.isEmptyAt(cell)) return MoveError.cellOccupied;
     return null;
   }
 
-  /// 手番プレイヤーが [letter] を [lane] に出す。
+  /// 手番プレイヤーが [letter] を [cell] に置く。
   ///
-  /// 母音はエナジーを消費せず、出た瞬間から生産を始める（MTG の土地と同じ）。
-  /// 子音はエナジーを支払う。どちらも登場時能力が即座に発動する。
-  void playCard(String letter, int lane) {
-    final error = validatePlay(letter, lane);
-    if (error != null) {
-      throw StateError('$letter をレーン $lane に出せません: $error');
-    }
-
-    final active = state.active;
-    final card = cardCatalog[letter]!;
-
-    active.hand.remove(letter);
-    if (card.isVowel) {
-      active.vowelsPlayedThisTurn++;
-      // 出したターンからマナを生む。
-      active.gainEnergy(card.energyProduced);
-    } else {
-      active.energy -= card.cost;
-    }
-
-    active.field.place(lane, Permanent(letter));
-    log.add('${active.name} が $letter をレーン $lane に出した');
-
-    final ability = onPlayAbilities[letter];
-    if (ability != null) {
-      ability(AbilityContext(
-        game: state,
-        actor: active,
-        opponent: state.inactive,
-        chooser: chooserFor(active),
-        log: log,
-        lane: lane,
-      ));
-    }
-    _cleanUpDestroyed();
-  }
-
-  /// ターンを終了する。戦闘を解決し、手番を相手に渡す。
-  CombatResult endTurn() {
-    final result = resolveCombat();
-    _clearDamage();
-    _enforceHandLimit(state.active);
-
-    if (!state.isOver) {
-      state.isFirstPlayerTurn = !state.isFirstPlayerTurn;
-      beginTurn();
-    }
-    return result;
-  }
-
-  /// 戦闘フェイズ。攻撃可能な自分の文字が一斉にレーンを攻撃する。
-  ///
-  /// 攻撃するかどうかの選択もブロッカーの宣言もない。誰と戦うかはレーンで
-  /// 自動的に決まる（docs/game-design.md 6 章）。
-  CombatResult resolveCombat() {
-    final attacker = state.active;
-    final defender = state.inactive;
-    final attackerBoard = buildBoard(attacker, defender);
-    final defenderBoard = buildBoard(defender, attacker);
-
-    final lanes = <LaneCombat>[];
-    var totalDamage = 0;
-
-    for (var lane = 0; lane < Battlefield.laneCount; lane++) {
-      final myPermanent = attacker.field[lane];
-      if (myPermanent == null) continue;
-      if (!attackerBoard.canAttack(lane)) continue;
-
-      final power = attackerBoard.powerOf(lane);
-      final blocker = defender.field[lane];
-
-      if (blocker == null || attackerBoard.piercesAt(lane)) {
-        final dealt = dealDamage(defender, power, log: log);
-        totalDamage += dealt;
-        lanes.add(LaneCombat(
-          lane: lane,
-          attacker: myPermanent.letter,
-          power: power,
-          blocker: blocker?.letter,
-          damageToPlayer: dealt,
-          attackerDestroyed: false,
-          blockerDestroyed: false,
-        ));
-        continue;
-      }
-
-      // 対峙している場合は互いにダメージを与え合う。
-      final toBlocker = power - defenderBoard.damageReductionAt(lane);
-      final toAttacker =
-          defenderBoard.powerOf(lane) - attackerBoard.damageReductionAt(lane);
-      if (toBlocker > 0) blocker.damage += toBlocker;
-      if (toAttacker > 0) myPermanent.damage += toAttacker;
-
-      lanes.add(LaneCombat(
-        lane: lane,
-        attacker: myPermanent.letter,
-        power: power,
-        blocker: blocker.letter,
-        damageToPlayer: 0,
-        attackerDestroyed:
-            myPermanent.damage >= attackerBoard.toughnessOf(lane),
-        blockerDestroyed: blocker.damage >= defenderBoard.toughnessOf(lane),
-      ));
-    }
-
-    _cleanUpDestroyed(
-      attackerBoard: attackerBoard,
-      defenderBoard: defenderBoard,
-    );
-
-    return CombatResult(lanes: lanes, totalDamage: totalDamage);
-  }
-
-  /// タフネスを超えるダメージを負った文字を、両者の戦場から取り除く。
-  void _cleanUpDestroyed({
-    BoardView? attackerBoard,
-    BoardView? defenderBoard,
+  /// 置いた直後に縦横の並びを判定し、成立した並びごとに、その文字数と
+  /// 同じ枚数まで隣接する相手の駒を奪う。奪った駒は持ち駒に加わる。
+  MoveResult play(
+    String letter,
+    Cell cell, {
+    CaptureChooser chooser = takeInReadingOrder,
   }) {
-    final activeBoardView = attackerBoard ?? boardOf(state.active);
-    final inactiveBoardView = defenderBoard ?? boardOf(state.inactive);
-
-    for (final destroyed
-        in state.active.removeDestroyed(activeBoardView.toughnessResolver)) {
-      log.add('${state.active.name} の $destroyed が破壊された');
+    final error = validate(letter, cell);
+    if (error != null) {
+      throw StateError('$letter を $cell に置けません: $error');
     }
-    for (final destroyed
-        in state.inactive.removeDestroyed(inactiveBoardView.toughnessResolver)) {
-      log.add('${state.inactive.name} の $destroyed が破壊された');
-    }
-  }
 
-  /// 蓄積したダメージを回復する。MTG と同じくターンをまたいで残らない。
-  void _clearDamage() {
-    for (final player in [state.first, state.second]) {
-      for (final permanent in player.field.occupants) {
-        permanent.damage = 0;
+    final mover = turn;
+    _hands[mover]!.remove(letter);
+    board.place(cell, Piece(letter, mover));
+
+    final formations = findFormationsAt(board, cell, mover);
+    final captured = <String>[];
+    final alreadyTaken = <Cell>{};
+
+    for (final formation in formations) {
+      final candidates = captureCandidates(board, formation, mover)
+          .where((c) => !alreadyTaken.contains(c))
+          .toList();
+      if (candidates.isEmpty) continue;
+
+      final chosen = chooser(formation, candidates, formation.captureLimit)
+          .where(candidates.contains)
+          .take(formation.captureLimit);
+
+      for (final target in chosen) {
+        final taken = board.removeAt(target);
+        if (taken == null) continue;
+        alreadyTaken.add(target);
+        _hands[mover]!.add(taken.letter);
+        captured.add(taken.letter);
       }
     }
-  }
 
-  void _enforceHandLimit(PlayerState player) {
-    while (player.hand.length > kHandLimit) {
-      final index =
-          chooserFor(player).chooseCard('手札上限を超過。捨てるカード', player.hand) ??
-              player.hand.length - 1;
-      player.discardAt(index);
-    }
-  }
+    log.add('${mover.name}: $letter を $cell へ'
+        '${formations.isEmpty ? "" : "。${formations.join("・")} 成立"}'
+        '${captured.isEmpty ? "" : "。${captured.join()} を奪取"}');
 
-  void _shuffle(List<String> cards) {
-    for (var i = cards.length - 1; i > 0; i--) {
-      final j = state.rng.nextInt(i + 1);
-      final temp = cards[i];
-      cards[i] = cards[j];
-      cards[j] = temp;
-    }
+    moveCount++;
+    // 置ける手がない側は飛ばす。両者置けなければ isOver が真になる。
+    turn = mover.opponent;
+    if (!isOver && !_canMove(turn)) turn = turn.opponent;
+
+    return MoveResult(
+      letter: letter,
+      cell: cell,
+      formations: formations,
+      captured: captured,
+    );
   }
 }
-
-/// 陣形の検出を外部から使いやすくするための再輸出。
-Formations formationsOf(Battlefield field) => findFormations(field);

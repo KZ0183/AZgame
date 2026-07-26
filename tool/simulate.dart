@@ -2,215 +2,132 @@
 ///
 ///     dart run tool/simulate.dart [試行回数]
 ///
-/// v0.3 で最も重要な指標は「ワード陣形が実際に成立し、維持されているか」。
-/// 単語がゲームの中心になっているかどうかは、ここでしか確かめられない。
+/// v0.4 は運の要素がないため、AI 同士は毎回同じ棋譜になる。そこで
+/// 序盤の手をずらした局面から開始して、局面のばらつきを作って測る。
 library;
 
 import 'dart:io';
 import 'dart:math';
 
 import 'package:azgame/src/engine/ai.dart';
-import 'package:azgame/src/engine/deck.dart';
-import 'package:azgame/src/engine/detection.dart';
 import 'package:azgame/src/engine/game.dart';
-import 'package:azgame/src/engine/game_state.dart';
+import 'package:azgame/src/engine/models.dart';
 
-class MatchRecord {
-  MatchRecord({
-    required this.turns,
-    required this.firstWon,
-    required this.decided,
-    required this.byDeckOut,
-    required this.combatDamage,
-    required this.totalDamage,
-    required this.turnsWithWord,
-    required this.turnsWithSequence,
-    required this.wordUsage,
-    required this.longestWord,
+class Record {
+  Record({
+    required this.moves,
+    required this.firstCount,
+    required this.secondCount,
+    required this.formations,
+    required this.captures,
+    required this.lengths,
   });
 
-  final int turns;
-  final bool firstWon;
-  final bool decided;
-  final bool byDeckOut;
+  final int moves;
+  final int firstCount;
+  final int secondCount;
 
-  /// 戦闘で相手 LP に通った合計。
-  final int combatDamage;
+  /// 成立した並びの総数。
+  final int formations;
 
-  /// 実際に減った LP の合計（両者ぶん）。
-  final int totalDamage;
+  /// 奪われた駒の総数。
+  final int captures;
 
-  /// ワード陣形が成立していた手番数。
-  final int turnsWithWord;
-  final int turnsWithSequence;
+  /// 成立した並びの長さの内訳。
+  final Map<int, int> lengths;
 
-  final Map<String, int> wordUsage;
-
-  /// この試合で成立した最長のワード。
-  final int longestWord;
+  int? get winnerSign => firstCount == secondCount
+      ? null
+      : (firstCount > secondCount ? 1 : -1);
 }
 
-const int _turnLimit = 200;
-
-MatchRecord playMatch(DeckList firstDeck, DeckList secondDeck, int seed) {
-  final state = GameState(
-    first: PlayerState(name: firstDeck.name, deck: firstDeck.toCardList()),
-    second: PlayerState(name: secondDeck.name, deck: secondDeck.toCardList()),
-    rng: Random(seed),
-  );
-  final game = Game(
-    state: state,
-    firstChooser: const HeuristicChooser(),
-    secondChooser: const HeuristicChooser(),
-  );
-  game.start();
-
+Record playMatch(int seed) {
+  final rng = Random(seed);
+  final game = AzGame();
   const ai = SimpleAi();
-  final wordUsage = <String, int>{};
-  var combatDamage = 0;
-  var turnsWithWord = 0;
-  var turnsWithSequence = 0;
-  var longestWord = 0;
-  var turns = 0;
 
-  final startingLp = state.first.lp + state.second.lp;
+  var formations = 0;
+  var captures = 0;
+  final lengths = <int, int>{};
 
-  while (!state.isOver && turns < _turnLimit) {
-    ai.playTurn(game);
-
-    // 戦闘前の盤面で陣形を数える。維持できているかを見たいので毎手番測る。
-    final formations = findFormations(state.active.field);
-    if (formations.words.isNotEmpty) {
-      turnsWithWord++;
-      for (final formation in formations.words) {
-        final word = formation.word.word;
-        wordUsage[word] = (wordUsage[word] ?? 0) + 1;
-        if (word.length > longestWord) longestWord = word.length;
-      }
+  // 最初の数手だけランダムに散らし、そこから両者最善を尽くす。
+  // これで「同じ初手からの分岐」を疑似的に作れる。
+  var scattered = 0;
+  while (!game.isOver) {
+    MoveResult? result;
+    if (scattered < 4) {
+      final hand = game.distinctHandOf(game.turn);
+      final cells = game.legalCells;
+      result = game.play(
+        hand[rng.nextInt(hand.length)],
+        cells[rng.nextInt(cells.length)],
+      );
+      scattered++;
+    } else {
+      result = ai.playTurn(game);
     }
-    if (formations.sequences.isNotEmpty) turnsWithSequence++;
+    if (result == null) break;
 
-    combatDamage += game.endTurn().totalDamage;
-    turns++;
+    formations += result.formations.length;
+    captures += result.captured.length;
+    for (final formation in result.formations) {
+      final length = formation.cells.length;
+      lengths[length] = (lengths[length] ?? 0) + 1;
+    }
   }
 
-  return MatchRecord(
-    turns: turns,
-    firstWon: identical(state.winner, state.first),
-    decided: state.isOver,
-    byDeckOut: state.first.deckedOut || state.second.deckedOut,
-    combatDamage: combatDamage,
-    totalDamage: startingLp - (state.first.lp + state.second.lp),
-    turnsWithWord: turnsWithWord,
-    turnsWithSequence: turnsWithSequence,
-    wordUsage: wordUsage,
-    longestWord: longestWord,
+  return Record(
+    moves: game.moveCount,
+    firstCount: game.board.countOf(Owner.first),
+    secondCount: game.board.countOf(Owner.second),
+    formations: formations,
+    captures: captures,
+    lengths: lengths,
   );
 }
 
 void main(List<String> args) {
   final trials = args.isEmpty ? 500 : int.parse(args.first);
+  final records = [for (var seed = 0; seed < trials; seed++) playMatch(seed)];
 
-  final records = <MatchRecord>[];
-  for (var seed = 0; seed < trials; seed++) {
-    records.add(seed.isEven
-        ? playMatch(starterAggro, starterControl, seed)
-        : playMatch(starterControl, starterAggro, seed));
-  }
-
-  final decided = records.where((r) => r.decided).toList();
-  final turns = decided.map((r) => r.turns).toList()..sort();
+  final firstWins = records.where((r) => r.winnerSign == 1).length;
+  final draws = records.where((r) => r.winnerSign == null).length;
+  final margins = records
+      .map((r) => (r.firstCount - r.secondCount).abs())
+      .toList()
+    ..sort();
 
   stdout
-    ..writeln('=== AZgame v0.3 バランス実測 ($trials 試合) ===')
+    ..writeln('=== AZgame v0.4 バランス実測 ($trials 試合) ===')
     ..writeln()
-    ..writeln('■ 試合の長さ（手番数。両者の手番を合算）')
-    ..writeln('  決着率        : ${_pct(decided.length / records.length)}');
-
-  if (turns.isNotEmpty) {
-    stdout
-      ..writeln('  平均          : ${_avg(turns).toStringAsFixed(1)} 手番'
-          '（≒ ${(_avg(turns) / 2).toStringAsFixed(1)} ターン）')
-      ..writeln('  中央値        : ${turns[turns.length ~/ 2]} 手番')
-      ..writeln('  最短 / 最長   : ${turns.first} / ${turns.last} 手番')
-      ..writeln('  デッキ切れ決着: '
-          '${_pct(decided.where((r) => r.byDeckOut).length / decided.length)}');
-  }
-
-  final firstWins = decided.where((r) => r.firstWon).length;
-  stdout
+    ..writeln('■ 決着')
+    ..writeln('  先手勝率    : ${_pct(firstWins / trials)}')
+    ..writeln('  引き分け    : ${_pct(draws / trials)}')
+    ..writeln('  平均手数    : ${_avg(records.map((r) => r.moves)).toStringAsFixed(1)}')
+    ..writeln('  勝敗の差    : 平均 ${_avg(margins).toStringAsFixed(1)} 枚 / '
+        '中央値 ${margins[margins.length ~/ 2]} 枚')
     ..writeln()
-    ..writeln('■ 先攻・後攻')
-    ..writeln('  先攻勝率      : ${_pct(firstWins / decided.length)}')
-    ..writeln()
-    ..writeln('■ ワード陣形は機能しているか（v0.3 の中心指標）');
+    ..writeln('■ 単語は機能しているか')
+    ..writeln('  1 試合の成立数: '
+        '${_avg(records.map((r) => r.formations)).toStringAsFixed(1)}')
+    ..writeln('  1 試合の捕獲数: '
+        '${_avg(records.map((r) => r.captures)).toStringAsFixed(1)}')
+    ..writeln('  成立が 0 の試合: '
+        '${_pct(records.where((r) => r.formations == 0).length / trials)}');
 
-  final wordUptime = decided
-      .map((r) => r.turns == 0 ? 0.0 : r.turnsWithWord / r.turns)
-      .toList();
-  final sequenceUptime = decided
-      .map((r) => r.turns == 0 ? 0.0 : r.turnsWithSequence / r.turns)
-      .toList();
-
-  stdout
-    ..writeln('  ワード成立率  : ${_pct(_avgD(wordUptime))}'
-        '（陣形が成立していた手番の割合）')
-    ..writeln('  連番成立率    : ${_pct(_avgD(sequenceUptime))}')
-    ..writeln('  ワードが 1 度も出ない試合: '
-        '${_pct(decided.where((r) => r.turnsWithWord == 0).length / decided.length)}');
-
-  final longest = <int, int>{};
-  for (final record in decided) {
-    longest[record.longestWord] = (longest[record.longestWord] ?? 0) + 1;
-  }
-  final lengths = longest.keys.toList()..sort();
-  stdout.writeln('  試合中の最長ワード: '
-      '${lengths.map((l) => '${l == 0 ? "なし" : "$l文字"} ${_pct(longest[l]! / decided.length)}').join(' / ')}');
-
-  final combat = _avg(decided.map((r) => r.combatDamage).toList());
-  final total = _avg(decided.map((r) => r.totalDamage).toList());
-  stdout
-    ..writeln()
-    ..writeln('■ ダメージ内訳（1 試合平均）')
-    ..writeln('  戦闘          : ${combat.toStringAsFixed(1)}'
-        '（${_pct(total == 0 ? 0 : combat / total)}）')
-    ..writeln('  能力・陣形    : ${(total - combat).toStringAsFixed(1)}'
-        '（${_pct(total == 0 ? 0 : (total - combat) / total)}）');
-
-  final usage = <String, int>{};
+  final lengths = <int, int>{};
   for (final record in records) {
-    record.wordUsage.forEach((word, count) {
-      usage[word] = (usage[word] ?? 0) + count;
+    record.lengths.forEach((length, count) {
+      lengths[length] = (lengths[length] ?? 0) + count;
     });
   }
-  final ranked = usage.entries.toList()
-    ..sort((a, b) => b.value.compareTo(a.value));
-
-  stdout
-    ..writeln()
-    ..writeln('■ 成立したワード（上位 15。維持された手番数の合計）');
-  for (final entry in ranked.take(15)) {
-    stdout.writeln('  ${entry.key.padRight(6)} ${entry.value}');
-  }
-
-  final unused = <String>{};
-  for (final deck in starterDecks) {
-    for (final word in deck.buildableWords()) {
-      if (!usage.containsKey(word)) unused.add(word);
-    }
-  }
-  if (unused.isNotEmpty) {
-    stdout
-      ..writeln()
-      ..writeln('■ デッキに入っているのに一度も成立しなかったワード')
-      ..writeln('  ${unused.join(', ')}');
-  }
+  final total = lengths.values.fold(0, (a, b) => a + b);
+  final keys = lengths.keys.toList()..sort();
+  stdout.writeln('  長さの内訳    : ${keys.map((l) => '$l文字 '
+      '${_pct(total == 0 ? 0 : lengths[l]! / total)}').join(' / ')}');
 }
 
-double _avg(List<int> values) =>
-    values.isEmpty ? 0 : values.reduce((a, b) => a + b) / values.length;
-
-double _avgD(List<double> values) =>
+double _avg(Iterable<int> values) =>
     values.isEmpty ? 0 : values.reduce((a, b) => a + b) / values.length;
 
 String _pct(double ratio) => '${(ratio * 100).toStringAsFixed(1)}%';

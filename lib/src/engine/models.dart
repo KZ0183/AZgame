@@ -1,281 +1,174 @@
 /// AZgame のコアデータモデル。
 ///
-/// Flutter に依存しない純粋な Dart で書く。ルールエンジン全体が UI から
-/// 独立してテストできることを保証するため、`lib/src/engine/` 以下では
-/// `package:flutter/*` を import してはならない。
+/// Flutter に依存しない純粋な Dart で書く。
 library;
 
-/// 文字の分類。
-enum LetterClass {
-  /// 母音 A E I O U。コスト 0 で 1 ターン 1 枚だけ出せ、毎ターンエナジーを生む。
-  /// MTG の土地に相当する。
-  vowel,
+/// 文字の分類。v0.4 では能力を持たないため、UI の色分けと
+/// デッキ構成の指標としてのみ使う。
+enum LetterClass { vowel, core, heavy, rare }
 
-  /// 基幹 D G L N R S T。安価で小回りの利く子音。
-  core,
-
-  /// 重 B C F H K M P V W Y。中コスト。はっきりした能力を持つ。
-  heavy,
-
-  /// 希少 J Q X Z。高コスト・高パワーの切り札。
-  rare,
-}
-
-/// 能力の発動タイミング。
-enum AbilityTrigger {
-  /// 戦場にある間、常に有効。
-  static,
-
-  /// 自分のターン開始時に毎回発動する。
-  upkeep,
-
-  /// 戦場に出た瞬間に 1 回だけ発動する。
-  onPlay,
-}
-
-/// 文字カード 1 種のマスターデータ。A〜Z の 26 個だけ存在する不変オブジェクト。
+/// 文字 1 種のマスターデータ。
 class LetterCard {
   const LetterCard({
     required this.letter,
     required this.rank,
-    required this.cost,
-    required this.power,
-    required this.toughness,
     required this.klass,
-    required this.deckLimit,
-    required this.energyProduced,
-    required this.abilityName,
-    required this.trigger,
-    required this.abilityText,
   });
 
   /// 'A' 〜 'Z'。
   final String letter;
 
-  /// アルファベット順位 1〜26。連番陣形の判定に使う。
+  /// アルファベット順位 1〜26。連番の判定に使う。
   final int rank;
-
-  /// 戦場に出すのに必要なエナジー。母音は 0。
-  final int cost;
-
-  /// 戦闘で与えるダメージの基礎値。
-  final int power;
-
-  /// この値以上のダメージを受けると破壊される。
-  final int toughness;
 
   final LetterClass klass;
 
-  /// デッキに投入できる最大枚数。
-  final int deckLimit;
-
-  /// 戦場にある間、毎ターン生み出すエナジー。子音は 0。
-  final int energyProduced;
-
-  final String abilityName;
-  final AbilityTrigger trigger;
-  final String abilityText;
-
   bool get isVowel => klass == LetterClass.vowel;
-
-  @override
-  String toString() => 'LetterCard($letter)';
-}
-
-/// ワード陣形が成立している間、継続的にかかる効果。
-///
-/// 効果は型付きの数値の集合として表す。任意の Dart コードを書けるようにすると
-/// データ側でバランス調整ができなくなるため、あえて表現力を絞っている。
-class WordEffect {
-  const WordEffect({
-    this.powerBonus = 0,
-    this.toughnessBonus = 0,
-    this.upkeepDamage = 0,
-    this.upkeepHeal = 0,
-    this.upkeepDraw = 0,
-    this.upkeepEnergy = 0,
-    this.upkeepShield = 0,
-    this.freeze = 0,
-    this.pierce = false,
-  });
-
-  /// 自分の全文字のパワーへの加算。
-  final int powerBonus;
-
-  /// 自分の全文字のタフネスへの加算。
-  final int toughnessBonus;
-
-  /// 自分のターン開始時に相手へ与えるダメージ。
-  final int upkeepDamage;
-
-  /// 自分のターン開始時に回復する LP。
-  final int upkeepHeal;
-
-  /// 自分のターン開始時に引く枚数。
-  final int upkeepDraw;
-
-  /// 自分のターン開始時に得るエナジー。
-  final int upkeepEnergy;
-
-  /// 自分のターン開始時に得るシールド。
-  final int upkeepShield;
-
-  /// 相手の文字のうち、攻撃できなくする体数。
-  final int freeze;
-
-  /// 自分の全文字の戦闘ダメージが、対峙する文字を無視して相手 LP に入るか。
-  final bool pierce;
-
-  /// 2 つの効果を合算する。複数の陣形が同時に成立したときに使う。
-  WordEffect merge(WordEffect other) => WordEffect(
-        powerBonus: powerBonus + other.powerBonus,
-        toughnessBonus: toughnessBonus + other.toughnessBonus,
-        upkeepDamage: upkeepDamage + other.upkeepDamage,
-        upkeepHeal: upkeepHeal + other.upkeepHeal,
-        upkeepDraw: upkeepDraw + other.upkeepDraw,
-        upkeepEnergy: upkeepEnergy + other.upkeepEnergy,
-        upkeepShield: upkeepShield + other.upkeepShield,
-        freeze: freeze + other.freeze,
-        pierce: pierce || other.pierce,
-      );
-
-  static const WordEffect none = WordEffect();
-}
-
-/// コンボワード 1 語のマスターデータ。
-class ComboWord {
-  const ComboWord({
-    required this.word,
-    required this.effect,
-    required this.text,
-  });
-
-  /// 大文字のみで構成される 2〜5 文字の語。
-  final String word;
-
-  /// 陣形が成立している間、継続的にかかる効果。
-  final WordEffect effect;
-
-  /// 表示用の効果文言。`data/words.json` の効果定義から自動生成される。
-  final String text;
-
-  int get length => word.length;
-
-  @override
-  String toString() => 'ComboWord($word)';
-}
-
-/// 戦場に出ている文字 1 体。カードと違い、こちらは状態を持つ。
-class Permanent {
-  Permanent(this.letter);
-
-  final String letter;
-
-  /// このターンに受けた累積ダメージ。ターン終了時に 0 に戻る。
-  int damage = 0;
-
-  /// 召喚酔い。出したターンは攻撃できない。
-  bool summoningSick = true;
-
-  /// 陣形や効果によって攻撃を止められているか。
-  bool frozen = false;
-
-  Permanent copy() => Permanent(letter)
-    ..damage = damage
-    ..summoningSick = summoningSick
-    ..frozen = frozen;
 
   @override
   String toString() => letter;
 }
 
-/// 戦場。5 レーンの固定長で、各レーンは空 (`null`) か文字 1 体を保持する。
-///
-/// レーンの索引は 0 が最も左。単語は左から右へ読む。
-/// 自分のレーン `i` は相手のレーン `i` と対峙する。
-class Battlefield {
-  Battlefield() : _lanes = List<Permanent?>.filled(laneCount, null);
+/// 対戦者。
+enum Owner {
+  first,
+  second;
 
-  Battlefield.from(List<Permanent?> lanes)
-      : assert(lanes.length == laneCount),
-        _lanes = List<Permanent?>.of(lanes);
+  Owner get opponent => this == first ? second : first;
+}
 
-  /// レーン数。
-  static const int laneCount = 5;
+/// 盤上のマス。行と列で表す。左上が (0, 0)。
+class Cell {
+  const Cell(this.row, this.col);
 
-  final List<Permanent?> _lanes;
+  final int row;
+  final int col;
 
-  List<Permanent?> get lanes => List<Permanent?>.unmodifiable(_lanes);
+  bool get isValid =>
+      row >= 0 && row < Board.size && col >= 0 && col < Board.size;
 
-  Permanent? operator [](int index) => _lanes[index];
-
-  /// レーンにいる文字を左から順に並べた読み取り用の列。
-  List<Permanent> get occupants => [
-        for (final permanent in _lanes) ?permanent,
+  /// 上下左右に隣接するマス。盤外は含まない。
+  List<Cell> get neighbours => [
+        for (final cell in [
+          Cell(row - 1, col),
+          Cell(row + 1, col),
+          Cell(row, col - 1),
+          Cell(row, col + 1),
+        ])
+          if (cell.isValid) cell,
       ];
-
-  bool isEmptyAt(int index) => _lanes[index] == null;
-
-  bool get isEmpty => _lanes.every((lane) => lane == null);
-
-  bool get isFull => _lanes.every((lane) => lane != null);
-
-  int get count => _lanes.where((lane) => lane != null).length;
-
-  List<int> get occupiedIndices => [
-        for (var i = 0; i < laneCount; i++)
-          if (_lanes[i] != null) i,
-      ];
-
-  List<int> get emptyIndices => [
-        for (var i = 0; i < laneCount; i++)
-          if (_lanes[i] == null) i,
-      ];
-
-  /// 指定レーンに文字を出す。すでに埋まっている場合は [StateError]。
-  void place(int index, Permanent permanent) {
-    if (_lanes[index] != null) {
-      throw StateError('レーン $index はすでに埋まっています');
-    }
-    _lanes[index] = permanent;
-  }
-
-  /// 指定レーンの文字を取り除いて返す。空だった場合は `null`。
-  Permanent? removeAt(int index) {
-    final removed = _lanes[index];
-    _lanes[index] = null;
-    return removed;
-  }
-
-  /// 全レーンを空にし、取り除かれた文字を左から順に返す。
-  List<Permanent> clear() {
-    final removed = <Permanent>[];
-    for (var i = 0; i < laneCount; i++) {
-      final permanent = _lanes[i];
-      if (permanent != null) {
-        removed.add(permanent);
-        _lanes[i] = null;
-      }
-    }
-    return removed;
-  }
-
-  /// 埋まっているレーンはそのままに、そこにいる文字を与えられた順に並べ替える。
-  void reorder(List<Permanent> order) {
-    final occupied = occupiedIndices;
-    if (order.length != occupied.length) {
-      throw ArgumentError('並べ替えの要素数が一致しません: '
-          '${order.length} != ${occupied.length}');
-    }
-    for (var i = 0; i < occupied.length; i++) {
-      _lanes[occupied[i]] = order[i];
-    }
-  }
-
-  Battlefield copy() =>
-      Battlefield.from([for (final lane in _lanes) lane?.copy()]);
 
   @override
-  String toString() =>
-      _lanes.map((lane) => lane?.letter ?? '_').join();
+  bool operator ==(Object other) =>
+      other is Cell && other.row == row && other.col == col;
+
+  @override
+  int get hashCode => row * Board.size + col;
+
+  @override
+  String toString() => '($row,$col)';
+}
+
+/// 盤上に置かれた駒。文字と所有者を持つ。
+class Piece {
+  const Piece(this.letter, this.owner);
+
+  final String letter;
+  final Owner owner;
+
+  /// 所有者だけを入れ替えた駒を返す。
+  Piece capturedBy(Owner newOwner) => Piece(letter, newOwner);
+
+  @override
+  String toString() => owner == Owner.first ? letter : letter.toLowerCase();
+}
+
+/// 5×5 の盤。
+class Board {
+  Board() : _cells = List<Piece?>.filled(size * size, null);
+
+  Board._(this._cells);
+
+  /// 一辺のマス数。
+  static const int size = 5;
+
+  /// 総マス数。
+  static const int cellCount = size * size;
+
+  final List<Piece?> _cells;
+
+  Piece? at(Cell cell) => _cells[cell.row * size + cell.col];
+
+  Piece? operator [](Cell cell) => at(cell);
+
+  bool isEmptyAt(Cell cell) => at(cell) == null;
+
+  bool get isFull => _cells.every((piece) => piece != null);
+
+  /// 空いているマス。
+  List<Cell> get emptyCells => [
+        for (var row = 0; row < size; row++)
+          for (var col = 0; col < size; col++)
+            if (_cells[row * size + col] == null) Cell(row, col),
+      ];
+
+  /// [owner] の駒がいるマス。
+  List<Cell> cellsOf(Owner owner) => [
+        for (var row = 0; row < size; row++)
+          for (var col = 0; col < size; col++)
+            if (_cells[row * size + col]?.owner == owner) Cell(row, col),
+      ];
+
+  /// [owner] の盤上の駒数。勝敗はこの値で決まる。
+  int countOf(Owner owner) =>
+      _cells.where((piece) => piece?.owner == owner).length;
+
+  void place(Cell cell, Piece piece) {
+    if (at(cell) != null) throw StateError('$cell はすでに埋まっています');
+    _cells[cell.row * size + cell.col] = piece;
+  }
+
+  Piece? removeAt(Cell cell) {
+    final removed = at(cell);
+    _cells[cell.row * size + cell.col] = null;
+    return removed;
+  }
+
+  Board copy() => Board._(List<Piece?>.of(_cells));
+
+  @override
+  String toString() {
+    final buffer = StringBuffer();
+    for (var row = 0; row < size; row++) {
+      for (var col = 0; col < size; col++) {
+        buffer.write(at(Cell(row, col))?.toString() ?? '.');
+      }
+      if (row < size - 1) buffer.write('/');
+    }
+    return buffer.toString();
+  }
+}
+
+/// 盤上に成立した並び。単語と連番の 2 種類がある。
+class Formation {
+  const Formation({
+    required this.cells,
+    required this.text,
+    required this.isSequence,
+  });
+
+  /// 構成するマス。読む順（左→右 または 上→下）に並ぶ。
+  final List<Cell> cells;
+
+  /// 成立した並びの文字列。
+  final String text;
+
+  /// 連番として成立したか。偽なら登録単語。
+  final bool isSequence;
+
+  /// 奪える駒の枚数。文字数がそのまま強さになる。
+  int get captureLimit => cells.length;
+
+  @override
+  String toString() => '$text${isSequence ? "(連番)" : ""}';
 }

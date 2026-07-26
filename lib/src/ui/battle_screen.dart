@@ -5,136 +5,100 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-import '../data/catalog.g.dart';
 import '../engine/ai.dart';
-import '../engine/board.dart';
-import '../engine/deck.dart';
 import '../engine/detection.dart';
 import '../engine/game.dart';
-import '../engine/game_state.dart';
 import '../engine/models.dart';
 import 'theme.dart';
 import 'widgets/letter_card_view.dart';
 
-/// プレイヤー対 AI の対戦画面。
-///
-/// プレイヤーは常に先攻側（[GameState.first]）を操作する。
+/// プレイヤー（先手）対 AI（後手）の対戦画面。
 class BattleScreen extends StatefulWidget {
-  const BattleScreen({
-    super.key,
-    required this.playerDeck,
-    required this.opponentDeck,
-  });
-
-  final DeckList playerDeck;
-  final DeckList opponentDeck;
+  const BattleScreen({super.key});
 
   @override
   State<BattleScreen> createState() => _BattleScreenState();
 }
 
 class _BattleScreenState extends State<BattleScreen> {
-  late Game _game;
+  late AzGame _game;
   String? _selected;
   bool _aiThinking = false;
-  CombatResult? _lastCombat;
+  MoveResult? _lastMove;
 
-  PlayerState get _me => _game.state.first;
-  PlayerState get _foe => _game.state.second;
-  bool get _myTurn => _game.state.isFirstPlayerTurn && !_aiThinking;
+  static const Owner _me = Owner.first;
+  static const Owner _foe = Owner.second;
+
+  bool get _myTurn => _game.turn == _me && !_aiThinking && !_game.isOver;
 
   @override
   void initState() {
     super.initState();
-    _startNewGame();
+    _restart();
   }
 
-  void _startNewGame() {
-    final state = GameState(
-      first: PlayerState(name: 'あなた', deck: widget.playerDeck.toCardList()),
-      second: PlayerState(name: '相手', deck: widget.opponentDeck.toCardList()),
-      rng: Random(),
-    );
-    _game = Game(
-      state: state,
-      firstChooser: const HeuristicChooser(),
-      secondChooser: const HeuristicChooser(),
-    );
-    _game.start();
+  void _restart() {
+    _game = AzGame();
     _selected = null;
     _aiThinking = false;
-    _lastCombat = null;
+    _lastMove = null;
   }
 
-  void _selectCard(String letter) {
+  void _selectLetter(String letter) {
     setState(() => _selected = _selected == letter ? null : letter);
   }
 
-  void _playAt(int lane) {
+  Future<void> _placeAt(Cell cell) async {
     final letter = _selected;
     if (letter == null || !_myTurn) return;
-    if (_game.validatePlay(letter, lane) != null) return;
+    if (_game.validate(letter, cell) != null) return;
 
     setState(() {
-      _game.playCard(letter, lane);
-      // 同じ文字がまだ手札にあり、続けて出せるなら選択を維持する。
-      if (!_me.hand.contains(letter) ||
-          _game.validatePlay(letter, _firstEmptyLane() ?? 0) != null) {
-        _selected = null;
-      }
-    });
-  }
-
-  int? _firstEmptyLane() {
-    final empty = _me.field.emptyIndices;
-    return empty.isEmpty ? null : empty.first;
-  }
-
-  Future<void> _endTurn() async {
-    if (!_myTurn) return;
-    setState(() {
-      _lastCombat = _game.endTurn();
+      _lastMove = _game.play(letter, cell);
       _selected = null;
     });
-    if (_game.state.isOver) return;
+    if (_game.isOver) return;
     await _runAiTurn();
   }
 
   Future<void> _runAiTurn() async {
     setState(() => _aiThinking = true);
-    const ai = SimpleAi();
-
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    while (mounted && !_game.state.isOver) {
-      final move = ai.bestMove(_game);
-      if (move == null) break;
-      setState(() => _game.playCard(move.letter, move.lane));
-      await Future<void>.delayed(const Duration(milliseconds: 420));
-    }
+    await Future<void>.delayed(const Duration(milliseconds: 550));
     if (!mounted) return;
 
     setState(() {
-      if (!_game.state.isOver) _lastCombat = _game.endTurn();
+      if (!_game.isOver && _game.turn == _foe) {
+        _lastMove = const SimpleAi().playTurn(_game);
+      }
       _aiThinking = false;
     });
   }
 
-  /// 選択中の文字が、いずれかのレーンに出せるか。
-  bool get _canPlaySelected {
+  /// 直前の手で成立した並びのマス。
+  Set<Cell> get _formationCells =>
+      {for (final f in _lastMove?.formations ?? const <Formation>[]) ...f.cells};
+
+  /// 選択中の文字を置くと並びが成立するマス。狙いどころを示す。
+  Set<Cell> get _scoringCells {
     final letter = _selected;
-    if (letter == null || !_myTurn) return false;
-    return _me.field.emptyIndices
-        .any((lane) => _game.validatePlay(letter, lane) == null);
+    if (letter == null || !_myTurn) return const {};
+    return {
+      for (final cell in _game.legalCells)
+        if (findFormationsAt(
+          _game.board.copy()..place(cell, Piece(letter, _me)),
+          cell,
+          _me,
+        ).isNotEmpty)
+          cell,
+    };
   }
 
   @override
   Widget build(BuildContext context) {
-    final laneWidth = min(
-      (MediaQuery.sizeOf(context).width - 48) / Battlefield.laneCount,
-      62.0,
-    );
-    final myBoard = _game.boardOf(_me);
-    final foeBoard = _game.boardOf(_foe);
+    final width = MediaQuery.sizeOf(context).width;
+    final cellSize = min((width - 56) / Board.size, 62.0);
+    final scoring = _scoringCells;
+    final formation = _formationCells;
 
     return Scaffold(
       body: SafeArea(
@@ -142,122 +106,143 @@ class _BattleScreenState extends State<BattleScreen> {
           children: [
             Column(
               children: [
-                _StatusPanel(player: _foe, board: foeBoard, isOpponent: true),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildLanes(foeBoard, laneWidth * 0.85,
-                            interactive: false),
-                        _FormationStrip(board: foeBoard, dimmed: true),
-                        _buildCenterBanner(),
-                        _FormationStrip(board: myBoard, dimmed: false),
-                        _buildLanes(myBoard, laneWidth, interactive: true),
-                      ],
-                    ),
-                  ),
-                ),
-                _StatusPanel(player: _me, board: myBoard, isOpponent: false),
-                const SizedBox(height: 4),
-                _buildHand(),
+                _buildScoreBar(),
+                const SizedBox(height: 6),
+                _buildBanner(),
+                const SizedBox(height: 8),
+                _buildBoard(cellSize, scoring, formation),
+                const Spacer(),
+                _buildHandLabel(),
+                Expanded(flex: 3, child: _buildHand()),
                 _buildActionBar(),
               ],
             ),
-            if (_game.state.isOver) _buildGameOver(),
+            if (_game.isOver) _buildGameOver(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildLanes(BoardView board, double laneWidth,
-      {required bool interactive}) {
-    final canPlace = interactive && _canPlaySelected;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (var lane = 0; lane < Battlefield.laneCount; lane++)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: LaneView(
-              letter: board.field[lane]?.letter,
-              width: laneWidth,
-              power: board.powerOf(lane),
-              toughness: board.toughnessOf(lane),
-              damage: board.field[lane]?.damage ?? 0,
-              exhausted: board.field[lane] != null && !board.canAttack(lane),
-              inFormation: board.formations.includes(lane),
-              highlighted: canPlace &&
-                  board.field[lane] == null &&
-                  _game.validatePlay(_selected!, lane) == null,
-              onTap: interactive ? () => _playAt(lane) : null,
-            ),
+  Widget _buildScoreBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+      child: Row(
+        children: [
+          _Score(
+            label: 'あなた',
+            count: _game.board.countOf(_me),
+            color: kFirstColor,
+            hand: _game.handOf(_me).length,
           ),
-      ],
+          const Spacer(),
+          Text(
+            '${_game.moveCount} / ${AzGame.maxMoves} 手',
+            style: const TextStyle(color: kTextMuted, fontSize: 12),
+          ),
+          const Spacer(),
+          _Score(
+            label: '相手',
+            count: _game.board.countOf(_foe),
+            color: kSecondColor,
+            hand: _game.handOf(_foe).length,
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildCenterBanner() {
+  Widget _buildBanner() {
     if (_aiThinking) {
-      return const _Banner(
-        icon: Icons.psychology_outlined,
+      return const _Banner(text: '相手が考えています…', color: kTextMuted);
+    }
+    final move = _lastMove;
+    if (move != null && move.scored) {
+      final words = move.formations.map((f) => f.text).join('・');
+      return _Banner(
+        text: move.captured.isEmpty
+            ? '$words 成立'
+            : '$words 成立 → ${move.captured.join()} を奪取',
+        color: kWordColor,
+      );
+    }
+    if (_selected != null) {
+      return _Banner(
+        text: '$_selected を置くマスを選ぶ（紫のマスで並びが成立）',
         color: kTextMuted,
-        text: '相手が考えています…',
       );
     }
+    return const _Banner(text: '持ち駒から 1 枚選ぶ', color: kTextMuted);
+  }
 
-    final combat = _lastCombat;
-    if (combat != null && combat.totalDamage > 0) {
-      return _Banner(
-        icon: Icons.bolt,
-        color: kLifeColor,
-        text: '直前の戦闘で ${combat.totalDamage} ダメージ',
-      );
-    }
+  Widget _buildBoard(double cellSize, Set<Cell> scoring, Set<Cell> formation) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: kSurface,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var row = 0; row < Board.size; row++)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var col = 0; col < Board.size; col++)
+                    Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Builder(builder: (context) {
+                        final cell = Cell(row, col);
+                        return BoardCellView(
+                          piece: _game.board.at(cell),
+                          size: cellSize,
+                          highlighted: scoring.contains(cell),
+                          inFormation: formation.contains(cell),
+                          onTap: _myTurn ? () => _placeAt(cell) : null,
+                        );
+                      }),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
-    final letter = _selected;
-    if (letter != null) {
-      final card = cardCatalog[letter]!;
-      return _Banner(
-        icon: Icons.touch_app_outlined,
-        color: classColor(card.klass),
-        text: '$letter ${card.abilityName} — ${card.abilityText}',
-      );
-    }
-
-    return const _Banner(
-      icon: Icons.touch_app_outlined,
-      color: kTextMuted,
-      text: '手札を選んでレーンに出す',
+  Widget _buildHandLabel() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 4),
+      child: Row(
+        children: [
+          const Text('持ち駒',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          const SizedBox(width: 8),
+          Text('${_game.handOf(_me).length} 枚',
+              style: const TextStyle(color: kTextMuted, fontSize: 12)),
+        ],
+      ),
     );
   }
 
   Widget _buildHand() {
-    return SizedBox(
-      height: 92,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: _me.hand.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 6),
-        itemBuilder: (context, index) {
-          final letter = _me.hand[index];
-          final playable = _myTurn &&
-              _me.field.emptyIndices
-                  .any((lane) => _game.validatePlay(letter, lane) == null);
-          return Center(
-            child: LetterCardView(
+    final letters = _game.distinctHandOf(_me);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Wrap(
+        spacing: 5,
+        runSpacing: 5,
+        children: [
+          for (final letter in letters)
+            HandPieceView(
               letter: letter,
-              width: 58,
+              count: _game.countInHand(_me, letter),
               selected: _selected == letter,
-              dimmed: !playable,
-              onTap: playable ? () => _selectCard(letter) : null,
+              onTap: _myTurn ? () => _selectLetter(letter) : null,
             ),
-          );
-        },
+        ],
       ),
     );
   }
@@ -270,19 +255,22 @@ class _BattleScreenState extends State<BattleScreen> {
           IconButton(
             onPressed: () => _showLog(context),
             icon: const Icon(Icons.receipt_long, color: kTextMuted),
-            tooltip: 'ログ',
+            tooltip: '棋譜',
           ),
           Expanded(
-            child: FilledButton.icon(
-              onPressed: _myTurn ? _endTurn : null,
-              icon: const Icon(Icons.local_fire_department),
-              label: Text(_myTurn ? '戦闘してターン終了' : '相手のターン'),
-              style: FilledButton.styleFrom(
-                backgroundColor: kWordColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Text(
+              _myTurn ? 'あなたの手番' : '相手の手番',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: _myTurn ? kFirstColor : kSecondColor,
+                fontWeight: FontWeight.w700,
               ),
             ),
+          ),
+          IconButton(
+            onPressed: () => setState(_restart),
+            icon: const Icon(Icons.refresh, color: kTextMuted),
+            tooltip: '最初から',
           ),
         ],
       ),
@@ -296,10 +284,10 @@ class _BattleScreenState extends State<BattleScreen> {
       builder: (context) => ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('対戦ログ',
+          const Text('棋譜',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          for (final entry in _game.log.entries.reversed.take(60))
+          for (final entry in _game.log.entries.reversed)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 3),
               child: Text(entry,
@@ -311,32 +299,40 @@ class _BattleScreenState extends State<BattleScreen> {
   }
 
   Widget _buildGameOver() {
-    final winner = _game.state.winner;
-    final won = identical(winner, _me);
+    final winner = _game.winner;
+    final label = winner == null
+        ? 'DRAW'
+        : winner == _me
+            ? 'WIN'
+            : 'LOSE';
     return Container(
-      color: kBackground.withValues(alpha: 0.88),
+      color: kBackground.withValues(alpha: 0.9),
       alignment: Alignment.center,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            won ? 'WIN' : 'LOSE',
+            label,
             style: TextStyle(
-              fontSize: 64,
+              fontSize: 60,
               fontWeight: FontWeight.w800,
-              color: won ? kEnergyColor : kLifeColor,
               letterSpacing: 4,
+              color: winner == null
+                  ? kTextMuted
+                  : winner == _me
+                      ? kFirstColor
+                      : kSecondColor,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
-            _foe.deckedOut || _me.deckedOut ? 'デッキ切れ' : 'LP 0',
-            style: const TextStyle(color: kTextMuted),
+            '${_game.board.countOf(_me)} 対 ${_game.board.countOf(_foe)}',
+            style: const TextStyle(color: kTextMuted, fontSize: 16),
           ),
           const SizedBox(height: 28),
           FilledButton(
-            onPressed: () => setState(_startNewGame),
-            child: const Text('もう一度'),
+            onPressed: () => setState(_restart),
+            child: const Text('もう一局'),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -348,173 +344,58 @@ class _BattleScreenState extends State<BattleScreen> {
   }
 }
 
-/// 成立している陣形の一覧。維持できているかどうかが一目で分かるようにする。
-class _FormationStrip extends StatelessWidget {
-  const _FormationStrip({required this.board, required this.dimmed});
-
-  final BoardView board;
-  final bool dimmed;
-
-  @override
-  Widget build(BuildContext context) {
-    final formations = board.formations;
-    if (formations.isEmpty) return const SizedBox(height: 20);
-
-    return SizedBox(
-      height: 20,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        shrinkWrap: true,
-        children: [
-          for (final word in formations.words)
-            _Chip2(
-              label: word.word.word,
-              color: kWordColor.withValues(alpha: dimmed ? 0.5 : 1),
-            ),
-          for (final sequence in formations.sequences)
-            _Chip2(
-              label: '連番+${sequence.powerBonus}',
-              color: kSequenceColor.withValues(alpha: dimmed ? 0.5 : 1),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Chip2 extends StatelessWidget {
-  const _Chip2({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 3),
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.6)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          color: color,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-  }
-}
-
-/// LP・シールド・エナジー・山札の状態表示。
-class _StatusPanel extends StatelessWidget {
-  const _StatusPanel({
-    required this.player,
-    required this.board,
-    required this.isOpponent,
+class _Score extends StatelessWidget {
+  const _Score({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.hand,
   });
 
-  final PlayerState player;
-  final BoardView board;
-  final bool isOpponent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Row(
-        children: [
-          Text(player.name,
-              style: const TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(width: 10),
-          _Chip(icon: Icons.favorite, color: kLifeColor, value: '${player.lp}'),
-          if (player.shield > 0) ...[
-            const SizedBox(width: 6),
-            _Chip(
-                icon: Icons.shield,
-                color: kShieldColor,
-                value: '${player.shield}'),
-          ],
-          const Spacer(),
-          _Chip(
-            icon: Icons.bolt,
-            color: kEnergyColor,
-            value: isOpponent
-                ? '${player.energyIncome}'
-                : '${player.energy} (+${player.energyIncome})',
-          ),
-          const SizedBox(width: 6),
-          _Chip(
-              icon: Icons.style, color: kTextMuted, value: '${player.deck.length}'),
-          if (isOpponent) ...[
-            const SizedBox(width: 6),
-            _Chip(
-                icon: Icons.back_hand_outlined,
-                color: kTextMuted,
-                value: '${player.hand.length}'),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({required this.icon, required this.color, required this.value});
-
-  final IconData icon;
+  final String label;
+  final int count;
   final Color color;
-  final String value;
+  final int hand;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 15, color: color),
-        const SizedBox(width: 3),
-        Text(value,
-            style: TextStyle(
-                color: color, fontSize: 13, fontWeight: FontWeight.w600)),
+        Text(label, style: const TextStyle(fontSize: 11, color: kTextMuted)),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text('$count',
+                style: TextStyle(
+                    fontSize: 24, fontWeight: FontWeight.w800, color: color)),
+            const SizedBox(width: 4),
+            Text('手駒 $hand',
+                style: const TextStyle(fontSize: 11, color: kTextMuted)),
+          ],
+        ),
       ],
     );
   }
 }
 
 class _Banner extends StatelessWidget {
-  const _Banner({required this.icon, required this.color, required this.text});
+  const _Banner({required this.text, required this.color});
 
-  final IconData icon;
-  final Color color;
   final String text;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 17, color: color),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              text,
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              style: TextStyle(color: color, fontSize: 12.5, height: 1.4),
-            ),
-          ),
-        ],
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        style: TextStyle(color: color, fontSize: 12.5),
       ),
     );
   }
 }
-
-/// 陣形の検出をこの画面から直接使えるようにするための別名。
-Formations formationsOfField(Battlefield field) => findFormations(field);

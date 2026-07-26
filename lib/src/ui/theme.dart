@@ -22,6 +22,10 @@ const Color kLifeColor = Color(0xFFE3576B);
 const Color kShieldColor = Color(0xFF5BA9E8);
 const Color kEnergyColor = Color(0xFFF2C14E);
 
+/// 先手（プレイヤー）と後手（相手）の駒の色。
+const Color kFirstColor = Color(0xFF3E6DD6);
+const Color kSecondColor = Color(0xFFC0503F);
+
 /// ワード成立時の強調色。
 const Color kWordColor = Color(0xFFB57BEE);
 

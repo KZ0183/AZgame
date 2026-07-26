@@ -1,142 +1,76 @@
-/// 文字カードと戦場のレーンを描画するウィジェット。
+/// 文字の駒と盤のマスを描画するウィジェット。
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../data/catalog.g.dart';
+import '../../engine/models.dart';
 import '../theme.dart';
 
-/// 1 枚の文字カード。
-///
-/// 文字そのものを主役に据え、コストと数値を角に小さく添える。
-/// 26 種を絵で描き分けるのは現実的でないため、識別はクラス色と字形に任せる。
-class LetterCardView extends StatelessWidget {
-  const LetterCardView({
+/// 持ち駒として並ぶ 1 文字。
+class HandPieceView extends StatelessWidget {
+  const HandPieceView({
     super.key,
     required this.letter,
-    this.width = 56,
+    this.count = 1,
+    this.size = 46,
     this.selected = false,
-    this.dimmed = false,
-    this.showStats = true,
-    this.power,
-    this.toughness,
-    this.damage = 0,
-    this.exhausted = false,
     this.onTap,
   });
 
   final String letter;
-  final double width;
 
-  /// 手札で選択中、または陣形に組み込まれている状態。
+  /// 同じ文字を何枚持っているか。2 枚以上なら数字を添える。
+  final int count;
+
+  final double size;
   final bool selected;
-
-  /// エナジー不足などで今は使えない状態か。
-  final bool dimmed;
-
-  final bool showStats;
-
-  /// 実効パワー。省略するとカードの基礎値を使う。
-  final int? power;
-
-  /// 実効タフネス。省略するとカードの基礎値を使う。
-  final int? toughness;
-
-  /// 現在受けているダメージ。0 より大きいと数値が赤く警告色になる。
-  final int damage;
-
-  /// 召喚酔いや拘束で攻撃できない状態か。
-  final bool exhausted;
-
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final card = cardCatalog[letter]!;
-    final accent = classColor(card.klass);
-    final height = width * 1.4;
-    final effectivePower = power ?? card.power;
-    final effectiveToughness = toughness ?? card.toughness;
-    final remaining = effectiveToughness - damage;
+    final accent = classColor(cardCatalog[letter]!.klass);
 
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        width: width,
-        height: height,
+        duration: const Duration(milliseconds: 110),
+        width: size,
+        height: size,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(width * 0.14),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.lerp(accent, Colors.black, 0.35)!,
-              Color.lerp(accent, Colors.black, 0.62)!,
-            ],
-          ),
+          borderRadius: BorderRadius.circular(size * 0.2),
+          color: selected
+              ? accent.withValues(alpha: 0.85)
+              : accent.withValues(alpha: 0.16),
           border: Border.all(
-            color: selected ? Colors.white : accent.withValues(alpha: 0.65),
-            width: selected ? 2.5 : 1.2,
+            color: selected ? Colors.white : accent.withValues(alpha: 0.7),
+            width: selected ? 2.2 : 1.2,
           ),
-          boxShadow: selected
-              ? [BoxShadow(color: accent.withValues(alpha: 0.6), blurRadius: 12)]
-              : null,
         ),
-        foregroundDecoration: dimmed || exhausted
-            ? BoxDecoration(
-                borderRadius: BorderRadius.circular(width * 0.14),
-                color: kBackground.withValues(alpha: exhausted ? 0.45 : 0.6),
-              )
-            : null,
         child: Stack(
+          alignment: Alignment.center,
           children: [
-            Center(
-              child: Text(
-                letter,
-                style: TextStyle(
-                  fontSize: width * 0.6,
-                  fontWeight: FontWeight.w700,
-                  height: 1,
-                  color: Colors.white,
-                  letterSpacing: -1,
-                ),
+            Text(
+              letter,
+              style: TextStyle(
+                fontSize: size * 0.52,
+                fontWeight: FontWeight.w800,
+                color: selected ? Colors.white : accent,
+                height: 1,
               ),
             ),
-            if (showStats) ...[
+            if (count > 1)
               Positioned(
-                top: 3,
-                left: 4,
-                child: _Pip(
-                  // 母音はコスト 0 でマナを生むので、支払いではなく生産量を出す。
-                  value: card.isVowel ? '+${card.energyProduced}' : '${card.cost}',
-                  color: kEnergyColor,
-                  size: width,
-                ),
-              ),
-              Positioned(
-                bottom: 2,
-                right: 4,
+                right: 2,
+                bottom: 1,
                 child: Text(
-                  '$effectivePower/${remaining < 0 ? 0 : remaining}',
+                  '×$count',
                   style: TextStyle(
-                    fontSize: width * 0.2,
+                    fontSize: size * 0.22,
                     fontWeight: FontWeight.w700,
-                    color: damage > 0
-                        ? kLifeColor
-                        : Colors.white.withValues(alpha: 0.9),
+                    color: selected ? Colors.white : kTextMuted,
                   ),
-                ),
-              ),
-            ],
-            if (exhausted)
-              Positioned(
-                top: 3,
-                right: 4,
-                child: Icon(
-                  Icons.bedtime_outlined,
-                  size: width * 0.22,
-                  color: Colors.white.withValues(alpha: 0.85),
                 ),
               ),
           ],
@@ -146,100 +80,74 @@ class LetterCardView extends StatelessWidget {
   }
 }
 
-class _Pip extends StatelessWidget {
-  const _Pip({required this.value, required this.color, required this.size});
-
-  final String value;
-  final Color color;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: size * 0.06, vertical: 1),
-      constraints: BoxConstraints(minWidth: size * 0.26),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(size * 0.14),
-      ),
-      child: Text(
-        value,
-        style: TextStyle(
-          fontSize: size * 0.18,
-          fontWeight: FontWeight.w800,
-          color: Colors.black87,
-        ),
-      ),
-    );
-  }
-}
-
-/// 戦場のレーン 1 本。空なら枠だけを描く。
-class LaneView extends StatelessWidget {
-  const LaneView({
+/// 盤上の 1 マス。
+class BoardCellView extends StatelessWidget {
+  const BoardCellView({
     super.key,
-    required this.letter,
-    required this.width,
-    this.power,
-    this.toughness,
-    this.damage = 0,
-    this.exhausted = false,
-    this.inFormation = false,
+    required this.piece,
+    required this.size,
     this.highlighted = false,
+    this.inFormation = false,
+    this.threatened = false,
     this.onTap,
   });
 
-  final String? letter;
-  final double width;
-  final int? power;
-  final int? toughness;
-  final int damage;
-  final bool exhausted;
+  final Piece? piece;
+  final double size;
 
-  /// 陣形に組み込まれているレーンか。
+  /// 置ける候補として光らせるか。
+  final bool highlighted;
+
+  /// 直前の手で成立した並びに含まれるか。
   final bool inFormation;
 
-  /// 配置先の候補として光らせるか。
-  final bool highlighted;
+  /// 直前の手で奪われる対象になっているか。
+  final bool threatened;
 
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final current = letter;
-    if (current != null) {
-      return LetterCardView(
-        letter: current,
-        width: width,
-        selected: inFormation,
-        power: power,
-        toughness: toughness,
-        damage: damage,
-        exhausted: exhausted,
-        onTap: onTap,
-      );
-    }
+    final current = piece;
+    final isMine = current?.owner == Owner.first;
+    final base = current == null
+        ? Colors.white.withValues(alpha: 0.04)
+        : (isMine ? kFirstColor : kSecondColor);
 
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        width: width,
-        height: width * 1.4,
+        duration: const Duration(milliseconds: 140),
+        width: size,
+        height: size,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(width * 0.14),
-          color: highlighted
-              ? kWordColor.withValues(alpha: 0.18)
-              : Colors.white.withValues(alpha: 0.03),
+          borderRadius: BorderRadius.circular(size * 0.16),
+          color: current == null
+              ? (highlighted ? kWordColor.withValues(alpha: 0.16) : base)
+              : base.withValues(alpha: 0.9),
           border: Border.all(
-            color: highlighted ? kWordColor : kOutline,
-            width: highlighted ? 2 : 1,
+            color: threatened
+                ? kLifeColor
+                : inFormation
+                    ? Colors.white
+                    : highlighted
+                        ? kWordColor
+                        : kOutline,
+            width: (threatened || inFormation) ? 2.4 : (highlighted ? 2 : 1),
           ),
         ),
-        child: highlighted
-            ? Icon(Icons.add, color: kWordColor, size: width * 0.4)
-            : null,
+        child: current == null
+            ? null
+            : Text(
+                current.letter,
+                style: TextStyle(
+                  fontSize: size * 0.5,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  height: 1,
+                ),
+              ),
       ),
     );
   }
