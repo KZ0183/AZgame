@@ -5,7 +5,9 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../data/catalog.g.dart';
 import '../engine/ai.dart';
+import '../engine/board.dart';
 import '../engine/deck.dart';
 import '../engine/detection.dart';
 import '../engine/game.dart';
@@ -35,7 +37,7 @@ class _BattleScreenState extends State<BattleScreen> {
   late Game _game;
   String? _selected;
   bool _aiThinking = false;
-  JudgementResult? _lastResult;
+  CombatResult? _lastCombat;
 
   PlayerState get _me => _game.state.first;
   PlayerState get _foe => _game.state.second;
@@ -61,31 +63,37 @@ class _BattleScreenState extends State<BattleScreen> {
     _game.start();
     _selected = null;
     _aiThinking = false;
-    _lastResult = null;
+    _lastCombat = null;
   }
 
   void _selectCard(String letter) {
     setState(() => _selected = _selected == letter ? null : letter);
   }
 
-  void _placeSelected(int slot) {
+  void _playAt(int lane) {
     final letter = _selected;
     if (letter == null || !_myTurn) return;
-    if (_game.validatePlacement(letter, slot) != null) return;
+    if (_game.validatePlay(letter, lane) != null) return;
 
     setState(() {
-      _game.placeCard(letter, slot);
-      // 同じ文字がまだ手札にあり、続けて置けるなら選択を維持する。
-      if (!_me.hand.contains(letter) || _me.remainingPlacements <= 0) {
+      _game.playCard(letter, lane);
+      // 同じ文字がまだ手札にあり、続けて出せるなら選択を維持する。
+      if (!_me.hand.contains(letter) ||
+          _game.validatePlay(letter, _firstEmptyLane() ?? 0) != null) {
         _selected = null;
       }
     });
   }
 
+  int? _firstEmptyLane() {
+    final empty = _me.field.emptyIndices;
+    return empty.isEmpty ? null : empty.first;
+  }
+
   Future<void> _endTurn() async {
     if (!_myTurn) return;
     setState(() {
-      _lastResult = _game.endTurn();
+      _lastCombat = _game.endTurn();
       _selected = null;
     });
     if (_game.state.isOver) return;
@@ -100,36 +108,33 @@ class _BattleScreenState extends State<BattleScreen> {
     while (mounted && !_game.state.isOver) {
       final move = ai.bestMove(_game);
       if (move == null) break;
-      setState(() => _game.placeCard(move.letter, move.slot));
+      setState(() => _game.playCard(move.letter, move.lane));
       await Future<void>.delayed(const Duration(milliseconds: 420));
     }
     if (!mounted) return;
 
     setState(() {
-      if (!_game.state.isOver) _lastResult = _game.endTurn();
+      if (!_game.state.isOver) _lastCombat = _game.endTurn();
       _aiThinking = false;
     });
   }
 
-  /// ターン終了時に何が起きるかの予告。
-  ///
-  /// 覚えるべきワードが 48 語あるため、盤面から「今なにが成立しているか」が
-  /// 読めないと学習が進まない。予告はチュートリアルを兼ねる。
-  ({WordHit? word, int sequenceDamage}) _preview(PlayerState player) {
-    final sequences = findSequences(player.line)
-        .where((hit) => hit.indices.any(player.slotsPlacedThisTurn.contains));
-    return (
-      word: findBestWord(player.line),
-      sequenceDamage: sequences.fold<int>(0, (sum, hit) => sum + hit.damage),
-    );
+  /// 選択中の文字が、いずれかのレーンに出せるか。
+  bool get _canPlaySelected {
+    final letter = _selected;
+    if (letter == null || !_myTurn) return false;
+    return _me.field.emptyIndices
+        .any((lane) => _game.validatePlay(letter, lane) == null);
   }
 
   @override
   Widget build(BuildContext context) {
-    final slotWidth = min(
-      (MediaQuery.sizeOf(context).width - 48) / SpellLine.slotCount,
-      64.0,
+    final laneWidth = min(
+      (MediaQuery.sizeOf(context).width - 48) / Battlefield.laneCount,
+      62.0,
     );
+    final myBoard = _game.boardOf(_me);
+    final foeBoard = _game.boardOf(_foe);
 
     return Scaffold(
       body: SafeArea(
@@ -137,25 +142,25 @@ class _BattleScreenState extends State<BattleScreen> {
           children: [
             Column(
               children: [
-                _StatusPanel(player: _foe, isOpponent: true),
-                // 相手ライン・予告・自分ラインを均等に配置する。盤面が縦に
-                // 散らばると、どちらのラインを見ているのか一瞬迷うため、
-                // 3 つのまとまりとして等間隔に置く。
+                _StatusPanel(player: _foe, board: foeBoard, isOpponent: true),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _buildLine(_foe, slotWidth * 0.82, interactive: false),
+                        _buildLanes(foeBoard, laneWidth * 0.85,
+                            interactive: false),
+                        _FormationStrip(board: foeBoard, dimmed: true),
                         _buildCenterBanner(),
-                        _buildLine(_me, slotWidth, interactive: true),
+                        _FormationStrip(board: myBoard, dimmed: false),
+                        _buildLanes(myBoard, laneWidth, interactive: true),
                       ],
                     ),
                   ),
                 ),
-                _StatusPanel(player: _me, isOpponent: false),
-                const SizedBox(height: 6),
+                _StatusPanel(player: _me, board: myBoard, isOpponent: false),
+                const SizedBox(height: 4),
                 _buildHand(),
                 _buildActionBar(),
               ],
@@ -167,27 +172,28 @@ class _BattleScreenState extends State<BattleScreen> {
     );
   }
 
-  Widget _buildLine(PlayerState player, double slotWidth,
+  Widget _buildLanes(BoardView board, double laneWidth,
       {required bool interactive}) {
-    final wordHit = findBestWord(player.line);
-    final wordIndices = wordHit?.indices ?? const <int>[];
-    final canPlace = interactive &&
-        _myTurn &&
-        _selected != null &&
-        _game.validatePlacement(_selected!, 0) == null;
+    final canPlace = interactive && _canPlaySelected;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        for (var i = 0; i < SpellLine.slotCount; i++)
+        for (var lane = 0; lane < Battlefield.laneCount; lane++)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: SpellSlotView(
-              letter: player.line[i],
-              width: slotWidth,
-              highlighted: canPlace,
-              wordHighlighted: wordIndices.contains(i),
-              onTap: interactive ? () => _placeSelected(i) : null,
+            child: LaneView(
+              letter: board.field[lane]?.letter,
+              width: laneWidth,
+              power: board.powerOf(lane),
+              toughness: board.toughnessOf(lane),
+              damage: board.field[lane]?.damage ?? 0,
+              exhausted: board.field[lane] != null && !board.canAttack(lane),
+              inFormation: board.formations.includes(lane),
+              highlighted: canPlace &&
+                  board.field[lane] == null &&
+                  _game.validatePlay(_selected!, lane) == null,
+              onTap: interactive ? () => _playAt(lane) : null,
             ),
           ),
       ],
@@ -203,36 +209,29 @@ class _BattleScreenState extends State<BattleScreen> {
       );
     }
 
-    final preview = _preview(_me);
-    final word = preview.word;
-    if (word != null) {
+    final combat = _lastCombat;
+    if (combat != null && combat.totalDamage > 0) {
       return _Banner(
-        icon: Icons.auto_awesome,
-        color: kWordColor,
-        text: 'ターン終了で ${word.word.word} が発動\n${word.word.effectText}',
-      );
-    }
-    if (preview.sequenceDamage > 0) {
-      return _Banner(
-        icon: Icons.trending_up,
-        color: kSequenceColor,
-        text: 'ターン終了でシークエンス ${preview.sequenceDamage} ダメージ',
+        icon: Icons.bolt,
+        color: kLifeColor,
+        text: '直前の戦闘で ${combat.totalDamage} ダメージ',
       );
     }
 
-    final last = _lastResult;
-    if (last != null && last.hasWord) {
+    final letter = _selected;
+    if (letter != null) {
+      final card = cardCatalog[letter]!;
       return _Banner(
-        icon: Icons.history,
-        color: kTextMuted,
-        text: '直前: ${last.word!.word.word}'
-            '${last.wordNegated ? "（無効化）" : "（${last.wordDamage} ダメージ）"}',
+        icon: Icons.touch_app_outlined,
+        color: classColor(card.klass),
+        text: '$letter ${card.abilityName} — ${card.abilityText}',
       );
     }
+
     return const _Banner(
       icon: Icons.touch_app_outlined,
       color: kTextMuted,
-      text: '手札を選んでマスに置く',
+      text: '手札を選んでレーンに出す',
     );
   }
 
@@ -246,12 +245,13 @@ class _BattleScreenState extends State<BattleScreen> {
         separatorBuilder: (_, _) => const SizedBox(width: 6),
         itemBuilder: (context, index) {
           final letter = _me.hand[index];
-          final playable =
-              _myTurn && _game.validatePlacement(letter, 0) == null;
+          final playable = _myTurn &&
+              _me.field.emptyIndices
+                  .any((lane) => _game.validatePlay(letter, lane) == null);
           return Center(
             child: LetterCardView(
               letter: letter,
-              width: 60,
+              width: 58,
               selected: _selected == letter,
               dimmed: !playable,
               onTap: playable ? () => _selectCard(letter) : null,
@@ -264,7 +264,7 @@ class _BattleScreenState extends State<BattleScreen> {
 
   Widget _buildActionBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
       child: Row(
         children: [
           IconButton(
@@ -275,12 +275,8 @@ class _BattleScreenState extends State<BattleScreen> {
           Expanded(
             child: FilledButton.icon(
               onPressed: _myTurn ? _endTurn : null,
-              icon: const Icon(Icons.done_all),
-              label: Text(
-                _myTurn
-                    ? 'ターン終了（残り ${_me.remainingPlacements} 枚）'
-                    : '相手のターン',
-              ),
+              icon: const Icon(Icons.local_fire_department),
+              label: Text(_myTurn ? '戦闘してターン終了' : '相手のターン'),
               style: FilledButton.styleFrom(
                 backgroundColor: kWordColor,
                 foregroundColor: Colors.white,
@@ -352,56 +348,115 @@ class _BattleScreenState extends State<BattleScreen> {
   }
 }
 
+/// 成立している陣形の一覧。維持できているかどうかが一目で分かるようにする。
+class _FormationStrip extends StatelessWidget {
+  const _FormationStrip({required this.board, required this.dimmed});
+
+  final BoardView board;
+  final bool dimmed;
+
+  @override
+  Widget build(BuildContext context) {
+    final formations = board.formations;
+    if (formations.isEmpty) return const SizedBox(height: 20);
+
+    return SizedBox(
+      height: 20,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        shrinkWrap: true,
+        children: [
+          for (final word in formations.words)
+            _Chip2(
+              label: word.word.word,
+              color: kWordColor.withValues(alpha: dimmed ? 0.5 : 1),
+            ),
+          for (final sequence in formations.sequences)
+            _Chip2(
+              label: '連番+${sequence.powerBonus}',
+              color: kSequenceColor.withValues(alpha: dimmed ? 0.5 : 1),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Chip2 extends StatelessWidget {
+  const _Chip2({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.6)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          color: color,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+}
+
 /// LP・シールド・エナジー・山札の状態表示。
 class _StatusPanel extends StatelessWidget {
-  const _StatusPanel({required this.player, required this.isOpponent});
+  const _StatusPanel({
+    required this.player,
+    required this.board,
+    required this.isOpponent,
+  });
 
   final PlayerState player;
+  final BoardView board;
   final bool isOpponent;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Row(
         children: [
-          Text(
-            player.name,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
+          Text(player.name,
+              style: const TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(width: 10),
-          _Chip(
-            icon: Icons.favorite,
-            color: kLifeColor,
-            value: '${player.lp}',
-          ),
+          _Chip(icon: Icons.favorite, color: kLifeColor, value: '${player.lp}'),
           if (player.shield > 0) ...[
             const SizedBox(width: 6),
             _Chip(
-              icon: Icons.shield,
-              color: kShieldColor,
-              value: '${player.shield}',
-            ),
+                icon: Icons.shield,
+                color: kShieldColor,
+                value: '${player.shield}'),
           ],
           const Spacer(),
           _Chip(
             icon: Icons.bolt,
             color: kEnergyColor,
-            value: '${player.energy}/${player.maxEnergy}',
+            value: isOpponent
+                ? '${player.energyIncome}'
+                : '${player.energy} (+${player.energyIncome})',
           ),
           const SizedBox(width: 6),
           _Chip(
-            icon: Icons.style,
-            color: kTextMuted,
-            value: '${player.deck.length}',
-          ),
+              icon: Icons.style, color: kTextMuted, value: '${player.deck.length}'),
           if (isOpponent) ...[
             const SizedBox(width: 6),
             _Chip(
-              icon: Icons.back_hand_outlined,
-              color: kTextMuted,
-              value: '${player.hand.length}',
-            ),
+                icon: Icons.back_hand_outlined,
+                color: kTextMuted,
+                value: '${player.hand.length}'),
           ],
         ],
       ),
@@ -441,17 +496,18 @@ class _Banner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 18, color: color),
+          Icon(icon, size: 17, color: color),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
               text,
               textAlign: TextAlign.center,
-              style: TextStyle(color: color, fontSize: 13, height: 1.4),
+              maxLines: 3,
+              style: TextStyle(color: color, fontSize: 12.5, height: 1.4),
             ),
           ),
         ],
@@ -459,3 +515,6 @@ class _Banner extends StatelessWidget {
     );
   }
 }
+
+/// 陣形の検出をこの画面から直接使えるようにするための別名。
+Formations formationsOfField(Battlefield field) => findFormations(field);

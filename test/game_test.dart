@@ -1,31 +1,21 @@
-/// ターン進行・ダメージ計算・効果解決の検査。
+/// マナ・戦闘・陣形・ターン進行の検査。
 library;
 
 import 'dart:math';
 
-import 'package:azgame/src/engine/effects.dart';
 import 'package:azgame/src/engine/game.dart';
 import 'package:azgame/src/engine/game_state.dart';
+import 'package:azgame/src/engine/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// 検証用に、決定的な山札を持つ対戦を組み立てる。
-///
-/// 山札はシャッフルされるため、内容を固定したいテストでは
-/// [Game.start] を呼ばずに手札とスペルラインを直接操作する。
 Game buildGame({
   List<String>? firstDeck,
   List<String>? secondDeck,
   int seed = 42,
 }) {
   final state = GameState(
-    first: PlayerState(
-      name: '先攻',
-      deck: firstDeck ?? List<String>.filled(30, 'A'),
-    ),
-    second: PlayerState(
-      name: '後攻',
-      deck: secondDeck ?? List<String>.filled(30, 'A'),
-    ),
+    first: PlayerState(name: '先攻', deck: firstDeck ?? List.filled(30, 'A')),
+    second: PlayerState(name: '後攻', deck: secondDeck ?? List.filled(30, 'A')),
     rng: Random(seed),
   );
   return Game(
@@ -35,362 +25,329 @@ Game buildGame({
   );
 }
 
-/// スペルラインを `'ACE__'` 形式で直接セットする。
-///
-/// シークエンスは「このターン置かれたマス」を含むものだけがダメージを出すため、
-/// 置いたマスを [PlayerState.slotsPlacedThisTurn] にも登録する。
-void setLine(PlayerState player, String pattern) {
-  player.line.clear();
-  player.slotsPlacedThisTurn.clear();
+/// 戦場を `'FIRE_'` 形式で直接組む。既定では召喚酔いを解いた状態にする。
+void setField(PlayerState player, String pattern, {bool ready = true}) {
+  player.field.clear();
   for (var i = 0; i < pattern.length; i++) {
-    final char = pattern[i];
-    if (char == '_') continue;
-    player.line.place(i, char);
-    player.slotsPlacedThisTurn.add(i);
+    if (pattern[i] == '_') continue;
+    player.field.place(i, Permanent(pattern[i])..summoningSick = !ready);
   }
 }
 
 void main() {
-  group('ダメージ適用', () {
-    test('シールドが先に削られ、超過分が LP に入る', () {
-      final target = PlayerState(name: 'T', deck: []);
-      target.gainShield(10);
-      dealDamage(target, 15);
-      expect(target.shield, 0);
-      expect(target.lp, kStartingLp - 5);
-    });
-
-    test('貫通ダメージはシールドを無視して LP に入る', () {
-      final target = PlayerState(name: 'T', deck: []);
-      target.gainShield(10);
-      dealDamage(target, 8, pierce: true);
-      expect(target.shield, 10);
-      expect(target.lp, kStartingLp - 8);
-    });
-
-    test('T がスペルライン上にあるとダメージが 2 減る', () {
-      final target = PlayerState(name: 'T', deck: []);
-      setLine(target, 'T____');
-      dealDamage(target, 10);
-      expect(target.lp, kStartingLp - 8);
-    });
-
-    test('VEIL 中はダメージが半減する', () {
-      final target = PlayerState(name: 'T', deck: []);
-      target.halveIncomingDamage = true;
-      dealDamage(target, 11);
-      expect(target.lp, kStartingLp - 5); // 11 ~/ 2 = 5
-    });
-
-    test('軽減しきったダメージは 0 になり LP は減らない', () {
-      final target = PlayerState(name: 'T', deck: []);
-      setLine(target, 'T____');
-      dealDamage(target, 2);
-      expect(target.lp, kStartingLp);
-    });
-  });
-
-  group('ワード解決', () {
-    test('ACE は 固有 8 + パワー 10 + A の先頭ボーナス 3 = 21', () {
+  group('マナ', () {
+    test('母音は毎ターンエナジーを生み、E は 2 生む', () {
       final game = buildGame();
-      setLine(game.state.first, 'ACE__');
-      final result = game.resolveJudgement();
-      expect(result.word!.word.word, 'ACE');
-      expect(result.wordDamage, 21);
+      setField(game.state.first, 'AE___');
+      expect(game.state.first.energyIncome, 3);
     });
 
-    test('S を含むワードは最後に 1.5 倍される', () {
-      final game = buildGame();
-      setLine(game.state.first, 'STAR_');
-      final result = game.resolveJudgement();
-      // 固有 10 + パワー(2+2+2+2)=8 → 18 → S で 27
-      expect(result.wordDamage, 27);
-    });
-
-    test('Z を含むワードは +15 され、BLAZE は 59 ダメージになる', () {
-      final game = buildGame();
-      setLine(game.state.first, 'BLAZE');
-      final result = game.resolveJudgement();
-      // 固有 16 + パワー 28 + Z の 15 = 59
-      expect(result.wordDamage, 59);
-    });
-
-    test('P を含むワードはシールドを無視して LP を削る', () {
-      final game = buildGame();
-      game.state.second.gainShield(100);
-      setLine(game.state.first, 'ZAP__');
-      final result = game.resolveJudgement();
-
-      // シークエンスぶんはシールドに吸われ、ワードぶんは貫通して LP に入る。
-      final rawSequenceDamage =
-          result.sequences.fold<int>(0, (sum, hit) => sum + hit.damage);
-      expect(result.wordDamage, greaterThan(0));
-      expect(result.sequenceDamage, 0, reason: 'シークエンスはシールドで吸い切られる');
-      expect(game.state.second.shield, 100 - rawSequenceDamage);
-      expect(game.state.second.lp, kStartingLp - result.wordDamage);
-    });
-
-    test('ワードを構成したカードは墓地へ送られる', () {
-      final game = buildGame();
-      setLine(game.state.first, 'ACE__');
-      game.resolveJudgement();
-      // E はエコーで残るため、墓地に行くのは A と C
-      expect(game.state.first.graveyard, containsAll(['A', 'C']));
-      expect(game.state.first.line.slots.contains('E'), isTrue);
-    });
-
-    test('E（エコー）はワード成立後もスペルラインに残る', () {
-      final game = buildGame();
-      setLine(game.state.first, 'ACE__');
-      game.resolveJudgement();
-      expect(game.state.first.line[2], 'E');
-      expect(game.state.first.graveyard.contains('E'), isFalse);
-    });
-
-    test('negateNextWord が立っているとワードは不発になるがカードは消費される', () {
-      final game = buildGame();
-      game.state.first.negateNextWord = true;
-      setLine(game.state.first, 'ACE__');
-      final result = game.resolveJudgement();
-      expect(result.wordNegated, isTrue);
-      expect(result.wordDamage, 0);
-      // シークエンスは無効化されないため、その分だけは LP が減る。
-      expect(game.state.second.lp, kStartingLp - result.sequenceDamage);
-      expect(game.state.first.graveyard, containsAll(['A', 'C']));
-      expect(game.state.first.negateNextWord, isFalse);
-    });
-
-    test('WIN は相手の LP が 15 以下のときだけ +20 される', () {
-      final low = buildGame();
-      low.state.second.lp = 15;
-      setLine(low.state.first, 'WIN__');
-      final boosted = low.resolveJudgement().wordDamage;
-
-      final high = buildGame();
-      high.state.second.lp = 40;
-      setLine(high.state.first, 'WIN__');
-      final normal = high.resolveJudgement().wordDamage;
-
-      expect(boosted - normal, 20);
-    });
-
-    test('UP のボーナスは次に発動したワードに乗り、使うと消える', () {
-      final game = buildGame();
-      game.state.first.nextWordBonus = 8;
-      setLine(game.state.first, 'ACE__');
-      final result = game.resolveJudgement();
-      expect(result.wordDamage, 21 + 8);
-      expect(game.state.first.nextWordBonus, 0);
-    });
-
-    test('1 ターンに成立するワードは 1 語だけ', () {
-      final game = buildGame();
-      setLine(game.state.first, 'STAR_');
-      final result = game.resolveJudgement();
-      expect(result.word!.word.word, 'STAR');
-      // AT も部分的に読めるが、最長の STAR のみが発動する
-      expect(game.state.first.line.isEmpty, isTrue);
-    });
-  });
-
-  group('シークエンスとワードの同時解決', () {
-    test('シークエンスが先に解決され、その後ワードでカードが消える', () {
-      final game = buildGame();
-      // A(1) C(3) E(5) は昇順 3 連（ランではない）かつ ACE が成立する
-      setLine(game.state.first, 'ACE__');
-      final result = game.resolveJudgement();
-
-      expect(result.sequences.length, 1);
-      expect(result.sequences.single.letters, ['A', 'C', 'E']);
-      // パワー合計 10 × 倍率 0.4 = 4
-      expect(result.sequences.single.damage, 4);
-      expect(result.sequenceDamage, 4);
-      expect(result.wordDamage, 21);
-      expect(game.state.second.lp, kStartingLp - 4 - 21);
-    });
-  });
-
-  group('ターン進行', () {
-    test('エナジーはターンごとに最大値が 1 増えて全回復する', () {
+    test('母音は 1 ターンに 1 枚しか出せない', () {
       final game = buildGame();
       game.start();
-      expect(game.state.first.maxEnergy, 1);
+      game.state.first.hand.addAll(['A', 'E']);
+
+      game.playCard('A', 0);
+      expect(game.validatePlay('E', 1), PlayError.vowelLimitReached);
+    });
+
+    test('母音は出したターンからマナを生む', () {
+      final game = buildGame();
+      game.start();
+      game.state.first.hand.add('E');
+      final before = game.state.first.energy;
+      game.playCard('E', 0);
+      expect(game.state.first.energy, before + 2);
+    });
+
+    test('エナジーが足りない子音は出せない', () {
+      final game = buildGame();
+      game.start();
+      game.state.first.hand.add('Z');
+      expect(game.validatePlay('Z', 0), PlayError.notEnoughEnergy);
+    });
+
+    test('エナジーは持ち越されず、ターン開始時に母音の生産量に戻る', () {
+      final game = buildGame();
+      game.start();
+      setField(game.state.first, 'A____');
+      game.state.first.energy = 99;
+
+      game.endTurn(); // 後攻へ
+      game.endTurn(); // 先攻に戻る
       expect(game.state.first.energy, 1);
-
-      game.endTurn(); // 後攻の 1 ターン目
-      expect(game.state.second.maxEnergy, 1);
-
-      game.endTurn(); // 先攻の 2 ターン目
-      expect(game.state.first.maxEnergy, 2);
-      expect(game.state.first.energy, 2);
     });
 
-    test('エナジーの最大値は 10 で頭打ちになる', () {
+    test('埋まっているレーンには出せない', () {
       final game = buildGame();
       game.start();
-      for (var i = 0; i < 30; i++) {
-        game.endTurn();
-      }
-      expect(game.state.first.maxEnergy, kMaxEnergyCap);
-    });
-
-    test('後攻は先攻より 2 枚多く初期手札を持つ（先攻有利の補正）', () {
-      final game = buildGame();
-      game.start();
-      // 先攻は 5 枚配って 1 ターン目に 1 枚引くので 6 枚
-      expect(game.state.first.hand.length, kStartingHandSize + 1);
-      // 後攻は 7 枚配られ、自分のターンが来た時点でさらに 1 枚引く
-      expect(game.state.second.hand.length, kStartingHandSize + 2);
-    });
-
-    test('エナジーが足りないカードは配置できない', () {
-      final game = buildGame();
-      game.start();
-      game.state.first.hand.add('Z'); // コスト 8
-      expect(game.validatePlacement('Z', 0), PlacementError.notEnoughEnergy);
-    });
-
-    test('1 ターンの配置枚数は基本 2 枚まで', () {
-      final game = buildGame();
-      game.start();
-      game.state.first.energy = 10;
-      game.state.first.hand.addAll(['A', 'A', 'A']);
-
-      expect(game.state.first.remainingPlacements, kBasePlacementsPerTurn);
-      game.placeCard('A', 0);
-      game.placeCard('A', 1);
-      expect(game.state.first.remainingPlacements, 0);
-      expect(game.validatePlacement('A', 2), PlacementError.noPlacementsLeft);
-    });
-
-    test('R（ラッシュ）は配置枚数を 1 増やす', () {
-      final game = buildGame();
-      game.start();
-      game.state.first.energy = 10;
-      game.state.first.hand.addAll(['R', 'A', 'A']);
-
-      game.placeCard('R', 0);
-      expect(game.state.first.remainingPlacements, kBasePlacementsPerTurn);
-    });
-
-    test('埋まっているマスには上書きでき、元のカードは墓地へ送られる', () {
-      final game = buildGame();
-      game.start();
-      game.state.first.energy = 10;
-      game.state.first.hand.addAll(['A', 'B']);
-      game.placeCard('A', 0);
-      expect(game.validatePlacement('B', 0), isNull);
-
-      game.placeCard('B', 0);
-      expect(game.state.first.line[0], 'B');
-      expect(game.state.first.graveyard, contains('A'));
-    });
-
-    test('ICE は相手の次のターンの配置枚数を 1 に制限する', () {
-      final game = buildGame();
-      game.start();
-      setLine(game.state.first, 'ICE__');
-      game.endTurn(); // 判定 → 後攻のターンが始まる
-      expect(game.state.second.remainingPlacements, 1);
-    });
-
-    test('LOCK は相手の次のターンの配置を完全に封じる', () {
-      final game = buildGame();
-      game.start();
-      // LOCK はシークエンスと合わせて 50 を超えるダメージになるため、
-      // 決着せずに次ターンへ進めるよう LP を厚くしておく。
-      game.state.second.lp = 300;
-      setLine(game.state.first, 'LOCK_');
-      game.endTurn();
-      expect(game.state.second.remainingPlacements, 0);
-    });
-
-    test('FROST の制限は 2 ターン続く', () {
-      final game = buildGame();
-      game.start();
-      game.state.second.lp = 300;
-      setLine(game.state.first, 'FROST');
-      game.endTurn();
-      expect(game.state.second.remainingPlacements, 1);
-      game.endTurn(); // 先攻の 2 ターン目
-      game.endTurn(); // 後攻の 2 ターン目
-      expect(game.state.second.remainingPlacements, 1);
-      game.endTurn();
-      game.endTurn(); // 後攻の 3 ターン目 — 制限が切れている
-      expect(game.state.second.remainingPlacements, kBasePlacementsPerTurn);
+      game.state.first.hand.addAll(['A', 'E']);
+      game.playCard('A', 0);
+      expect(game.validatePlay('E', 0), PlayError.laneOccupied);
     });
   });
 
-  group('配置時能力', () {
-    test('B はシールドを 3 得る', () {
+  group('召喚酔い', () {
+    test('出したターンは攻撃できない', () {
       final game = buildGame();
       game.start();
+      game.state.first.hand.add('A');
+      game.playCard('A', 0);
+
+      final board = game.boardOf(game.state.first);
+      expect(board.canAttack(0), isFalse);
+    });
+
+    test('次の自分のターンには攻撃できる', () {
+      final game = buildGame();
+      game.start();
+      game.state.first.hand.add('A');
+      game.playCard('A', 0);
+
+      game.endTurn(); // 後攻へ
+      game.endTurn(); // 先攻に戻る
+      expect(game.boardOf(game.state.first).canAttack(0), isTrue);
+    });
+
+    test('R がいると召喚酔いを受けない', () {
+      final game = buildGame();
+      game.start();
+      setField(game.state.first, 'R____');
       game.state.first.energy = 10;
       game.state.first.hand.add('B');
-      game.placeCard('B', 0);
-      expect(game.state.first.shield, 3);
-    });
+      game.playCard('B', 1);
 
-    test('Z は配置しただけで 10 ダメージを与える', () {
+      expect(game.boardOf(game.state.first).canAttack(1), isTrue);
+    });
+  });
+
+  group('レーン戦闘', () {
+    test('相手のレーンが空なら本体にダメージが入る', () {
       final game = buildGame();
       game.start();
+      setField(game.state.first, 'F____'); // 4/4
+      final result = game.resolveCombat();
+
+      expect(result.totalDamage, 4);
+      expect(game.state.second.lp, kStartingLp - 4);
+    });
+
+    test('対峙している場合は互いにダメージを与え合う', () {
+      final game = buildGame();
+      game.start();
+      setField(game.state.first, 'F____');  // 4/4
+      setField(game.state.second, 'B____'); // 3/3
+
+      game.resolveCombat();
+      // B はタフネス 3 に 4 ダメージで破壊される
+      expect(game.state.second.field[0], isNull);
+      // F はタフネス 4 に 3 ダメージなので生存
+      expect(game.state.first.field[0], isNotNull);
+      expect(game.state.first.field[0]!.damage, 3);
+      // 本体にはダメージが入らない
+      expect(game.state.second.lp, kStartingLp);
+    });
+
+    test('相打ちになると両方が破壊される', () {
+      final game = buildGame();
+      game.start();
+      setField(game.state.first, 'F____');
+      setField(game.state.second, 'F____');
+
+      game.resolveCombat();
+      expect(game.state.first.field[0], isNull);
+      expect(game.state.second.field[0], isNull);
+    });
+
+    test('T は自分のレーンで受ける戦闘ダメージを 2 減らす', () {
+      final game = buildGame();
+      game.start();
+      setField(game.state.first, 'B____');  // 3/3
+      setField(game.state.second, 'T____'); // 1/1 だが 2 軽減
+
+      game.resolveCombat();
+      // 3 - 2 = 1 ダメージ。タフネス 1 なので破壊される
+      expect(game.state.second.field[0], isNull);
+    });
+
+    test('P は対峙する文字を無視して本体に通る', () {
+      final game = buildGame();
+      game.start();
+      setField(game.state.first, 'P____');  // 3/3 貫通
+      setField(game.state.second, 'Z____'); // 8/8
+
+      game.resolveCombat();
+      expect(game.state.second.lp, kStartingLp - 3);
+      // 貫通したので Z との殴り合いは起きない
+      expect(game.state.first.field[0]!.damage, 0);
+    });
+
+    test('蓄積したダメージはターン終了時に回復する', () {
+      final game = buildGame();
+      game.start();
+      setField(game.state.first, 'F____');
+      setField(game.state.second, 'Z____'); // 8/8。F は 8 受けるが…
+
+      // F(4/4) は Z(8/8) に討ち取られる。代わりに H(4/4) で試す
+      setField(game.state.first, 'H____');
+      setField(game.state.second, 'T____'); // 1/1、2 軽減
+      game.endTurn();
+      for (final permanent in game.state.first.field.occupants) {
+        expect(permanent.damage, 0);
+      }
+    });
+  });
+
+  group('陣形の継続効果', () {
+    test('ワード陣形は文字を消費せず、盤面に残り続ける', () {
+      final game = buildGame();
+      game.start();
+      setField(game.state.first, 'FIRE_');
+
+      game.endTurn();
+      game.endTurn();
+      // FIRE の 4 文字は健在
+      expect(game.state.first.field.count, 4);
+    });
+
+    test('パワー加算の陣形は実効パワーに反映される', () {
+      final withFormation = buildGame();
+      setField(withFormation.state.first, 'WAR__'); // WAR = 全文字パワー+3
+      final boosted = withFormation.boardOf(withFormation.state.first);
+
+      final plain = buildGame();
+      setField(plain.state.first, 'W_R__'); // 隙間があり陣形は不成立
+      final normal = plain.boardOf(plain.state.first);
+
+      expect(boosted.powerOf(0), greaterThan(normal.powerOf(0)));
+    });
+
+    test('毎ターン効果の陣形はターン開始時に発動する', () {
+      final game = buildGame();
+      game.start();
+      setField(game.state.first, 'FIRE_'); // 毎ターン 5 ダメージ
+
+      final before = game.state.second.lp;
+      game.endTurn(); // 後攻へ
+      game.endTurn(); // 先攻のターン開始 → FIRE が発動
+      // 戦闘ぶんも入るため、少なくとも 5 は削れている
+      expect(game.state.second.lp, lessThanOrEqualTo(before - 5));
+    });
+
+    test('陣形が崩れると効果は即座に消える', () {
+      final game = buildGame();
+      setField(game.state.first, 'WAR__');
+      final before = game.boardOf(game.state.first).powerOf(0);
+
+      game.state.first.destroyAt(1); // A を失って陣形が崩れる
+      final after = game.boardOf(game.state.first).powerOf(0);
+      expect(after, lessThan(before));
+    });
+
+    test('拘束の陣形は相手の文字を攻撃できなくする', () {
+      // 戦闘を挟むと FROST 自身が討ち取られて陣形が崩れてしまうため、
+      // 盤面を組んだうえでターン開始処理だけを走らせて検証する。
+      final game = buildGame();
+      setField(game.state.second, 'FROST'); // 相手 3 体を拘束
+      setField(game.state.first, 'BCFHZ');
+
+      game.beginTurn(); // 先攻のターン開始。ここで拘束を受ける
+      final board = game.boardOf(game.state.first);
+      final frozen = game.state.first.field.occupiedIndices
+          .where((lane) => !board.canAttack(lane))
+          .length;
+      expect(frozen, 3);
+    });
+  });
+
+  group('常在能力', () {
+    test('A は隣のレーンの文字のパワーを上げる', () {
+      final game = buildGame();
+      setField(game.state.first, 'AB___');
+      final board = game.boardOf(game.state.first);
+      // B は基礎 3、隣の A で +1
+      expect(board.powerOf(1), greaterThanOrEqualTo(4));
+    });
+
+    test('D は隣のレーンの文字のタフネスを上げる', () {
+      final withD = buildGame();
+      setField(withD.state.first, 'DB___');
+      final withoutD = buildGame();
+      setField(withoutD.state.first, '_B___');
+
+      expect(withD.boardOf(withD.state.first).toughnessOf(1),
+          greaterThan(withoutD.boardOf(withoutD.state.first).toughnessOf(1)));
+    });
+
+    test('K は陣形に含まれていない間だけパワーが上がる', () {
+      // 単騎なら基礎 5 に +3。KEY の陣形に入ると加算が消えて 5 に戻る。
+      // KEY を選んだのは、K が隣接強化も連番陣形も受けない並びだから。
+      final solo = buildGame();
+      setField(solo.state.first, 'K____');
+      expect(solo.boardOf(solo.state.first).powerOf(0), 8);
+
+      final inFormation = buildGame();
+      setField(inFormation.state.first, 'KEY__');
+      expect(inFormation.boardOf(inFormation.state.first).powerOf(0), 5);
+    });
+  });
+
+  group('登場時能力', () {
+    test('J は相手の文字を 1 体破壊する', () {
+      final game = buildGame();
+      game.start();
+      setField(game.state.second, 'B____');
       game.state.first.energy = 10;
-      game.state.first.hand.add('Z');
-      game.placeCard('Z', 0);
-      expect(game.state.second.lp, kStartingLp - 10);
+      game.state.first.hand.add('J');
+
+      game.playCard('J', 1);
+      expect(game.state.second.field.isEmpty, isTrue);
     });
 
-    test('X は相手のスペルラインを全破壊する', () {
+    test('X は相手の全ての文字に 4 ダメージを与える', () {
       final game = buildGame();
       game.start();
-      setLine(game.state.second, 'ACE__');
+      setField(game.state.second, 'BBB__'); // 3/3 が 3 体
       game.state.first.energy = 10;
       game.state.first.hand.add('X');
-      game.placeCard('X', 0);
-      expect(game.state.second.line.isEmpty, isTrue);
-      expect(game.state.second.graveyard, containsAll(['A', 'C', 'E']));
+
+      game.playCard('X', 4);
+      expect(game.state.second.field.isEmpty, isTrue);
     });
 
-    test('W は相手のラインを右へずらし、はみ出したカードを破壊する', () {
+    test('W は相手の戦場を右へずらし、はみ出した文字を破壊する', () {
       final game = buildGame();
       game.start();
-      setLine(game.state.second, 'ACE_Z');
+      setField(game.state.second, 'ACE_Z');
       game.state.first.energy = 10;
       game.state.first.hand.add('W');
-      game.placeCard('W', 0);
-      expect(game.state.second.line.toString(), '_ACE_');
-      expect(game.state.second.graveyard, contains('Z'));
-    });
 
-    test('Y は LP を 3 失う代わりに 3 枚引く', () {
-      final game = buildGame(firstDeck: List<String>.filled(30, 'C'));
-      game.start();
-      final before = game.state.first.hand.length;
-      game.state.first.energy = 10;
-      game.state.first.hand.add('Y');
-      game.placeCard('Y', 0);
-      expect(game.state.first.lp, kStartingLp - 3);
-      expect(game.state.first.hand.length, before + 3);
+      game.playCard('W', 0);
+      expect(game.state.second.field.toString(), '_ACE_');
+      expect(game.state.second.graveyard, contains('Z'));
     });
   });
 
   group('決着', () {
     test('LP が 0 以下になった側が敗北する', () {
       final game = buildGame();
-      game.state.second.lp = 5;
-      setLine(game.state.first, 'ACE__');
-      game.resolveJudgement();
+      game.start();
+      game.state.second.lp = 3;
+      setField(game.state.first, 'F____');
+
+      game.resolveCombat();
       expect(game.state.isOver, isTrue);
       expect(game.state.winner, game.state.first);
     });
 
     test('デッキが尽きた状態でドローすると敗北する', () {
-      final game = buildGame(firstDeck: ['A', 'A', 'A', 'A', 'A', 'A']);
+      // 初手 5 枚を配った時点で山札が尽きる構成。先攻は 1 手番目に
+      // ドローしないため、2 巡目のドローで敗北が確定する。
+      final game = buildGame(firstDeck: List.filled(kStartingHandSize, 'A'));
       game.start();
       expect(game.state.first.deck, isEmpty);
-      expect(game.state.first.deckedOut, isFalse);
-      game.endTurn(); // 後攻
-      game.endTurn(); // 先攻 — 引けずにデッキ切れ
+      game.endTurn();
+      game.endTurn();
       expect(game.state.first.deckedOut, isTrue);
       expect(game.state.winner, game.state.second);
     });

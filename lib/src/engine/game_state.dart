@@ -7,26 +7,19 @@ import '../data/catalog.g.dart';
 import 'models.dart';
 
 /// 初期ライフポイント。
-const int kStartingLp = 80;
-
-/// 1 ターンに配置できるカードの基本枚数。
-///
-/// エナジーと空きマスが許す限り、この枚数まで配置できる。
-/// `R`（ラッシュ）や `GO` は一時的にこれを増やし、
-/// `ICE` / `FROST` / `LOCK` は一時的に減らす。
-const int kBasePlacementsPerTurn = 2;
-
-/// エナジーの上限。
-const int kMaxEnergyCap = 10;
+const int kStartingLp = 60;
 
 /// 初期手札枚数。
 const int kStartingHandSize = 5;
 
-/// 手札の上限。エンドフェイズに超過分を捨てる。
+/// 手札の上限。ターン終了時に超過分を捨てる。
 const int kHandLimit = 8;
 
 /// デッキの枚数。
 const int kDeckSize = 30;
+
+/// 1 ターンに無償で出せる母音の枚数。MTG の土地と同じ制約。
+const int kVowelsPerTurn = 1;
 
 /// 対戦者ひとりぶんの状態。
 class PlayerState {
@@ -40,84 +33,31 @@ class PlayerState {
 
   int lp;
   int shield = 0;
+
+  /// 現在使えるエナジー。ターン開始時に「戦場の母音が生む量」まで回復する。
   int energy = 0;
-  int maxEnergy = 0;
 
   /// 山札。索引 0 が一番上。
   final List<String> deck;
 
   final List<String> hand = [];
-  final SpellLine line = SpellLine();
+  final Battlefield field = Battlefield();
   final List<String> graveyard = [];
 
-  /// このターンすでに配置した枚数。
-  int placementsUsed = 0;
-
-  /// このターン限定の追加配置枚数（`R` / `GO`）。
-  int bonusPlacements = 0;
-
-  /// このターンにカードを置いたマスの索引。
-  ///
-  /// シークエンスは「このターン伸びたもの」だけがダメージを出す。
-  /// 盤面を寝かせているだけで毎ターン削れてしまうと、単語を作るという
-  /// ゲームの核が機能しなくなるため（docs/game-design.md 6.1）。
-  final Set<int> slotsPlacedThisTurn = {};
-
-  /// 今後のターンに課される配置制限のキュー。索引 0 が次の自分のターン。
-  ///
-  /// `ICE` は `[1]`、`FROST` は `[1, 1]`、`LOCK` は `[0]` を課す。
-  /// 複数の制限が重なる場合は、ターンごとに厳しいほう（小さいほう）が残る。
-  final List<int> placementLimitQueue = [];
-
-  /// 次に発動するワードが無効化されるか（`NO` / `JINX`）。
-  bool negateNextWord = false;
-
-  /// 次に発動するワードのダメージ加算（`UP` / `MAP`）。
-  int nextWordBonus = 0;
-
-  /// 次に受けるダメージを半減するか（`VEIL`）。
-  bool halveIncomingDamage = false;
-
-  /// 直近に発動したワード。`M`（ミラー）が参照する。
-  ComboWord? lastWord;
+  /// このターンすでに母音を出したか。
+  int vowelsPlayedThisTurn = 0;
 
   /// デッキ切れで敗北が確定したか。
   bool deckedOut = false;
 
   bool get isDefeated => lp <= 0 || deckedOut;
 
-  /// このターン配置できる残り枚数。
-  int get remainingPlacements {
-    final limit = _currentPlacementLimit + bonusPlacements;
-    final remaining = limit - placementsUsed;
-    return remaining < 0 ? 0 : remaining;
-  }
+  /// 戦場の母音が毎ターン生み出すエナジーの合計。
+  int get energyIncome => field.occupants
+      .fold<int>(0, (sum, p) => sum + cardCatalog[p.letter]!.energyProduced);
 
-  int _currentTurnLimit = kBasePlacementsPerTurn;
-  int get _currentPlacementLimit => _currentTurnLimit;
-
-  /// ターン開始時に配置制限を確定させる。
-  void beginTurnPlacementLimit() {
-    if (placementLimitQueue.isNotEmpty) {
-      _currentTurnLimit = placementLimitQueue.removeAt(0);
-    } else {
-      _currentTurnLimit = kBasePlacementsPerTurn;
-    }
-    placementsUsed = 0;
-    bonusPlacements = 0;
-    slotsPlacedThisTurn.clear();
-  }
-
-  /// [turns] ターンのあいだ、配置枚数を [limit] 以下に制限する。
-  void restrictPlacements({required int turns, required int limit}) {
-    for (var i = 0; i < turns; i++) {
-      if (i < placementLimitQueue.length) {
-        placementLimitQueue[i] = min(placementLimitQueue[i], limit);
-      } else {
-        placementLimitQueue.add(limit);
-      }
-    }
-  }
+  /// このターン、まだ母音を無償で出せるか。
+  bool get canPlayVowel => vowelsPlayedThisTurn < kVowelsPerTurn;
 
   /// 山札の一番上から [count] 枚引く。引ける枚数が足りなければデッキ切れ。
   List<String> draw(int count) {
@@ -134,45 +74,16 @@ class PlayerState {
     return drawn;
   }
 
-  /// 山札の上から [count] 枚を墓地へ送る（`BUG`）。
-  List<String> mill(int count) {
-    final milled = <String>[];
-    for (var i = 0; i < count && deck.isNotEmpty; i++) {
-      final card = deck.removeAt(0);
-      graveyard.add(card);
-      milled.add(card);
-    }
-    return milled;
-  }
+  void heal(int amount) => lp += amount;
 
-  void heal(int amount) {
-    lp += amount;
-  }
+  void gainShield(int amount) => shield += amount;
 
-  void gainShield(int amount) {
-    shield += amount;
-  }
+  void gainEnergy(int amount) => energy += amount;
 
-  void gainEnergy(int amount) {
-    energy = min(energy + amount, maxEnergy);
-  }
-
-  void gainMaxEnergy(int amount) {
-    maxEnergy = min(maxEnergy + amount, kMaxEnergyCap);
-    energy = min(energy + amount, maxEnergy);
-  }
-
-  /// スペルライン上の指定マスのカードを墓地へ送る。
-  String? destroyAt(int index) {
-    final removed = line.removeAt(index);
-    if (removed != null) graveyard.add(removed);
-    return removed;
-  }
-
-  /// スペルライン上の全カードを墓地へ送る。
-  List<String> destroyLine() {
-    final removed = line.clear();
-    graveyard.addAll(removed);
+  /// 戦場の指定レーンの文字を墓地へ送る。
+  Permanent? destroyAt(int index) {
+    final removed = field.removeAt(index);
+    if (removed != null) graveyard.add(removed.letter);
     return removed;
   }
 
@@ -184,10 +95,25 @@ class PlayerState {
     return card;
   }
 
+  /// タフネスを超えるダメージを負っている文字を墓地へ送る。
+  ///
+  /// [toughnessOf] は陣形や隣接効果を織り込んだ実効タフネスを返す関数。
+  List<String> removeDestroyed(int Function(int lane) toughnessOf) {
+    final destroyed = <String>[];
+    for (final lane in field.occupiedIndices) {
+      final permanent = field[lane]!;
+      if (permanent.damage >= toughnessOf(lane)) {
+        field.removeAt(lane);
+        graveyard.add(permanent.letter);
+        destroyed.add(permanent.letter);
+      }
+    }
+    return destroyed;
+  }
+
   @override
-  String toString() =>
-      '$name(LP $lp${shield > 0 ? ' +$shield' : ''}, '
-      'E $energy/$maxEnergy, line $line)';
+  String toString() => '$name(LP $lp${shield > 0 ? ' +$shield' : ''}, '
+      'E $energy, 場 $field)';
 }
 
 /// 対戦全体の状態。
@@ -198,19 +124,15 @@ class GameState {
     Random? rng,
   }) : rng = rng ?? Random();
 
-  /// 先攻プレイヤー。
   final PlayerState first;
-
-  /// 後攻プレイヤー。
   final PlayerState second;
 
-  /// 乱数源。テストでは種を固定して決定的に動かせる。
+  /// 乱数源。種を固定すれば対戦を完全に再現できる。
   final Random rng;
 
-  /// 1 から始まるターン番号。両者のターンを通して増加する。
+  /// 1 から始まる手番番号。両者の手番を通して増加する。
   int turnNumber = 0;
 
-  /// 現在の手番プレイヤーが先攻側か。
   bool isFirstPlayerTurn = true;
 
   PlayerState get active => isFirstPlayerTurn ? first : second;
@@ -226,6 +148,9 @@ class GameState {
     if (firstDown && secondDown) return null;
     return firstDown ? second : first;
   }
+
+  PlayerState opponentOf(PlayerState player) =>
+      identical(player, first) ? second : first;
 }
 
 /// 対戦中に起きた出来事の記録。UI の演出とデバッグの両方に使う。
@@ -239,27 +164,21 @@ class GameLog {
 }
 
 /// 効果の解決中にプレイヤー（または AI）へ選択を求めるためのインターフェース。
-///
-/// エンジンを UI から独立させるための境界。テストでは決定的な実装を、
-/// 対人プレイでは UI 実装を、AI 戦では思考ルーチンを差し込む。
 abstract class Chooser {
   /// [letters] から 1 枚選び、その索引を返す。選ばない場合は `null`。
   int? chooseCard(String reason, List<String> letters);
 
-  /// スペルライン上の埋まっているマスから 1 つ選び、索引を返す。
-  int? chooseLineSlot(String reason, SpellLine line);
+  /// 戦場の埋まっているレーンから 1 つ選び、索引を返す。
+  int? chooseLane(String reason, Battlefield field);
 
-  /// [letters] を任意の順に並べ替えて返す。
-  List<String> chooseOrder(String reason, List<String> letters);
-
-  /// 空きマスから配置先を 1 つ選び、索引を返す。
-  int? choosePlacementSlot(String reason, SpellLine line, String letter);
+  /// [permanents] を任意の順に並べ替えて返す。
+  List<Permanent> chooseOrder(String reason, List<Permanent> permanents);
 }
 
 /// 決定的に振る舞う既定の [Chooser]。
 ///
-/// 「コストが高いカードほど価値がある」という単純な指標で選ぶ。
-/// テストの再現性を担保しつつ、AI の初期実装としても十分に機能する。
+/// 「コストが高いものほど価値がある」という単純な指標で選ぶ。
+/// テストの再現性を担保しつつ、AI の補助としても十分に機能する。
 class HeuristicChooser implements Chooser {
   const HeuristicChooser();
 
@@ -276,29 +195,23 @@ class HeuristicChooser implements Chooser {
   }
 
   @override
-  int? chooseLineSlot(String reason, SpellLine line) {
-    final occupied = line.occupiedIndices;
+  int? chooseLane(String reason, Battlefield field) {
+    final occupied = field.occupiedIndices;
     if (occupied.isEmpty) return null;
     var best = occupied.first;
-    for (final index in occupied) {
-      if (cardCatalog[line[index]!]!.cost > cardCatalog[line[best]!]!.cost) {
-        best = index;
-      }
+    for (final lane in occupied) {
+      final here = cardCatalog[field[lane]!.letter]!.cost;
+      final bestCost = cardCatalog[field[best]!.letter]!.cost;
+      if (here > bestCost) best = lane;
     }
     return best;
   }
 
   @override
-  List<String> chooseOrder(String reason, List<String> letters) {
-    // 順位の昇順に並べるとシークエンスが最も伸びる。
-    final sorted = List<String>.of(letters)
-      ..sort((a, b) => cardCatalog[a]!.rank.compareTo(cardCatalog[b]!.rank));
-    return sorted;
-  }
-
-  @override
-  int? choosePlacementSlot(String reason, SpellLine line, String letter) {
-    final empty = line.emptyIndices;
-    return empty.isEmpty ? null : empty.first;
+  List<Permanent> chooseOrder(String reason, List<Permanent> permanents) {
+    // 順位の昇順に並べると連番陣形が最も伸びる。
+    return List<Permanent>.of(permanents)
+      ..sort((a, b) =>
+          cardCatalog[a.letter]!.rank.compareTo(cardCatalog[b.letter]!.rank));
   }
 }

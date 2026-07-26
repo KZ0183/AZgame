@@ -83,7 +83,17 @@ class _CardList extends StatelessWidget {
                           color: classColor(card.klass),
                         ),
                         const SizedBox(width: 4),
-                        _Tag(label: '${card.deckLimit}枚まで', color: kTextMuted),
+                        _Tag(
+                          label: card.isVowel
+                              ? 'マナ +${card.energyProduced}'
+                              : 'コスト ${card.cost}',
+                          color: kEnergyColor,
+                        ),
+                        const SizedBox(width: 4),
+                        _Tag(
+                          label: '${card.power}/${card.toughness}',
+                          color: kTextMuted,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -172,16 +182,13 @@ class _WordListState extends State<_WordList> {
                           ],
                         ),
                         const Spacer(),
-                        if (word.damage > 0)
-                          _Tag(
-                              label: '${word.damage} ダメージ',
-                              color: kLifeColor),
+                        _Tag(label: '${word.length} 文字', color: kTextMuted),
                       ],
                     ),
-                    if (word.effectText != '—') ...[
+                    ...[
                       const SizedBox(height: 8),
                       Text(
-                        word.effectText,
+                        word.text,
                         style: const TextStyle(
                             color: kTextMuted, fontSize: 12.5, height: 1.5),
                       ),

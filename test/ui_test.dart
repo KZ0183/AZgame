@@ -34,12 +34,12 @@ void main() {
     expect(find.byType(BattleScreen), findsOneWidget);
     expect(find.text('あなた'), findsOneWidget);
     expect(find.text('相手'), findsOneWidget);
-    // 空のマス 10 個（両者 5 マスずつ）と手札が描かれている
-    expect(find.byType(SpellSlotView), findsNWidgets(10));
+    // 両者 5 レーンずつが描かれている
+    expect(find.byType(LaneView), findsNWidgets(10));
     expect(find.byType(LetterCardView), findsWidgets);
   });
 
-  testWidgets('手札を選んでマスに置き、ターンを終了できる', (tester) async {
+  testWidgets('手札を選んでレーンに出し、ターンを終了できる', (tester) async {
     await tester.pumpWidget(const AzGameApp());
     await tester.pumpAndSettle();
     await tester.tap(find.text('対戦開始'));
@@ -55,7 +55,7 @@ void main() {
     await tester.tap(handCards.first);
     await tester.pump();
 
-    await tester.tap(find.byType(SpellSlotView).at(5));
+    await tester.tap(find.byType(LaneView).at(5));
     await tester.pump();
 
     // ターン終了ボタンを押すと、AI の手番に入る。

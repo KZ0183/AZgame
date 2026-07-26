@@ -1,49 +1,49 @@
 /// AZgame のコアデータモデル。
 ///
-/// このファイルは Flutter に依存しない純粋な Dart で書かれている。
-/// ルールエンジン全体が UI から独立してテストできることを保証するため、
-/// `lib/src/engine/` 以下では `package:flutter/*` を import してはならない。
+/// Flutter に依存しない純粋な Dart で書く。ルールエンジン全体が UI から
+/// 独立してテストできることを保証するため、`lib/src/engine/` 以下では
+/// `package:flutter/*` を import してはならない。
 library;
 
-/// 文字の分類。コスト帯と役割を表す。詳細は docs/game-design.md 3.2 を参照。
+/// 文字の分類。
 enum LetterClass {
-  /// 母音 A E I O U。安価・低パワー。ワード形成の潤滑油。
+  /// 母音 A E I O U。コスト 0 で 1 ターン 1 枚だけ出せ、毎ターンエナジーを生む。
+  /// MTG の土地に相当する。
   vowel,
 
-  /// 基幹 D G L N R S T。安価でワードに入りやすい汎用サポート。
+  /// 基幹 D G L N R S T。安価で小回りの利く子音。
   core,
 
-  /// 重 B C F H K M P V W Y。中コスト。クセのある能力を持つ。
+  /// 重 B C F H K M P V W Y。中コスト。はっきりした能力を持つ。
   heavy,
 
   /// 希少 J Q X Z。高コスト・高パワーの切り札。
   rare,
 }
 
-/// 固有能力の発動タイミング。
+/// 能力の発動タイミング。
 enum AbilityTrigger {
-  /// スペルラインに配置した瞬間に発動する。
-  onPlace,
+  /// 戦場にある間、常に有効。
+  static,
 
-  /// スペルライン上にある間、常に有効。
-  passive,
+  /// 自分のターン開始時に毎回発動する。
+  upkeep,
 
-  /// このカードを含むワードが成立したときに発動する。
-  onWord,
+  /// 戦場に出た瞬間に 1 回だけ発動する。
+  onPlay,
 }
 
 /// 文字カード 1 種のマスターデータ。A〜Z の 26 個だけ存在する不変オブジェクト。
-///
-/// カードは状態を持たないため、盤面上では文字（`String`）として参照し、
-/// ステータスが必要になった時点でカタログから引く。
 class LetterCard {
   const LetterCard({
     required this.letter,
     required this.rank,
     required this.cost,
     required this.power,
+    required this.toughness,
     required this.klass,
     required this.deckLimit,
+    required this.energyProduced,
     required this.abilityName,
     required this.trigger,
     required this.abilityText,
@@ -52,43 +52,112 @@ class LetterCard {
   /// 'A' 〜 'Z'。
   final String letter;
 
-  /// アルファベット順位 1〜26。シークエンス判定に使う。
+  /// アルファベット順位 1〜26。連番陣形の判定に使う。
   final int rank;
 
-  /// 配置に必要なエナジー。
+  /// 戦場に出すのに必要なエナジー。母音は 0。
   final int cost;
 
-  /// ワード威力への加算値、およびシークエンスダメージの素になる値。
+  /// 戦闘で与えるダメージの基礎値。
   final int power;
+
+  /// この値以上のダメージを受けると破壊される。
+  final int toughness;
 
   final LetterClass klass;
 
   /// デッキに投入できる最大枚数。
   final int deckLimit;
 
+  /// 戦場にある間、毎ターン生み出すエナジー。子音は 0。
+  final int energyProduced;
+
   final String abilityName;
   final AbilityTrigger trigger;
   final String abilityText;
 
+  bool get isVowel => klass == LetterClass.vowel;
+
   @override
   String toString() => 'LetterCard($letter)';
+}
+
+/// ワード陣形が成立している間、継続的にかかる効果。
+///
+/// 効果は型付きの数値の集合として表す。任意の Dart コードを書けるようにすると
+/// データ側でバランス調整ができなくなるため、あえて表現力を絞っている。
+class WordEffect {
+  const WordEffect({
+    this.powerBonus = 0,
+    this.toughnessBonus = 0,
+    this.upkeepDamage = 0,
+    this.upkeepHeal = 0,
+    this.upkeepDraw = 0,
+    this.upkeepEnergy = 0,
+    this.upkeepShield = 0,
+    this.freeze = 0,
+    this.pierce = false,
+  });
+
+  /// 自分の全文字のパワーへの加算。
+  final int powerBonus;
+
+  /// 自分の全文字のタフネスへの加算。
+  final int toughnessBonus;
+
+  /// 自分のターン開始時に相手へ与えるダメージ。
+  final int upkeepDamage;
+
+  /// 自分のターン開始時に回復する LP。
+  final int upkeepHeal;
+
+  /// 自分のターン開始時に引く枚数。
+  final int upkeepDraw;
+
+  /// 自分のターン開始時に得るエナジー。
+  final int upkeepEnergy;
+
+  /// 自分のターン開始時に得るシールド。
+  final int upkeepShield;
+
+  /// 相手の文字のうち、攻撃できなくする体数。
+  final int freeze;
+
+  /// 自分の全文字の戦闘ダメージが、対峙する文字を無視して相手 LP に入るか。
+  final bool pierce;
+
+  /// 2 つの効果を合算する。複数の陣形が同時に成立したときに使う。
+  WordEffect merge(WordEffect other) => WordEffect(
+        powerBonus: powerBonus + other.powerBonus,
+        toughnessBonus: toughnessBonus + other.toughnessBonus,
+        upkeepDamage: upkeepDamage + other.upkeepDamage,
+        upkeepHeal: upkeepHeal + other.upkeepHeal,
+        upkeepDraw: upkeepDraw + other.upkeepDraw,
+        upkeepEnergy: upkeepEnergy + other.upkeepEnergy,
+        upkeepShield: upkeepShield + other.upkeepShield,
+        freeze: freeze + other.freeze,
+        pierce: pierce || other.pierce,
+      );
+
+  static const WordEffect none = WordEffect();
 }
 
 /// コンボワード 1 語のマスターデータ。
 class ComboWord {
   const ComboWord({
     required this.word,
-    required this.damage,
-    required this.effectText,
+    required this.effect,
+    required this.text,
   });
 
   /// 大文字のみで構成される 2〜5 文字の語。
   final String word;
 
-  /// ワード固有ダメージ。実効ダメージは、これに構成カードのパワー合計を加えたもの。
-  final int damage;
+  /// 陣形が成立している間、継続的にかかる効果。
+  final WordEffect effect;
 
-  final String effectText;
+  /// 表示用の効果文言。`data/words.json` の効果定義から自動生成される。
+  final String text;
 
   int get length => word.length;
 
@@ -96,89 +165,117 @@ class ComboWord {
   String toString() => 'ComboWord($word)';
 }
 
-/// スペルライン。5 マスの固定長で、各マスは空 (`null`) か文字を保持する。
+/// 戦場に出ている文字 1 体。カードと違い、こちらは状態を持つ。
+class Permanent {
+  Permanent(this.letter);
+
+  final String letter;
+
+  /// このターンに受けた累積ダメージ。ターン終了時に 0 に戻る。
+  int damage = 0;
+
+  /// 召喚酔い。出したターンは攻撃できない。
+  bool summoningSick = true;
+
+  /// 陣形や効果によって攻撃を止められているか。
+  bool frozen = false;
+
+  Permanent copy() => Permanent(letter)
+    ..damage = damage
+    ..summoningSick = summoningSick
+    ..frozen = frozen;
+
+  @override
+  String toString() => letter;
+}
+
+/// 戦場。5 レーンの固定長で、各レーンは空 (`null`) か文字 1 体を保持する。
 ///
-/// マスの索引は 0 が最も左。ワードは左から右へ読む。
-class SpellLine {
-  SpellLine() : _slots = List<String?>.filled(slotCount, null);
+/// レーンの索引は 0 が最も左。単語は左から右へ読む。
+/// 自分のレーン `i` は相手のレーン `i` と対峙する。
+class Battlefield {
+  Battlefield() : _lanes = List<Permanent?>.filled(laneCount, null);
 
-  SpellLine.from(List<String?> slots)
-    : assert(slots.length == slotCount),
-      _slots = List<String?>.of(slots);
+  Battlefield.from(List<Permanent?> lanes)
+      : assert(lanes.length == laneCount),
+        _lanes = List<Permanent?>.of(lanes);
 
-  /// スペルラインのマス数。
-  static const int slotCount = 5;
+  /// レーン数。
+  static const int laneCount = 5;
 
-  final List<String?> _slots;
+  final List<Permanent?> _lanes;
 
-  /// 読み取り専用のマス一覧。
-  List<String?> get slots => List<String?>.unmodifiable(_slots);
+  List<Permanent?> get lanes => List<Permanent?>.unmodifiable(_lanes);
 
-  String? operator [](int index) => _slots[index];
+  Permanent? operator [](int index) => _lanes[index];
 
-  bool isEmptyAt(int index) => _slots[index] == null;
+  /// レーンにいる文字を左から順に並べた読み取り用の列。
+  List<Permanent> get occupants => [
+        for (final permanent in _lanes) ?permanent,
+      ];
 
-  bool get isEmpty => _slots.every((s) => s == null);
+  bool isEmptyAt(int index) => _lanes[index] == null;
 
-  bool get isFull => _slots.every((s) => s != null);
+  bool get isEmpty => _lanes.every((lane) => lane == null);
 
-  /// 埋まっているマスの索引一覧。
+  bool get isFull => _lanes.every((lane) => lane != null);
+
+  int get count => _lanes.where((lane) => lane != null).length;
+
   List<int> get occupiedIndices => [
-    for (var i = 0; i < slotCount; i++)
-      if (_slots[i] != null) i,
-  ];
+        for (var i = 0; i < laneCount; i++)
+          if (_lanes[i] != null) i,
+      ];
 
-  /// 空いているマスの索引一覧。
   List<int> get emptyIndices => [
-    for (var i = 0; i < slotCount; i++)
-      if (_slots[i] == null) i,
-  ];
+        for (var i = 0; i < laneCount; i++)
+          if (_lanes[i] == null) i,
+      ];
 
-  /// 指定マスに文字を置く。すでに埋まっている場合は [StateError]。
-  void place(int index, String letter) {
-    if (_slots[index] != null) {
-      throw StateError('マス $index はすでに $_slots[index] で埋まっています');
+  /// 指定レーンに文字を出す。すでに埋まっている場合は [StateError]。
+  void place(int index, Permanent permanent) {
+    if (_lanes[index] != null) {
+      throw StateError('レーン $index はすでに埋まっています');
     }
-    _slots[index] = letter;
+    _lanes[index] = permanent;
   }
 
-  /// 指定マスの文字を取り除いて返す。空だった場合は `null`。
-  String? removeAt(int index) {
-    final removed = _slots[index];
-    _slots[index] = null;
+  /// 指定レーンの文字を取り除いて返す。空だった場合は `null`。
+  Permanent? removeAt(int index) {
+    final removed = _lanes[index];
+    _lanes[index] = null;
     return removed;
   }
 
-  /// 全マスを空にし、取り除かれた文字を配置順に返す。
-  List<String> clear() {
-    final removed = <String>[];
-    for (var i = 0; i < slotCount; i++) {
-      final letter = _slots[i];
-      if (letter != null) {
-        removed.add(letter);
-        _slots[i] = null;
+  /// 全レーンを空にし、取り除かれた文字を左から順に返す。
+  List<Permanent> clear() {
+    final removed = <Permanent>[];
+    for (var i = 0; i < laneCount; i++) {
+      final permanent = _lanes[i];
+      if (permanent != null) {
+        removed.add(permanent);
+        _lanes[i] = null;
       }
     }
     return removed;
   }
 
-  /// 埋まっている文字を左詰めのまま、与えられた順に並べ替える。
-  ///
-  /// `O`（オービット）や `AIR` のように「好きな順に並べ替える」効果で使う。
-  /// [order] は現在埋まっている文字の順列でなければならない。
-  void reorder(List<String> order) {
+  /// 埋まっているレーンはそのままに、そこにいる文字を与えられた順に並べ替える。
+  void reorder(List<Permanent> order) {
     final occupied = occupiedIndices;
     if (order.length != occupied.length) {
       throw ArgumentError('並べ替えの要素数が一致しません: '
           '${order.length} != ${occupied.length}');
     }
     for (var i = 0; i < occupied.length; i++) {
-      _slots[occupied[i]] = order[i];
+      _lanes[occupied[i]] = order[i];
     }
   }
 
-  SpellLine copy() => SpellLine.from(_slots);
+  Battlefield copy() =>
+      Battlefield.from([for (final lane in _lanes) lane?.copy()]);
 
   @override
-  String toString() => _slots.map((s) => s ?? '_').join();
+  String toString() =>
+      _lanes.map((lane) => lane?.letter ?? '_').join();
 }

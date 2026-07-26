@@ -1,4 +1,4 @@
-/// 文字カードとスペルラインのマスを描画するウィジェット。
+/// 文字カードと戦場のレーンを描画するウィジェット。
 library;
 
 import 'package:flutter/material.dart';
@@ -8,7 +8,7 @@ import '../theme.dart';
 
 /// 1 枚の文字カード。
 ///
-/// 文字そのものを主役に据え、コストとパワーを角に小さく添える。
+/// 文字そのものを主役に据え、コストと数値を角に小さく添える。
 /// 26 種を絵で描き分けるのは現実的でないため、識別はクラス色と字形に任せる。
 class LetterCardView extends StatelessWidget {
   const LetterCardView({
@@ -18,19 +18,36 @@ class LetterCardView extends StatelessWidget {
     this.selected = false,
     this.dimmed = false,
     this.showStats = true,
+    this.power,
+    this.toughness,
+    this.damage = 0,
+    this.exhausted = false,
     this.onTap,
   });
 
   final String letter;
   final double width;
 
-  /// 手札で選択中か。
+  /// 手札で選択中、または陣形に組み込まれている状態。
   final bool selected;
 
   /// エナジー不足などで今は使えない状態か。
   final bool dimmed;
 
   final bool showStats;
+
+  /// 実効パワー。省略するとカードの基礎値を使う。
+  final int? power;
+
+  /// 実効タフネス。省略するとカードの基礎値を使う。
+  final int? toughness;
+
+  /// 現在受けているダメージ。0 より大きいと数値が赤く警告色になる。
+  final int damage;
+
+  /// 召喚酔いや拘束で攻撃できない状態か。
+  final bool exhausted;
+
   final VoidCallback? onTap;
 
   @override
@@ -38,6 +55,9 @@ class LetterCardView extends StatelessWidget {
     final card = cardCatalog[letter]!;
     final accent = classColor(card.klass);
     final height = width * 1.4;
+    final effectivePower = power ?? card.power;
+    final effectiveToughness = toughness ?? card.toughness;
+    final remaining = effectiveToughness - damage;
 
     return GestureDetector(
       onTap: onTap,
@@ -63,10 +83,10 @@ class LetterCardView extends StatelessWidget {
               ? [BoxShadow(color: accent.withValues(alpha: 0.6), blurRadius: 12)]
               : null,
         ),
-        foregroundDecoration: dimmed
+        foregroundDecoration: dimmed || exhausted
             ? BoxDecoration(
                 borderRadius: BorderRadius.circular(width * 0.14),
-                color: kBackground.withValues(alpha: 0.6),
+                color: kBackground.withValues(alpha: exhausted ? 0.45 : 0.6),
               )
             : null,
         child: Stack(
@@ -75,7 +95,7 @@ class LetterCardView extends StatelessWidget {
               child: Text(
                 letter,
                 style: TextStyle(
-                  fontSize: width * 0.62,
+                  fontSize: width * 0.6,
                   fontWeight: FontWeight.w700,
                   height: 1,
                   color: Colors.white,
@@ -86,22 +106,39 @@ class LetterCardView extends StatelessWidget {
             if (showStats) ...[
               Positioned(
                 top: 3,
-                left: 5,
-                child: _Pip(value: '${card.cost}', color: kEnergyColor, size: width),
+                left: 4,
+                child: _Pip(
+                  // 母音はコスト 0 でマナを生むので、支払いではなく生産量を出す。
+                  value: card.isVowel ? '+${card.energyProduced}' : '${card.cost}',
+                  color: kEnergyColor,
+                  size: width,
+                ),
               ),
               Positioned(
-                bottom: 3,
-                right: 5,
+                bottom: 2,
+                right: 4,
                 child: Text(
-                  '${card.power}',
+                  '$effectivePower/${remaining < 0 ? 0 : remaining}',
                   style: TextStyle(
-                    fontSize: width * 0.19,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white.withValues(alpha: 0.8),
+                    fontSize: width * 0.2,
+                    fontWeight: FontWeight.w700,
+                    color: damage > 0
+                        ? kLifeColor
+                        : Colors.white.withValues(alpha: 0.9),
                   ),
                 ),
               ),
             ],
+            if (exhausted)
+              Positioned(
+                top: 3,
+                right: 4,
+                child: Icon(
+                  Icons.bedtime_outlined,
+                  size: width * 0.22,
+                  color: Colors.white.withValues(alpha: 0.85),
+                ),
+              ),
           ],
         ),
       ),
@@ -119,15 +156,18 @@ class _Pip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: size * 0.28,
-      height: size * 0.28,
+      padding: EdgeInsets.symmetric(horizontal: size * 0.06, vertical: 1),
+      constraints: BoxConstraints(minWidth: size * 0.26),
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(size * 0.14),
+      ),
       child: Text(
         value,
         style: TextStyle(
-          fontSize: size * 0.19,
-          fontWeight: FontWeight.w700,
+          fontSize: size * 0.18,
+          fontWeight: FontWeight.w800,
           color: Colors.black87,
         ),
       ),
@@ -135,25 +175,33 @@ class _Pip extends StatelessWidget {
   }
 }
 
-/// スペルラインのマス 1 つ。空なら枠だけを描く。
-class SpellSlotView extends StatelessWidget {
-  const SpellSlotView({
+/// 戦場のレーン 1 本。空なら枠だけを描く。
+class LaneView extends StatelessWidget {
+  const LaneView({
     super.key,
     required this.letter,
     required this.width,
+    this.power,
+    this.toughness,
+    this.damage = 0,
+    this.exhausted = false,
+    this.inFormation = false,
     this.highlighted = false,
-    this.wordHighlighted = false,
     this.onTap,
   });
 
   final String? letter;
   final double width;
+  final int? power;
+  final int? toughness;
+  final int damage;
+  final bool exhausted;
+
+  /// 陣形に組み込まれているレーンか。
+  final bool inFormation;
 
   /// 配置先の候補として光らせるか。
   final bool highlighted;
-
-  /// ワードを構成しているマスとして光らせるか。
-  final bool wordHighlighted;
 
   final VoidCallback? onTap;
 
@@ -161,28 +209,15 @@ class SpellSlotView extends StatelessWidget {
   Widget build(BuildContext context) {
     final current = letter;
     if (current != null) {
-      return Stack(
-        alignment: Alignment.center,
-        children: [
-          LetterCardView(
-            letter: current,
-            width: width,
-            selected: wordHighlighted,
-            onTap: onTap,
-          ),
-          if (highlighted)
-            IgnorePointer(
-              child: Container(
-                width: width,
-                height: width * 1.4,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(width * 0.14),
-                  border: Border.all(color: kWordColor, width: 2),
-                  color: kWordColor.withValues(alpha: 0.18),
-                ),
-              ),
-            ),
-        ],
+      return LetterCardView(
+        letter: current,
+        width: width,
+        selected: inFormation,
+        power: power,
+        toughness: toughness,
+        damage: damage,
+        exhausted: exhausted,
+        onTap: onTap,
       );
     }
 
@@ -200,7 +235,6 @@ class SpellSlotView extends StatelessWidget {
           border: Border.all(
             color: highlighted ? kWordColor : kOutline,
             width: highlighted ? 2 : 1,
-            strokeAlign: BorderSide.strokeAlignInside,
           ),
         ),
         child: highlighted

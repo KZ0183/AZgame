@@ -1,202 +1,183 @@
-/// スペルライン上の判定処理。シークエンス検出とワード検出。
+/// 戦場の並びから陣形を検出する。
 ///
-/// どちらも副作用を持たない純粋関数として実装しており、盤面を渡せば
-/// 検出結果が返る。実際の効果適用は [resolveJudgement] 側の責務。
+/// 副作用を持たない純粋関数として実装している。陣形は文字を消費せず、
+/// 成立している間ずっと効果が続くため、毎ターン評価し直される。
 library;
 
 import '../data/catalog.g.dart';
 import 'models.dart';
 
-/// シークエンス長ごとの倍率。索引は長さ（2〜5）。
-///
-/// docs/game-design.md 6.1 の表に対応する。
-const Map<int, double> sequenceMultiplier = {
-  2: 0.25,
-  3: 0.4,
-  4: 0.55,
-  5: 0.75,
-};
+/// `L`（リンク）は陣形の判定において任意の文字として扱える。
+const String wildcardLetter = 'L';
 
-/// 全ステップが連番だった場合（ラン）の倍率。
-const Map<int, double> runMultiplier = {
-  2: 0.4,
-  3: 0.65,
-  4: 1.0,
-  5: 1.5,
-};
+/// 成立しているワード陣形。
+class WordFormation {
+  const WordFormation({required this.start, required this.word});
 
-/// ワイルドカードとして振る舞う文字。
-///
-/// `L`（リンク）はシークエンス判定において順位を任意の値として扱えるため、
-/// 昇順判定・連番判定の両方で常に成立する。
-const String linkLetter = 'L';
-
-/// 検出された 1 本のシークエンス。
-class SequenceHit {
-  const SequenceHit({
-    required this.start,
-    required this.letters,
-    required this.isRun,
-    required this.powerSum,
-    required this.damage,
-  });
-
-  /// スペルライン上の開始マス索引。
+  /// 戦場上の開始レーン。
   final int start;
 
-  /// 構成する文字（左から右の順）。
-  final List<String> letters;
-
-  /// 全ステップがちょうど +1 だったか（ラン成立）。
-  final bool isRun;
-
-  /// 構成カードのパワー合計。
-  final int powerSum;
-
-  /// このシークエンスが与えるダメージ。
-  final int damage;
-
-  int get length => letters.length;
-
-  /// このシークエンスが占有しているマスの索引一覧。
-  List<int> get indices => [for (var i = 0; i < length; i++) start + i];
-
-  double get multiplier =>
-      (isRun ? runMultiplier[length] : sequenceMultiplier[length]) ?? 1.0;
-
-  @override
-  String toString() =>
-      'SequenceHit(${letters.join()}, run: $isRun, dmg: $damage)';
-}
-
-/// 検出されたワード。
-class WordHit {
-  const WordHit({
-    required this.start,
-    required this.word,
-  });
-
-  /// スペルライン上の開始マス索引。
-  final int start;
-
-  /// 成立したワード。
   final ComboWord word;
 
   int get length => word.length;
 
-  /// このワードが占有しているマスの索引一覧。
-  List<int> get indices => [for (var i = 0; i < length; i++) start + i];
+  /// この陣形が占有しているレーンの索引。
+  List<int> get lanes => [for (var i = 0; i < length; i++) start + i];
 
   @override
-  String toString() => 'WordHit(${word.word} @$start)';
+  String toString() => 'WordFormation(${word.word} @$start)';
 }
 
-/// `K`（ナイト）がワードに含まれていないときのパワー加算量。
-const int kKnightSoloBonus = 4;
+/// 成立している連番陣形。
+class SequenceFormation {
+  const SequenceFormation({
+    required this.start,
+    required this.length,
+    required this.isRun,
+  });
 
-/// 状況を加味した実効パワー。
-///
-/// `K` は「ワードに含まれていない間、パワー+4」という passive を持つため、
-/// シークエンスダメージでは加算され、ワード威力の計算では加算されない。
-int effectivePower(String letter, {required bool inWord}) {
-  final base = cardCatalog[letter]!.power;
-  if (letter == 'K' && !inWord) return base + kKnightSoloBonus;
-  return base;
+  /// 戦場上の開始レーン。
+  final int start;
+
+  /// 連なっている文字数。
+  final int length;
+
+  /// 全ステップがちょうど +1 だったか。
+  final bool isRun;
+
+  List<int> get lanes => [for (var i = 0; i < length; i++) start + i];
+
+  /// この陣形に属する文字が得るパワー加算。
+  ///
+  /// 長さ n で `n - 1`、ランならさらに +1。2 連なら +1、5 連のランなら +5。
+  int get powerBonus => (length - 1) + (isRun ? 1 : 0);
+
+  @override
+  String toString() =>
+      'SequenceFormation(@$start x$length${isRun ? " run" : ""})';
 }
 
-/// [a] の次に [b] を置いたとき、シークエンスが昇順として継続するか。
+/// 戦場に成立しているすべての陣形。
+class Formations {
+  const Formations({required this.words, required this.sequences});
+
+  final List<WordFormation> words;
+  final List<SequenceFormation> sequences;
+
+  bool get isEmpty => words.isEmpty && sequences.isEmpty;
+
+  int get count => words.length + sequences.length;
+
+  /// ワード陣形の効果をすべて合算したもの。
+  WordEffect get combinedWordEffect => words.fold(
+        WordEffect.none,
+        (merged, formation) => merged.merge(formation.word.effect),
+      );
+
+  /// 指定レーンの文字が、連番陣形から得るパワー加算。
+  int sequenceBonusFor(int lane) {
+    for (final sequence in sequences) {
+      if (sequence.lanes.contains(lane)) return sequence.powerBonus;
+    }
+    return 0;
+  }
+
+  /// 指定レーンの文字が、いずれかの陣形に含まれているか。
+  bool includes(int lane) =>
+      words.any((w) => w.lanes.contains(lane)) ||
+      sequences.any((s) => s.lanes.contains(lane));
+
+  static const Formations empty = Formations(words: [], sequences: []);
+}
+
+/// 戦場上の [lane] にいる文字が、ワードの [expected] 文字として通用するか。
+bool _matches(Battlefield field, int lane, String expected) {
+  final permanent = field[lane];
+  if (permanent == null) return false;
+  if (permanent.letter == wildcardLetter) return true;
+  return permanent.letter == expected;
+}
+
+/// 成立しているワード陣形をすべて検出する。
 ///
-/// - 通常は順位が増加していれば成立する（差は 1 でなくてよい）
+/// 隙間なく並んだ 2 文字以上が対象。重なり合う陣形も、それぞれ独立に成立する。
+/// `L` はワイルドカードとして任意の文字に化ける。
+List<WordFormation> findWordFormations(Battlefield field) {
+  final found = <WordFormation>[];
+
+  for (final word in wordCatalog.values) {
+    for (var start = 0; start + word.length <= Battlefield.laneCount; start++) {
+      var ok = true;
+      for (var i = 0; i < word.length; i++) {
+        if (!_matches(field, start + i, word.word[i])) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) found.add(WordFormation(start: start, word: word));
+    }
+  }
+
+  found.sort((a, b) =>
+      a.start != b.start ? a.start.compareTo(b.start) : b.length.compareTo(a.length));
+  return found;
+}
+
+/// [a] の次に [b] が来たとき、連番陣形として昇順に継続するか。
+///
+/// - 順位が増加していれば成立する（差は 1 でなくてよい）
 /// - `Z` の次の `A` は環状として繋がる
 /// - `L` はワイルドカードとして常に成立する
 bool ascends(String a, String b) {
-  if (a == linkLetter || b == linkLetter) return true;
+  if (a == wildcardLetter || b == wildcardLetter) return true;
   if (a == 'Z' && b == 'A') return true;
   return cardCatalog[b]!.rank > cardCatalog[a]!.rank;
 }
 
 /// [a] の次の [b] がちょうど +1 の連番か（ラン成立の条件）。
 bool isConsecutive(String a, String b) {
-  if (a == linkLetter || b == linkLetter) return true;
+  if (a == wildcardLetter || b == wildcardLetter) return true;
   if (a == 'Z' && b == 'A') return true;
   return cardCatalog[b]!.rank == cardCatalog[a]!.rank + 1;
 }
 
-/// スペルライン上のシークエンスをすべて検出する。
+/// 成立している連番陣形をすべて検出する。
 ///
-/// 空マスは連なりを断ち切る。左から貪欲に最長の昇順連結を取り、
-/// 取り切ったら次のマスから再開する。長さ 1 はシークエンスにならない。
-List<SequenceHit> findSequences(SpellLine line) {
-  final hits = <SequenceHit>[];
+/// 空きレーンは連なりを断ち切る。左から貪欲に最長の昇順連結を取る。
+List<SequenceFormation> findSequenceFormations(Battlefield field) {
+  final found = <SequenceFormation>[];
   var i = 0;
 
-  while (i < SpellLine.slotCount) {
-    final head = line[i];
-    if (head == null) {
+  while (i < Battlefield.laneCount) {
+    if (field[i] == null) {
       i++;
       continue;
     }
 
     var end = i;
     var isRun = true;
-    while (end + 1 < SpellLine.slotCount) {
-      final current = line[end]!;
-      final next = line[end + 1];
-      if (next == null || !ascends(current, next)) break;
-      if (!isConsecutive(current, next)) isRun = false;
+    while (end + 1 < Battlefield.laneCount) {
+      final current = field[end]!;
+      final next = field[end + 1];
+      if (next == null || !ascends(current.letter, next.letter)) break;
+      if (!isConsecutive(current.letter, next.letter)) isRun = false;
       end++;
     }
 
     final length = end - i + 1;
     if (length >= 2) {
-      final letters = [for (var k = i; k <= end; k++) line[k]!];
-      final powerSum = letters.fold<int>(
-        0,
-        (sum, l) => sum + effectivePower(l, inWord: false),
-      );
-      final multiplier =
-          (isRun ? runMultiplier[length] : sequenceMultiplier[length]) ?? 1.0;
-      hits.add(SequenceHit(
-        start: i,
-        letters: letters,
-        isRun: isRun,
-        powerSum: powerSum,
-        damage: (powerSum * multiplier).floor(),
-      ));
+      found.add(SequenceFormation(start: i, length: length, isRun: isRun));
       i = end + 1;
     } else {
       i++;
     }
   }
 
-  return hits;
+  return found;
 }
 
-/// スペルライン上で成立する最良のワードを 1 つ返す。成立しなければ `null`。
-///
-/// 隙間なく並んだ 2 文字以上の並びのみが対象。複数成立する場合は
-/// 最長のワードが優先され、同長なら左にあるものが優先される。
-WordHit? findBestWord(SpellLine line) {
-  WordHit? best;
-
-  for (var start = 0; start < SpellLine.slotCount; start++) {
-    if (line[start] == null) continue;
-
-    final buffer = StringBuffer();
-    for (var end = start; end < SpellLine.slotCount; end++) {
-      final letter = line[end];
-      if (letter == null) break;
-      buffer.write(letter);
-      if (buffer.length < 2) continue;
-      if (buffer.length > maxWordLength) break;
-
-      final word = wordCatalog[buffer.toString()];
-      if (word == null) continue;
-      if (best == null || word.length > best.length) {
-        best = WordHit(start: start, word: word);
-      }
-    }
-  }
-
-  return best;
-}
+/// 戦場の陣形をすべて検出する。
+Formations findFormations(Battlefield field) => Formations(
+      words: findWordFormations(field),
+      sequences: findSequenceFormations(field),
+    );
