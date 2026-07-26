@@ -9,6 +9,11 @@
 | A. Web を開く | iPhone / Android | 初回のみ | 数分（自動） | レイアウト、ルール、手触り |
 | B. APK を入れる | Android のみ | 初回のみ | 数分（自動） | 実機の描画性能、タップの追従 |
 | C. 手元の PC から流す | iPhone / Android | Flutter 環境 | 即時 | 作りながらの試行錯誤 |
+| D. 同じ Wi-Fi で配信 | iPhone / Android | Flutter 環境 | 即時 | A が使えないときの代替 |
+
+> **private リポジトリの注意。** 経路 A（GitHub Pages）は、private リポジトリでは
+> GitHub Pro 以上のプランでないと使えない。無料プランのままなら、
+> リポジトリを public にするか、経路 B / D を使う。
 
 ---
 
@@ -95,6 +100,30 @@ flutter run            # 実機に流し込む
 
 TestFlight や Ad Hoc 配布には **Apple Developer Program（有料）** の登録が要る。
 登録前の段階では、iPhone での確認は経路 A（Web）が現実的。
+
+---
+
+## D. 同じ Wi-Fi 上の PC から配信する
+
+経路 A が使えない場合（private リポジトリで Pages が有効にできないなど）の代替。
+PC で Web 版を立ち上げ、スマホから PC の IP を直接開く。
+GitHub のプランに左右されず、iPhone でも使える。
+
+```sh
+# PC の LAN 内 IP を調べる（例: 192.168.1.23）
+#   macOS : ipconfig getifaddr en0
+#   Linux : hostname -I
+#   Windows : ipconfig
+
+flutter run -d web-server --web-hostname 0.0.0.0 --web-port 8080
+```
+
+スマホのブラウザで `http://192.168.1.23:8080` を開く。
+PC とスマホが同じ Wi-Fi につながっている必要がある。
+
+> PC のファイアウォールが 8080 番を塞いでいると開けない。
+> 接続できない場合はまず PC 自身のブラウザで `http://localhost:8080` を確認し、
+> そこが映るならファイアウォールを疑う。
 
 ---
 

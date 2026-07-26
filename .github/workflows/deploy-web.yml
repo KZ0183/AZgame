@@ -64,13 +64,33 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: 確認用 URL を表示
+      - name: 結果を表示
+        # 失敗時こそ案内が要る。Pages の初回有効化を忘れていると 404 で落ちるが、
+        # 既定ではこのステップ自体が飛ばされてしまい、何をすべきか分からない。
+        if: always()
         run: |
-          {
-            echo '## スマホで開く'
-            echo ''
-            echo "**${{ steps.deployment.outputs.page_url }}**"
-            echo ''
-            echo 'この URL をスマホのブラウザで開くと、この時点の最新版を触れます。'
-            echo 'ホーム画面に追加すると全画面で起動し、実機アプリに近い見え方になります。'
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${{ steps.deployment.outputs.page_url }}" ]; then
+            {
+              echo '## スマホで開く'
+              echo ''
+              echo "**${{ steps.deployment.outputs.page_url }}**"
+              echo ''
+              echo 'この URL をスマホのブラウザで開くと、この時点の最新版を触れます。'
+              echo 'ホーム画面に追加すると全画面で起動し、実機アプリに近い見え方になります。'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo '## 公開できませんでした'
+              echo ''
+              echo 'GitHub Pages が有効になっていない可能性が高いです。'
+              echo ''
+              echo '1. **Settings → Pages** を開く'
+              echo '2. **Source** を **GitHub Actions** に変更して保存'
+              echo '3. このワークフローを再実行する'
+              echo ''
+              echo '> private リポジトリで Pages を使うには GitHub Pro 以上のプランが要ります。'
+              echo '> 無料プランのままなら、リポジトリを public にするか、'
+              echo '> Android なら「Android APK を配布」ワークフローの Release から入れてください。'
+              echo '> 詳しくは docs/testing-on-device.md を参照。'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
