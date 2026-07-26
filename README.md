@@ -62,10 +62,8 @@ push すると GitHub Actions が自動でビルドし、2 つの経路で実機
 
 | 経路 | 対応端末 | 入口 |
 | --- | --- | --- |
-| Web（推奨） | iPhone / Android | GitHub Pages の URL をブラウザで開く |
-| APK | Android のみ | Releases の「開発ビルド（最新）」から `.apk` を落とす |
-
-初回だけ **Settings → Pages → Source** を **GitHub Actions** に変える必要がある。
+| Web（推奨） | iPhone / Android | https://kz0183.github.io/AZgame/ |
+| APK | Android のみ | [Releases](../../releases/tag/dev-build) の「開発ビルド（最新）」から `.apk` を落とす |
 
 ### CI
 
