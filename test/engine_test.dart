@@ -162,7 +162,7 @@ void main() {
     test('タップ済みのクリーチャーはブロックできない', () {
       final game = buildGame()..start();
       final attacker = putCreature(game.first, 'L'); // 1/1
-      putCreature(game.second, 'F')..tapped = true;
+      putCreature(game.second, 'F').tapped = true;
 
       final result = game.attack([attacker]);
       expect(result.totalDamage, 1);
