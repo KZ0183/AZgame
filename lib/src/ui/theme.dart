@@ -32,21 +32,19 @@ const Color kWordColor = Color(0xFFB57BEE);
 /// シークエンス成立時の強調色。
 const Color kSequenceColor = Color(0xFF4FC3A1);
 
-/// クラスごとのカード色。
-Color classColor(LetterClass klass) => switch (klass) {
-      LetterClass.vowel => const Color(0xFFE8A33D),
-      LetterClass.core => const Color(0xFF3FA7A0),
-      LetterClass.heavy => const Color(0xFF6C7BD6),
-      LetterClass.rare => const Color(0xFFD4504F),
-    };
-
-/// クラスの日本語表示名。
-String classLabel(LetterClass klass) => switch (klass) {
-      LetterClass.vowel => '母音',
-      LetterClass.core => '基幹',
-      LetterClass.heavy => '重',
-      LetterClass.rare => '希少',
-    };
+/// カードの色。土地は緑、クリーチャーはコストが重いほど赤に寄る。
+Color cardColor(LetterCard card) {
+  if (card.isLand) return const Color(0xFF4C9A5B);
+  return switch (card.cost) {
+    1 => const Color(0xFF3FA7A0),
+    2 => const Color(0xFF4E8FCB),
+    3 => const Color(0xFF6C7BD6),
+    4 => const Color(0xFF8E6FCE),
+    5 => const Color(0xFFB56AB0),
+    6 => const Color(0xFFC85F7C),
+    _ => const Color(0xFFD4504F),
+  };
+}
 
 ThemeData buildTheme() {
   final base = ThemeData.dark(useMaterial3: true);

@@ -1,194 +1,313 @@
-/// 対戦の進行。エンジンの入口となるクラス。
+/// 初期 MTG を単純化したルールエンジン。
 library;
 
-import 'detection.dart';
+import 'dart:math';
+
+import '../data/catalog.g.dart';
 import 'models.dart';
 
-/// 駒を置けなかった理由。
-enum MoveError {
-  /// その文字を持ち駒に持っていない。
-  notInHand,
+const int kStartingLife = 20;
+const int kStartingHand = 7;
+const int kHandLimit = 7;
+const int kDeckSize = 30;
 
-  /// 指定したマスがすでに埋まっている。
-  cellOccupied,
+/// カードを唱えられなかった理由。
+enum PlayError { notInHand, landAlreadyPlayed, notEnoughMana, gameOver }
 
-  /// すでに決着がついている。
-  gameOver,
-}
+/// 対戦者ひとりぶんの状態。
+class PlayerState {
+  PlayerState({required this.name, required List<String> deck})
+      : library = List<String>.of(deck);
 
-/// 1 手の結果。
-class MoveResult {
-  const MoveResult({
-    required this.letter,
-    required this.cell,
-    required this.formations,
-    required this.captured,
-  });
+  final String name;
 
-  final String letter;
-  final Cell cell;
+  int life = kStartingLife;
 
-  /// この手で成立した並び。
-  final List<Formation> formations;
+  /// 山札。索引 0 が一番上。
+  final List<String> library;
+  final List<String> hand = [];
+  final List<String> graveyard = [];
 
-  /// 奪った駒（文字）。
-  final List<String> captured;
+  /// 戦場の土地とクリーチャー。
+  final List<Permanent> lands = [];
+  final List<Permanent> creatures = [];
 
-  bool get scored => formations.isNotEmpty;
+  /// このターンすでに土地を置いたか。
+  bool landPlayedThisTurn = false;
+
+  bool deckedOut = false;
+
+  bool get isDefeated => life <= 0 || deckedOut;
+
+  /// 今すぐ使えるマナ。アンタップ状態の土地の数。
+  int get availableMana => lands.where((land) => !land.tapped).length;
+
+  List<String> draw(int count) {
+    final drawn = <String>[];
+    for (var i = 0; i < count; i++) {
+      if (library.isEmpty) {
+        deckedOut = true;
+        break;
+      }
+      final card = library.removeAt(0);
+      hand.add(card);
+      drawn.add(card);
+    }
+    return drawn;
+  }
+
+  /// [amount] ぶんの土地をタップしてマナを支払う。
+  void payMana(int amount) {
+    var remaining = amount;
+    for (final land in lands) {
+      if (remaining == 0) break;
+      if (land.tapped) continue;
+      land.tapped = true;
+      remaining--;
+    }
+    if (remaining > 0) throw StateError('マナが足りません');
+  }
+
+  /// 攻撃できるクリーチャー。
+  List<Permanent> get readyAttackers =>
+      creatures.where((c) => !c.summoningSick && !c.tapped).toList();
+
+  /// ブロックできるクリーチャー。タップ状態のものはブロックできない。
+  List<Permanent> get readyBlockers =>
+      creatures.where((c) => !c.tapped).toList();
+
+  /// タフネス以上のダメージを受けたクリーチャーを墓地へ送る。
+  List<String> removeDead() {
+    final dead = <String>[];
+    creatures.removeWhere((creature) {
+      final card = cardCatalog[creature.letter]!;
+      if (creature.damage < card.toughness) return false;
+      graveyard.add(creature.letter);
+      dead.add(creature.letter);
+      return true;
+    });
+    return dead;
+  }
 
   @override
-  String toString() => '$letter→$cell'
-      '${formations.isEmpty ? "" : " ${formations.join(",")}"}'
-      '${captured.isEmpty ? "" : " 捕獲:${captured.join()}"}';
+  String toString() => '$name(ライフ $life, 土地 ${lands.length}, '
+      'クリーチャー ${creatures.map((c) => c.letter).join()})';
 }
 
-/// 捕獲する駒を選ぶ関数。候補から [limit] 枚までを選んで返す。
-typedef CaptureChooser = List<Cell> Function(
-  Formation formation,
-  List<Cell> candidates,
-  int limit,
+/// ブロックの割り当てを決める関数。
+///
+/// 攻撃してきたクリーチャーごとに、ブロックに使うクリーチャーを返す。
+/// 割り当てないものは `null`。1 体のブロッカーは 1 体しかブロックできない。
+typedef BlockChooser = Map<Permanent, Permanent?> Function(
+  List<Permanent> attackers,
+  List<Permanent> blockers,
 );
 
-/// 既定の捕獲選択。読む順に先頭から取る。
-List<Cell> takeInReadingOrder(
-  Formation formation,
-  List<Cell> candidates,
-  int limit,
-) =>
-    candidates.take(limit).toList();
+/// 1 体ぶんの戦闘結果。
+class CombatLine {
+  const CombatLine({
+    required this.attacker,
+    required this.blocker,
+    required this.damageToPlayer,
+  });
 
-/// 対戦中に起きた出来事の記録。
+  final String attacker;
+  final String? blocker;
+  final int damageToPlayer;
+}
+
+/// 1 回の戦闘の結果。
+class CombatResult {
+  const CombatResult({required this.lines, required this.totalDamage});
+
+  final List<CombatLine> lines;
+  final int totalDamage;
+}
+
 class GameLog {
   final List<String> entries = [];
-
   void add(String message) => entries.add(message);
-
-  @override
-  String toString() => entries.join('\n');
 }
 
 /// 対戦を進行させるエンジン。
-///
-/// 乱数を一切使わない。同じ手順を再生すれば必ず同じ局面になる。
-class AzGame {
-  AzGame({GameLog? log}) : log = log ?? GameLog() {
-    for (final owner in Owner.values) {
-      _hands[owner] = [
-        for (var i = 0; i < 26; i++) String.fromCharCode(65 + i),
-      ];
-    }
-  }
+class Game {
+  Game({
+    required this.first,
+    required this.second,
+    required this.firstBlocker,
+    required this.secondBlocker,
+    Random? rng,
+    GameLog? log,
+  })  : rng = rng ?? Random(),
+        log = log ?? GameLog();
 
-  /// 手数の上限。これを超えたら盤上の駒数で決着する。
-  static const int maxMoves = 24;
+  final PlayerState first;
+  final PlayerState second;
 
-  final Board board = Board();
+  /// それぞれのプレイヤーがブロックを決める方法。
+  final BlockChooser firstBlocker;
+  final BlockChooser secondBlocker;
+
+  final Random rng;
   final GameLog log;
 
-  final Map<Owner, List<String>> _hands = {};
+  int turnNumber = 0;
+  bool isFirstPlayerTurn = true;
 
-  /// 手番。
-  Owner turn = Owner.first;
+  PlayerState get active => isFirstPlayerTurn ? first : second;
+  PlayerState get inactive => isFirstPlayerTurn ? second : first;
 
-  /// これまでに指された手数。
-  int moveCount = 0;
+  BlockChooser get _activeBlocker =>
+      isFirstPlayerTurn ? secondBlocker : firstBlocker;
 
-  /// [owner] の持ち駒。読み取り専用。
-  List<String> handOf(Owner owner) => List<String>.unmodifiable(_hands[owner]!);
+  bool get isOver => first.isDefeated || second.isDefeated;
 
-  /// [owner] が持っている文字の種類（重複を除く）。表示と探索に使う。
-  List<String> distinctHandOf(Owner owner) {
-    final letters = _hands[owner]!.toSet().toList()..sort();
-    return letters;
-  }
-
-  /// [owner] が同じ文字を何枚持っているか。
-  int countInHand(Owner owner, String letter) =>
-      _hands[owner]!.where((l) => l == letter).length;
-
-  bool _canMove(Owner owner) =>
-      _hands[owner]!.isNotEmpty && !board.isFull;
-
-  bool get isOver =>
-      moveCount >= maxMoves ||
-      board.isFull ||
-      (!_canMove(Owner.first) && !_canMove(Owner.second));
-
-  /// 勝者。引き分けなら `null`。
-  Owner? get winner {
+  PlayerState? get winner {
     if (!isOver) return null;
-    final first = board.countOf(Owner.first);
-    final second = board.countOf(Owner.second);
-    if (first == second) return null;
-    return first > second ? Owner.first : Owner.second;
+    if (first.isDefeated && second.isDefeated) return null;
+    return first.isDefeated ? second : first;
   }
 
-  /// 手番プレイヤーが置けるマス。
-  List<Cell> get legalCells => board.emptyCells;
-
-  /// [letter] を [cell] に置けるか。置けるなら `null` を返す。
-  MoveError? validate(String letter, Cell cell) {
-    if (isOver) return MoveError.gameOver;
-    if (!_hands[turn]!.contains(letter)) return MoveError.notInHand;
-    if (!board.isEmptyAt(cell)) return MoveError.cellOccupied;
-    return null;
+  void start() {
+    _shuffle(first.library);
+    _shuffle(second.library);
+    first.draw(kStartingHand);
+    second.draw(kStartingHand);
+    log.add('対戦開始');
+    beginTurn();
   }
 
-  /// 手番プレイヤーが [letter] を [cell] に置く。
-  ///
-  /// 置いた直後に縦横の並びを判定し、成立した並びごとに、その文字数と
-  /// 同じ枚数まで隣接する相手の駒を奪う。奪った駒は持ち駒に加わる。
-  MoveResult play(
-    String letter,
-    Cell cell, {
-    CaptureChooser chooser = takeInReadingOrder,
-  }) {
-    final error = validate(letter, cell);
-    if (error != null) {
-      throw StateError('$letter を $cell に置けません: $error');
+  /// ターンを開始する。アンタップ → ドローの順。
+  void beginTurn() {
+    if (isOver) return;
+    turnNumber++;
+    final player = active;
+
+    for (final permanent in [...player.lands, ...player.creatures]) {
+      permanent.tapped = false;
+      permanent.summoningSick = false;
+    }
+    player.landPlayedThisTurn = false;
+
+    // 先攻の 1 ターン目はドローしない。
+    if (turnNumber > 1) player.draw(1);
+
+    log.add('--- ターン $turnNumber: ${player.name} ---');
+  }
+
+  PlayError? validatePlay(String letter) {
+    if (isOver) return PlayError.gameOver;
+    final player = active;
+    if (!player.hand.contains(letter)) return PlayError.notInHand;
+    final card = cardCatalog[letter]!;
+    if (card.isLand) {
+      return player.landPlayedThisTurn ? PlayError.landAlreadyPlayed : null;
+    }
+    return player.availableMana < card.cost ? PlayError.notEnoughMana : null;
+  }
+
+  /// 手札から [letter] を戦場に出す。
+  void play(String letter) {
+    final error = validatePlay(letter);
+    if (error != null) throw StateError('$letter を出せません: $error');
+
+    final player = active;
+    final card = cardCatalog[letter]!;
+    player.hand.remove(letter);
+
+    if (card.isLand) {
+      player.landPlayedThisTurn = true;
+      // 土地は召喚酔いの影響を受けない。
+      player.lands.add(Permanent(letter)..summoningSick = false);
+      log.add('${player.name} が土地 $letter を置いた');
+    } else {
+      player.payMana(card.cost);
+      player.creatures.add(Permanent(letter));
+      log.add('${player.name} が $letter (${card.power}/${card.toughness}) を唱えた');
+    }
+  }
+
+  /// 戦闘。[attackers] で攻撃を宣言し、防御側がブロックを割り当てる。
+  CombatResult attack(List<Permanent> attackers) {
+    final attacker = active;
+    final defender = inactive;
+
+    final declared =
+        attackers.where(attacker.readyAttackers.contains).toList();
+    for (final creature in declared) {
+      creature.tapped = true;
     }
 
-    final mover = turn;
-    _hands[mover]!.remove(letter);
-    board.place(cell, Piece(letter, mover));
+    final blocks = declared.isEmpty
+        ? <Permanent, Permanent?>{}
+        : _activeBlocker(declared, defender.readyBlockers);
 
-    final formations = findFormationsAt(board, cell, mover);
-    final captured = <String>[];
-    final alreadyTaken = <Cell>{};
+    final lines = <CombatLine>[];
+    var totalDamage = 0;
+    final usedBlockers = <Permanent>{};
 
-    for (final formation in formations) {
-      final candidates = captureCandidates(board, formation, mover)
-          .where((c) => !alreadyTaken.contains(c))
-          .toList();
-      if (candidates.isEmpty) continue;
+    for (final creature in declared) {
+      final card = cardCatalog[creature.letter]!;
+      final blocker = blocks[creature];
 
-      final chosen = chooser(formation, candidates, formation.captureLimit)
-          .where(candidates.contains)
-          .take(formation.captureLimit);
+      if (blocker == null ||
+          !defender.readyBlockers.contains(blocker) ||
+          !usedBlockers.add(blocker)) {
+        defender.life -= card.power;
+        totalDamage += card.power;
+        lines.add(CombatLine(
+          attacker: creature.letter,
+          blocker: null,
+          damageToPlayer: card.power,
+        ));
+        continue;
+      }
 
-      for (final target in chosen) {
-        final taken = board.removeAt(target);
-        if (taken == null) continue;
-        alreadyTaken.add(target);
-        _hands[mover]!.add(taken.letter);
-        captured.add(taken.letter);
+      final blockerCard = cardCatalog[blocker.letter]!;
+      blocker.damage += card.power;
+      creature.damage += blockerCard.power;
+      lines.add(CombatLine(
+        attacker: creature.letter,
+        blocker: blocker.letter,
+        damageToPlayer: 0,
+      ));
+    }
+
+    for (final dead in attacker.removeDead()) {
+      log.add('${attacker.name} の $dead が破壊された');
+    }
+    for (final dead in defender.removeDead()) {
+      log.add('${defender.name} の $dead が破壊された');
+    }
+    if (totalDamage > 0) {
+      log.add('${defender.name} に $totalDamage ダメージ（残り ${defender.life}）');
+    }
+
+    return CombatResult(lines: lines, totalDamage: totalDamage);
+  }
+
+  /// ターンを終了し、手番を渡す。
+  void endTurn() {
+    for (final player in [first, second]) {
+      for (final creature in player.creatures) {
+        creature.damage = 0;
       }
     }
+    while (active.hand.length > kHandLimit) {
+      active.graveyard.add(active.hand.removeLast());
+    }
 
-    log.add('${mover.name}: $letter を $cell へ'
-        '${formations.isEmpty ? "" : "。${formations.join("・")} 成立"}'
-        '${captured.isEmpty ? "" : "。${captured.join()} を奪取"}');
+    if (isOver) return;
+    isFirstPlayerTurn = !isFirstPlayerTurn;
+    beginTurn();
+  }
 
-    moveCount++;
-    // 置ける手がない側は飛ばす。両者置けなければ isOver が真になる。
-    turn = mover.opponent;
-    if (!isOver && !_canMove(turn)) turn = turn.opponent;
-
-    return MoveResult(
-      letter: letter,
-      cell: cell,
-      formations: formations,
-      captured: captured,
-    );
+  void _shuffle(List<String> cards) {
+    for (var i = cards.length - 1; i > 0; i--) {
+      final j = rng.nextInt(i + 1);
+      final temp = cards[i];
+      cards[i] = cards[j];
+      cards[j] = temp;
+    }
   }
 }

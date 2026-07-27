@@ -24,9 +24,9 @@ class HomeScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: const [
-                    HandPieceView(letter: 'A', size: 56),
+                    CardView(letter: 'A', width: 52),
                     SizedBox(width: 8),
-                    HandPieceView(letter: 'Z', size: 56),
+                    CardView(letter: 'Z', width: 52),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -39,7 +39,7 @@ class HomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  '同じ 26 文字を、置く場所だけで戦う',
+                  'A〜Z の 26 枚で戦うカードゲーム',
                   style: TextStyle(color: kTextMuted, fontSize: 13),
                 ),
                 const SizedBox(height: 32),
@@ -75,7 +75,7 @@ class HomeScreen extends StatelessWidget {
                       side: const BorderSide(color: kOutline),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text('ワード図鑑'),
+                    child: const Text('カード一覧'),
                   ),
                 ),
               ],
@@ -93,11 +93,11 @@ class _Rules extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const rules = [
-      '両者が A〜Z を 1 枚ずつ持ち、交互に 5×5 の盤へ置く',
-      '縦か横に自分の駒だけで単語か連番が並ぶと成立',
-      '成立した文字数ぶんだけ、隣接する相手の駒を奪える',
-      '奪った駒は自分の持ち駒になる',
-      '24 手を終えた時点で、盤上の駒が多い方の勝ち',
+      '母音 A E I O U は土地。1 ターン 1 枚置け、1 マナを生む',
+      '子音はクリーチャー。コスト N なら N/N',
+      '出したターンは攻撃できない（召喚酔い）',
+      '攻撃するクリーチャーを選び、相手はブロックする',
+      '相手のライフ 20 を 0 にすれば勝ち',
     ];
 
     return Container(

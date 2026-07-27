@@ -1,142 +1,241 @@
 {
-  "version": "0.4.0",
-  "note": "v0.4 では文字は能力もコストも持たない。盤上でどの単語に加われるかだけが文字の個性であり、class は UI の色分けとデッキ構成の指標にのみ使う。",
-  "classes": {
-    "vowel": "母音 A E I O U。ほとんどの単語に必要となる要の文字",
-    "core": "基幹 D G L N R S T。多くの単語に登場する",
-    "heavy": "重 B C F H K M P V W Y。使いどころが限られる",
-    "rare": "希少 J Q X Z。加われる単語は少ないが、決まれば大きい"
-  },
+  "version": "0.5.0",
+  "note": "初期 MTG を土台にしたバニラ基準。母音 5 種は土地（1 ターン 1 枚、タップで 1 マナ）。子音 21 種はコスト N のクリーチャーで、パワーもタフネスも N。能力は持たない。ここから 1 枚ずつ個性を足していく。",
+  "costAssignment": "子音のコストはスクラブル文字スコアの希少度順に 1〜7 へ割り当てた。L N R S T が 1、D G が 2、B C M P が 3、F H V W Y が 4、K が 5、J X が 6、Q Z が 7。",
   "cards": [
     {
       "letter": "A",
       "rank": 1,
-      "class": "vowel"
+      "type": "land",
+      "cost": 0,
+      "power": 0,
+      "toughness": 0,
+      "deckLimit": 4
     },
     {
       "letter": "B",
       "rank": 2,
-      "class": "heavy"
+      "type": "creature",
+      "cost": 3,
+      "power": 3,
+      "toughness": 3,
+      "deckLimit": 4
     },
     {
       "letter": "C",
       "rank": 3,
-      "class": "heavy"
+      "type": "creature",
+      "cost": 3,
+      "power": 3,
+      "toughness": 3,
+      "deckLimit": 4
     },
     {
       "letter": "D",
       "rank": 4,
-      "class": "core"
+      "type": "creature",
+      "cost": 2,
+      "power": 2,
+      "toughness": 2,
+      "deckLimit": 4
     },
     {
       "letter": "E",
       "rank": 5,
-      "class": "vowel"
+      "type": "land",
+      "cost": 0,
+      "power": 0,
+      "toughness": 0,
+      "deckLimit": 4
     },
     {
       "letter": "F",
       "rank": 6,
-      "class": "heavy"
+      "type": "creature",
+      "cost": 4,
+      "power": 4,
+      "toughness": 4,
+      "deckLimit": 4
     },
     {
       "letter": "G",
       "rank": 7,
-      "class": "core"
+      "type": "creature",
+      "cost": 2,
+      "power": 2,
+      "toughness": 2,
+      "deckLimit": 4
     },
     {
       "letter": "H",
       "rank": 8,
-      "class": "heavy"
+      "type": "creature",
+      "cost": 4,
+      "power": 4,
+      "toughness": 4,
+      "deckLimit": 4
     },
     {
       "letter": "I",
       "rank": 9,
-      "class": "vowel"
+      "type": "land",
+      "cost": 0,
+      "power": 0,
+      "toughness": 0,
+      "deckLimit": 4
     },
     {
       "letter": "J",
       "rank": 10,
-      "class": "rare"
+      "type": "creature",
+      "cost": 6,
+      "power": 6,
+      "toughness": 6,
+      "deckLimit": 4
     },
     {
       "letter": "K",
       "rank": 11,
-      "class": "heavy"
+      "type": "creature",
+      "cost": 5,
+      "power": 5,
+      "toughness": 5,
+      "deckLimit": 4
     },
     {
       "letter": "L",
       "rank": 12,
-      "class": "core"
+      "type": "creature",
+      "cost": 1,
+      "power": 1,
+      "toughness": 1,
+      "deckLimit": 4
     },
     {
       "letter": "M",
       "rank": 13,
-      "class": "heavy"
+      "type": "creature",
+      "cost": 3,
+      "power": 3,
+      "toughness": 3,
+      "deckLimit": 4
     },
     {
       "letter": "N",
       "rank": 14,
-      "class": "core"
+      "type": "creature",
+      "cost": 1,
+      "power": 1,
+      "toughness": 1,
+      "deckLimit": 4
     },
     {
       "letter": "O",
       "rank": 15,
-      "class": "vowel"
+      "type": "land",
+      "cost": 0,
+      "power": 0,
+      "toughness": 0,
+      "deckLimit": 4
     },
     {
       "letter": "P",
       "rank": 16,
-      "class": "heavy"
+      "type": "creature",
+      "cost": 3,
+      "power": 3,
+      "toughness": 3,
+      "deckLimit": 4
     },
     {
       "letter": "Q",
       "rank": 17,
-      "class": "rare"
+      "type": "creature",
+      "cost": 7,
+      "power": 7,
+      "toughness": 7,
+      "deckLimit": 4
     },
     {
       "letter": "R",
       "rank": 18,
-      "class": "core"
+      "type": "creature",
+      "cost": 1,
+      "power": 1,
+      "toughness": 1,
+      "deckLimit": 4
     },
     {
       "letter": "S",
       "rank": 19,
-      "class": "core"
+      "type": "creature",
+      "cost": 1,
+      "power": 1,
+      "toughness": 1,
+      "deckLimit": 4
     },
     {
       "letter": "T",
       "rank": 20,
-      "class": "core"
+      "type": "creature",
+      "cost": 1,
+      "power": 1,
+      "toughness": 1,
+      "deckLimit": 4
     },
     {
       "letter": "U",
       "rank": 21,
-      "class": "vowel"
+      "type": "land",
+      "cost": 0,
+      "power": 0,
+      "toughness": 0,
+      "deckLimit": 4
     },
     {
       "letter": "V",
       "rank": 22,
-      "class": "heavy"
+      "type": "creature",
+      "cost": 4,
+      "power": 4,
+      "toughness": 4,
+      "deckLimit": 4
     },
     {
       "letter": "W",
       "rank": 23,
-      "class": "heavy"
+      "type": "creature",
+      "cost": 4,
+      "power": 4,
+      "toughness": 4,
+      "deckLimit": 4
     },
     {
       "letter": "X",
       "rank": 24,
-      "class": "rare"
+      "type": "creature",
+      "cost": 6,
+      "power": 6,
+      "toughness": 6,
+      "deckLimit": 4
     },
     {
       "letter": "Y",
       "rank": 25,
-      "class": "heavy"
+      "type": "creature",
+      "cost": 4,
+      "power": 4,
+      "toughness": 4,
+      "deckLimit": 4
     },
     {
       "letter": "Z",
       "rank": 26,
-      "class": "rare"
+      "type": "creature",
+      "cost": 7,
+      "power": 7,
+      "toughness": 7,
+      "deckLimit": 4
     }
   ]
 }
