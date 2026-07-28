@@ -1,124 +1,131 @@
-/// 対戦画面。
+/// 戦闘画面。
+///
+/// 操作は 2 つだけ。「手札をタップして出す」「自分のミニオンをタップ →
+/// 攻撃相手をタップ」。土地もブロックも攻撃宣言もない。
 library;
 
 import 'package:flutter/material.dart';
 
-import '../engine/ai.dart';
-import '../engine/deck.dart';
-import '../engine/game.dart';
+import '../engine/battle.dart';
 import '../engine/models.dart';
 import 'theme.dart';
-import 'widgets/letter_card_view.dart';
+import 'widgets/kana_card_view.dart';
 
-/// プレイヤー（先攻）対 AI（後攻）の対戦画面。
-///
-/// 操作は「手札をタップして出す」「自分のクリーチャーをタップ →
-/// 攻撃対象をタップ」の 2 つだけ。ブロックも土地もない。
 class BattleScreen extends StatefulWidget {
-  const BattleScreen({super.key});
+  const BattleScreen({
+    super.key,
+    required this.battle,
+    required this.onFinished,
+  });
+
+  final Battle battle;
+
+  /// 決着したときに呼ばれる。勝ったかどうかを渡す。
+  final void Function(bool won) onFinished;
 
   @override
   State<BattleScreen> createState() => _BattleScreenState();
 }
 
 class _BattleScreenState extends State<BattleScreen> {
-  late Game _game;
-  Permanent? _selectedAttacker;
-  bool _aiThinking = false;
+  Minion? _attacker;
+  bool _resolving = false;
   String? _message;
 
-  PlayerState get _me => _game.first;
-  PlayerState get _foe => _game.second;
-  bool get _myTurn => _game.isFirstPlayerTurn && !_aiThinking && !_game.isOver;
+  Battle get _battle => widget.battle;
+  bool get _myTurn => !_resolving && !_battle.isOver;
 
-  @override
-  void initState() {
-    super.initState();
-    _restart();
-  }
-
-  void _restart() {
-    _game = Game(
-      first: PlayerState(name: 'あなた', deck: starterDeck.toCardList()),
-      second: PlayerState(name: '相手', deck: starterDeck.toCardList()),
-    )..start();
-    _selectedAttacker = null;
-    _aiThinking = false;
-    _message = null;
-  }
-
-  void _playCard(String letter) {
-    if (_game.validatePlay(letter) != null) return;
-    setState(() => _game.play(letter));
-  }
-
-  void _selectAttacker(Permanent creature) {
-    if (_game.validateAttack(creature) != null) return;
-    setState(() => _selectedAttacker =
-        _selectedAttacker == creature ? null : creature);
-  }
-
-  /// 攻撃対象を指定して解決する。[target] が `null` なら本体を殴る。
-  void _resolveAttack(Permanent? target) {
-    final attacker = _selectedAttacker;
-    if (attacker == null || !_myTurn) return;
+  void _playCard(String kana) {
+    if (!_myTurn || _battle.validatePlay(kana) != null) return;
     setState(() {
-      final result = _game.attack(attacker, target);
-      _message = result.target == null
-          ? '本体に ${result.damageToPlayer} ダメージ'
-          : '${result.attacker} で ${result.target} を攻撃';
-      _selectedAttacker = null;
+      _battle.play(kana);
+      _message = null;
     });
+  }
+
+  void _selectAttacker(Minion minion) {
+    if (!_myTurn) return;
+    if (minion.attacked || minion.summoningSick) return;
+    setState(() => _attacker = _attacker == minion ? null : minion);
+  }
+
+  /// 攻撃対象を指定して解決する。[target] が `null` なら敵本体を殴る。
+  void _resolveAttack(Minion? target) {
+    final attacker = _attacker;
+    if (attacker == null || !_myTurn) return;
+    final error = _battle.validateAttack(attacker, target: target);
+    if (error == AttackError.tauntInTheWay) {
+      setState(() => _message = '挑発がいる。先にそちらを倒すこと');
+      return;
+    }
+    if (error != null) return;
+
+    setState(() {
+      _battle.attack(attacker, target);
+      _attacker = null;
+      _message = null;
+    });
+    if (_battle.playerWon) widget.onFinished(true);
   }
 
   Future<void> _endTurn() async {
     if (!_myTurn) return;
     setState(() {
-      _selectedAttacker = null;
-      _game.endTurn();
+      _attacker = null;
+      _resolving = true;
     });
-    if (_game.isOver) return;
-
-    setState(() => _aiThinking = true);
-    await Future<void>.delayed(const Duration(milliseconds: 650));
+    await Future<void>.delayed(const Duration(milliseconds: 550));
     if (!mounted) return;
+
+    final before = _battle.playerLife;
     setState(() {
-      final before = _me.life;
-      const SimpleAi().takeTurn(_game);
-      final taken = before - _me.life;
-      _message = taken > 0 ? '相手の攻撃で $taken ダメージ' : '相手はターンを終えた';
-      _game.endTurn();
-      _aiThinking = false;
+      _battle.endTurn();
+      final taken = before - _battle.playerLife;
+      _message = taken > 0 ? '敵のターンで $taken ダメージ' : '敵は何もしてこなかった';
+      _resolving = false;
     });
+    if (_battle.playerLost) widget.onFinished(false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final attacking = _selectedAttacker != null;
+    final aiming = _attacker != null;
+    final blocked = _battle.enemyTaunts.isNotEmpty;
 
     return Scaffold(
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            Column(
-              children: [
-                _PlayerBar(
-                  player: _foe,
-                  color: kSecondColor,
-                  targetable: attacking,
-                  onTap: attacking ? () => _resolveAttack(null) : null,
-                ),
-                _buildCreatures(_foe, isOpponent: true, targetable: attacking),
-                const Spacer(),
-                _buildMessage(),
-                const Spacer(),
-                _buildCreatures(_me, isOpponent: false, targetable: false),
-                _PlayerBar(player: _me, color: kFirstColor),
-                _buildHand(),
-                _buildActionBar(),
-              ],
+            _EnemyHeader(
+              battle: _battle,
+              targetable: aiming && !blocked,
+              onTap: aiming && !blocked ? () => _resolveAttack(null) : null,
             ),
-            if (_game.isOver) _buildGameOver(),
+            _MinionRow(
+              minions: _battle.enemyMinions,
+              emptyLabel: '敵の場は空',
+              builder: (minion) => MinionView(
+                minion: minion,
+                targetable: aiming && (!blocked || minion.hasTaunt),
+                onTap: aiming ? () => _resolveAttack(minion) : null,
+              ),
+            ),
+            const Spacer(),
+            _buildMessage(),
+            const Spacer(),
+            _MinionRow(
+              minions: _battle.playerMinions,
+              emptyLabel: '自分の場は空',
+              builder: (minion) => MinionView(
+                minion: minion,
+                selected: _attacker == minion,
+                canAct: _myTurn && minion.canAttack,
+                onTap: _myTurn ? () => _selectAttacker(minion) : null,
+              ),
+            ),
+            _PlayerBar(battle: _battle),
+            _buildHand(),
+            _buildActionBar(),
           ],
         ),
       ),
@@ -126,75 +133,40 @@ class _BattleScreenState extends State<BattleScreen> {
   }
 
   Widget _buildMessage() {
-    final text = _aiThinking
-        ? '相手のターン…'
-        : _selectedAttacker != null
-            ? '攻撃する相手をタップ（相手の名前をタップで本体を殴る）'
-            : _message ?? 'カードを出して、クリーチャーをタップして攻撃';
+    final text = _resolving
+        ? '敵のターン…'
+        : _attacker != null
+            ? '攻撃する相手をタップ（敵の名前をタップで本体）'
+            : _message ?? 'カードを出して、ミニオンをタップして攻撃';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Text(text,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: _selectedAttacker != null ? kLifeColor : kTextMuted,
-            fontSize: 12.5,
-          )),
-    );
-  }
-
-  Widget _buildCreatures(
-    PlayerState player, {
-    required bool isOpponent,
-    required bool targetable,
-  }) {
-    return SizedBox(
-      height: 74,
-      child: player.creatures.isEmpty
-          ? Center(
-              child: Text(isOpponent ? '相手の場は空' : '自分の場は空',
-                  style: const TextStyle(color: kTextMuted, fontSize: 11)))
-          : ListView(
-              scrollDirection: Axis.horizontal,
-              shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              children: [
-                for (final creature in player.creatures)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                    child: CreatureView(
-                      permanent: creature,
-                      width: 54,
-                      selected: _selectedAttacker == creature,
-                      targetable: targetable,
-                      canAct: !isOpponent &&
-                          _myTurn &&
-                          _game.validateAttack(creature) == null,
-                      onTap: isOpponent
-                          ? (targetable ? () => _resolveAttack(creature) : null)
-                          : (_myTurn ? () => _selectAttacker(creature) : null),
-                    ),
-                  ),
-              ],
-            ),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: _attacker != null ? kLifeColor : kTextMuted,
+          fontSize: 12.5,
+        ),
+      ),
     );
   }
 
   Widget _buildHand() {
     return SizedBox(
-      height: 86,
+      height: 88,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: _me.hand.length,
+        itemCount: _battle.hand.length,
         separatorBuilder: (_, _) => const SizedBox(width: 5),
         itemBuilder: (context, index) {
-          final letter = _me.hand[index];
-          final playable = _myTurn && _game.validatePlay(letter) == null;
+          final kana = _battle.hand[index];
+          final playable = _myTurn && _battle.validatePlay(kana) == null;
           return Center(
             child: CardView(
-              letter: letter,
+              kana: kana,
               dimmed: !playable,
-              onTap: playable ? () => _playCard(letter) : null,
+              onTap: playable ? () => _playCard(kana) : null,
             ),
           );
         },
@@ -208,37 +180,34 @@ class _BattleScreenState extends State<BattleScreen> {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => _showLog(context),
+            onPressed: _showLog,
             icon: const Icon(Icons.receipt_long, color: kTextMuted),
           ),
           Expanded(
             child: FilledButton(
               onPressed: _myTurn ? _endTurn : null,
               style: FilledButton.styleFrom(
-                backgroundColor: kWordColor,
+                backgroundColor: kAccentColor,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
-              child: Text(_myTurn ? 'ターン終了' : '相手のターン'),
+              child: Text(_myTurn ? 'ターン終了' : '敵のターン'),
             ),
           ),
-          IconButton(
-            onPressed: () => setState(_restart),
-            icon: const Icon(Icons.refresh, color: kTextMuted),
-          ),
+          const SizedBox(width: 48),
         ],
       ),
     );
   }
 
-  void _showLog(BuildContext context) {
+  void _showLog() {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: kSurface,
       builder: (context) => ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          for (final entry in _game.log.entries.reversed.take(60))
+          for (final entry in _battle.log.entries.reversed.take(60))
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 3),
               child: Text(entry,
@@ -248,85 +217,108 @@ class _BattleScreenState extends State<BattleScreen> {
       ),
     );
   }
+}
 
-  Widget _buildGameOver() {
-    final won = _game.winner == _me;
-    return Container(
-      color: kBackground.withValues(alpha: 0.9),
-      alignment: Alignment.center,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(won ? 'WIN' : 'LOSE',
-              style: TextStyle(
-                  fontSize: 60,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 4,
-                  color: won ? kFirstColor : kSecondColor)),
-          const SizedBox(height: 24),
-          FilledButton(
-              onPressed: () => setState(_restart),
-              child: const Text('もう一戦')),
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('タイトルへ')),
-        ],
+/// 敵の頭。名前・ライフ・**次の行動予告**。予告が見えることがこのゲームの肝。
+class _EnemyHeader extends StatelessWidget {
+  const _EnemyHeader({
+    required this.battle,
+    required this.targetable,
+    this.onTap,
+  });
+
+  final Battle battle;
+  final bool targetable;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enemy = battle.enemy;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: targetable
+              ? kLifeColor.withValues(alpha: 0.16)
+              : kSurface.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(12),
+          border: targetable ? Border.all(color: kLifeColor, width: 2) : null,
+        ),
+        child: Row(
+          children: [
+            Text(enemy.glyph, style: const TextStyle(fontSize: 26)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(enemy.name, style: const TextStyle(fontSize: 13)),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.favorite, size: 15, color: kEnemyColor),
+                      const SizedBox(width: 3),
+                      Text('${battle.enemyLife}',
+                          style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: kEnemyColor)),
+                      Text(' / ${enemy.life}',
+                          style: const TextStyle(
+                              fontSize: 11, color: kTextMuted)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.visibility_outlined,
+                          size: 13, color: kEnergyColor),
+                      const SizedBox(width: 4),
+                      Text('次: ${battle.nextActionLabel}',
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: kEnergyColor)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _PlayerBar extends StatelessWidget {
-  const _PlayerBar({
-    required this.player,
-    required this.color,
-    this.targetable = false,
-    this.onTap,
-  });
+  const _PlayerBar({required this.battle});
 
-  final PlayerState player;
-  final Color color;
-
-  /// 攻撃対象として選べる状態か。
-  final bool targetable;
-
-  final VoidCallback? onTap;
+  final Battle battle;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: targetable ? kLifeColor.withValues(alpha: 0.16) : null,
-          borderRadius: BorderRadius.circular(10),
-          border: targetable ? Border.all(color: kLifeColor, width: 2) : null,
-        ),
-        child: Row(
-          children: [
-            Text(player.name, style: const TextStyle(fontSize: 12)),
-            const SizedBox(width: 8),
-            Icon(Icons.favorite, size: 16, color: color),
-            const SizedBox(width: 3),
-            Text('${player.life}',
-                style: TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w800, color: color)),
-            const Spacer(),
-            _ManaPips(current: player.mana, max: player.maxMana),
-            const SizedBox(width: 10),
-            const Icon(Icons.back_hand_outlined, size: 13, color: kTextMuted),
-            const SizedBox(width: 2),
-            Text('${player.hand.length}',
-                style: const TextStyle(fontSize: 12, color: kTextMuted)),
-            const SizedBox(width: 8),
-            const Icon(Icons.style, size: 13, color: kTextMuted),
-            const SizedBox(width: 2),
-            Text('${player.library.length}',
-                style: const TextStyle(fontSize: 12, color: kTextMuted)),
-          ],
-        ),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.favorite, size: 16, color: kLifeColor),
+          const SizedBox(width: 3),
+          Text('${battle.playerLife}',
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: kLifeColor)),
+          const SizedBox(width: 12),
+          Expanded(child: _ManaPips(current: battle.mana, max: battle.maxMana)),
+          const Icon(Icons.style, size: 13, color: kTextMuted),
+          const SizedBox(width: 2),
+          Text('${battle.library.length}',
+              style: const TextStyle(fontSize: 12, color: kTextMuted)),
+        ],
       ),
     );
   }
@@ -346,10 +338,10 @@ class _ManaPips extends StatelessWidget {
       children: [
         for (var i = 0; i < max; i++)
           Padding(
-            padding: const EdgeInsets.only(right: 2),
+            padding: const EdgeInsets.only(right: 3),
             child: Container(
-              width: 8,
-              height: 8,
+              width: 9,
+              height: 9,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: i < current
@@ -359,6 +351,41 @@ class _ManaPips extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _MinionRow extends StatelessWidget {
+  const _MinionRow({
+    required this.minions,
+    required this.emptyLabel,
+    required this.builder,
+  });
+
+  final List<Minion> minions;
+  final String emptyLabel;
+  final Widget Function(Minion) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 78,
+      child: minions.isEmpty
+          ? Center(
+              child: Text(emptyLabel,
+                  style: const TextStyle(color: kTextMuted, fontSize: 11)))
+          : ListView(
+              scrollDirection: Axis.horizontal,
+              shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              children: [
+                for (final minion in minions)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: builder(minion),
+                  ),
+              ],
+            ),
     );
   }
 }

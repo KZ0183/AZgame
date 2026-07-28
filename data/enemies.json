@@ -1,0 +1,147 @@
+{
+  "version": "0.7.0",
+  "note": "敵は行動表（pattern）だけで定義する。カードと違い互いのバランスを取る必要がないので、1 体を数行で足せる。ボリュームはここで稼ぐ。",
+  "enemies": [
+    {
+      "id": "kikori",
+      "name": "木こり人形",
+      "glyph": "🪓",
+      "life": 34,
+      "flavor": "森のはずれで斧を振り続ける人形。単調だが一撃が重い。",
+      "lesson": "本体の一撃が速い。壁を並べても止まらないので、間に合わせる速さが要る。",
+      "pattern": [
+        {
+          "kind": "summon",
+          "summons": [
+            "あ"
+          ]
+        },
+        {
+          "kind": "strike",
+          "value": 8
+        },
+        {
+          "kind": "strike",
+          "value": 8
+        },
+        {
+          "kind": "summon",
+          "summons": [
+            "い"
+          ]
+        },
+        {
+          "kind": "strike",
+          "value": 11
+        }
+      ]
+    },
+    {
+      "id": "mukade",
+      "name": "百足の群",
+      "glyph": "🐛",
+      "life": 46,
+      "flavor": "一匹ずつは弱い。だが数えているうちに増えている。",
+      "lesson": "雑魚の総攻撃が本体。挑発で受けるほど楽になるが、薙ぎ払いと本体の一撃は素通りする。",
+      "pattern": [
+        {
+          "kind": "summon",
+          "summons": [
+            "あ",
+            "か",
+            "き"
+          ]
+        },
+        {
+          "kind": "summon",
+          "summons": [
+            "い",
+            "い"
+          ]
+        },
+        {
+          "kind": "strike",
+          "value": 4
+        },
+        {
+          "kind": "sweep",
+          "value": 2
+        },
+        {
+          "kind": "summon",
+          "summons": [
+            "う",
+            "か",
+            "か"
+          ]
+        },
+        {
+          "kind": "strike",
+          "value": 5
+        },
+        {
+          "kind": "summon",
+          "summons": [
+            "い",
+            "き",
+            "あ"
+          ]
+        },
+        {
+          "kind": "strike",
+          "value": 7
+        }
+      ]
+    },
+    {
+      "id": "oni",
+      "name": "鬼",
+      "glyph": "👹",
+      "life": 52,
+      "flavor": "壁を立て、薙ぎ払い、力を溜めて振り下ろす。",
+      "lesson": "一撃が回るたびに重くなる。長引かせるほど不利になるので、どこかで決めに行く必要がある。",
+      "pattern": [
+        {
+          "kind": "summon",
+          "summons": [
+            "ち"
+          ]
+        },
+        {
+          "kind": "strike",
+          "value": 7
+        },
+        {
+          "kind": "sweep",
+          "value": 3
+        },
+        {
+          "kind": "strike",
+          "value": 7
+        },
+        {
+          "kind": "empower",
+          "value": 5
+        },
+        {
+          "kind": "summon",
+          "summons": [
+            "つ"
+          ]
+        },
+        {
+          "kind": "sweep",
+          "value": 3
+        },
+        {
+          "kind": "strike",
+          "value": 7
+        },
+        {
+          "kind": "heal",
+          "value": 8
+        }
+      ]
+    }
+  ]
+}

@@ -29,10 +29,10 @@ jobs:
         # JSON だけ編集して再生成を忘れると、実装と設計がずれたまま進んでしまう。
         run: |
           dart run tool/generate_catalog.dart
-          if ! git diff --quiet -- lib/src/data/catalog.g.dart; then
-            echo "::error::catalog.g.dart が data/*.json と一致していません。"
+          if ! git diff --quiet -- lib/src/data/; then
+            echo "::error::lib/src/data/*.g.dart が data/*.json と一致していません。"
             echo "::error::dart run tool/generate_catalog.dart を実行してコミットしてください。"
-            git diff -- lib/src/data/catalog.g.dart
+            git diff -- lib/src/data/
             exit 1
           fi
 

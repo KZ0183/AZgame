@@ -1,215 +1,599 @@
 {
-  "version": "0.6.0",
-  "note": "土地を廃止し、26 枚すべてをクリーチャーにした。マナは毎ターン自動で +1 されるため、カードはクリーチャーだけでよい。すべてバニラで、コストがそのままパワーとタフネスになる。",
-  "costAssignment": "スクラブル文字スコアの希少度順に並べ、1 マナ 4 枚 / 2 マナ 5 枚 / 3 マナ 5 枚 / 4 マナ 4 枚 / 5 マナ 3 枚 / 6 マナ 2 枚 / 7 マナ 2 枚 / 8 マナ 1 枚 のカーブへ割り当てた。",
+  "version": "0.7.0",
   "cards": [
     {
-      "letter": "A",
-      "rank": 1,
+      "kana": "あ",
+      "order": 1,
+      "row": "あ行",
       "cost": 1,
       "power": 1,
       "toughness": 1,
+      "keywords": [],
+      "onPlay": "none",
+      "onPlayValue": 0,
       "deckLimit": 4
     },
     {
-      "letter": "B",
-      "rank": 2,
-      "cost": 3,
-      "power": 3,
-      "toughness": 3,
-      "deckLimit": 4
-    },
-    {
-      "letter": "C",
-      "rank": 3,
-      "cost": 3,
-      "power": 3,
-      "toughness": 3,
-      "deckLimit": 4
-    },
-    {
-      "letter": "D",
-      "rank": 4,
-      "cost": 3,
-      "power": 3,
-      "toughness": 3,
-      "deckLimit": 4
-    },
-    {
-      "letter": "E",
-      "rank": 5,
-      "cost": 1,
-      "power": 1,
-      "toughness": 1,
-      "deckLimit": 4
-    },
-    {
-      "letter": "F",
-      "rank": 6,
-      "cost": 4,
-      "power": 4,
-      "toughness": 4,
-      "deckLimit": 4
-    },
-    {
-      "letter": "G",
-      "rank": 7,
-      "cost": 3,
-      "power": 3,
-      "toughness": 3,
-      "deckLimit": 4
-    },
-    {
-      "letter": "H",
-      "rank": 8,
-      "cost": 4,
-      "power": 4,
-      "toughness": 4,
-      "deckLimit": 4
-    },
-    {
-      "letter": "I",
-      "rank": 9,
-      "cost": 1,
-      "power": 1,
-      "toughness": 1,
-      "deckLimit": 4
-    },
-    {
-      "letter": "J",
-      "rank": 10,
-      "cost": 6,
-      "power": 6,
-      "toughness": 6,
-      "deckLimit": 4
-    },
-    {
-      "letter": "K",
-      "rank": 11,
-      "cost": 6,
-      "power": 6,
-      "toughness": 6,
-      "deckLimit": 4
-    },
-    {
-      "letter": "L",
-      "rank": 12,
-      "cost": 1,
-      "power": 1,
-      "toughness": 1,
-      "deckLimit": 4
-    },
-    {
-      "letter": "M",
-      "rank": 13,
-      "cost": 4,
-      "power": 4,
-      "toughness": 4,
-      "deckLimit": 4
-    },
-    {
-      "letter": "N",
-      "rank": 14,
+      "kana": "い",
+      "order": 2,
+      "row": "あ行",
       "cost": 2,
       "power": 2,
       "toughness": 2,
+      "keywords": [],
+      "onPlay": "none",
+      "onPlayValue": 0,
       "deckLimit": 4
     },
     {
-      "letter": "O",
-      "rank": 15,
-      "cost": 2,
-      "power": 2,
-      "toughness": 2,
+      "kana": "う",
+      "order": 3,
+      "row": "あ行",
+      "cost": 3,
+      "power": 3,
+      "toughness": 3,
+      "keywords": [],
+      "onPlay": "none",
+      "onPlayValue": 0,
       "deckLimit": 4
     },
     {
-      "letter": "P",
-      "rank": 16,
+      "kana": "え",
+      "order": 4,
+      "row": "あ行",
       "cost": 4,
       "power": 4,
       "toughness": 4,
+      "keywords": [],
+      "onPlay": "none",
+      "onPlayValue": 0,
       "deckLimit": 4
     },
     {
-      "letter": "Q",
-      "rank": 17,
-      "cost": 7,
+      "kana": "お",
+      "order": 5,
+      "row": "あ行",
+      "cost": 5,
+      "power": 5,
+      "toughness": 5,
+      "keywords": [],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "か",
+      "order": 6,
+      "row": "か行",
+      "cost": 1,
+      "power": 1,
+      "toughness": 1,
+      "keywords": [
+        "charge"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "き",
+      "order": 7,
+      "row": "か行",
+      "cost": 2,
+      "power": 2,
+      "toughness": 1,
+      "keywords": [
+        "charge"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "く",
+      "order": 8,
+      "row": "か行",
+      "cost": 3,
+      "power": 3,
+      "toughness": 2,
+      "keywords": [
+        "charge"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "け",
+      "order": 9,
+      "row": "か行",
+      "cost": 4,
+      "power": 4,
+      "toughness": 3,
+      "keywords": [
+        "charge"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "こ",
+      "order": 10,
+      "row": "か行",
+      "cost": 5,
+      "power": 5,
+      "toughness": 4,
+      "keywords": [
+        "charge"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "さ",
+      "order": 11,
+      "row": "さ行",
+      "cost": 1,
+      "power": 1,
+      "toughness": 1,
+      "keywords": [],
+      "onPlay": "snipe",
+      "onPlayValue": 1,
+      "deckLimit": 4
+    },
+    {
+      "kana": "し",
+      "order": 12,
+      "row": "さ行",
+      "cost": 2,
+      "power": 1,
+      "toughness": 2,
+      "keywords": [],
+      "onPlay": "snipe",
+      "onPlayValue": 1,
+      "deckLimit": 4
+    },
+    {
+      "kana": "す",
+      "order": 13,
+      "row": "さ行",
+      "cost": 3,
+      "power": 2,
+      "toughness": 3,
+      "keywords": [],
+      "onPlay": "snipe",
+      "onPlayValue": 2,
+      "deckLimit": 4
+    },
+    {
+      "kana": "せ",
+      "order": 14,
+      "row": "さ行",
+      "cost": 4,
+      "power": 3,
+      "toughness": 4,
+      "keywords": [],
+      "onPlay": "snipe",
+      "onPlayValue": 2,
+      "deckLimit": 4
+    },
+    {
+      "kana": "そ",
+      "order": 15,
+      "row": "さ行",
+      "cost": 5,
+      "power": 4,
+      "toughness": 5,
+      "keywords": [],
+      "onPlay": "snipe",
+      "onPlayValue": 3,
+      "deckLimit": 4
+    },
+    {
+      "kana": "た",
+      "order": 16,
+      "row": "た行",
+      "cost": 1,
+      "power": 1,
+      "toughness": 2,
+      "keywords": [
+        "taunt"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "ち",
+      "order": 17,
+      "row": "た行",
+      "cost": 2,
+      "power": 1,
+      "toughness": 3,
+      "keywords": [
+        "taunt"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "つ",
+      "order": 18,
+      "row": "た行",
+      "cost": 3,
+      "power": 2,
+      "toughness": 4,
+      "keywords": [
+        "taunt"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "て",
+      "order": 19,
+      "row": "た行",
+      "cost": 4,
+      "power": 3,
+      "toughness": 5,
+      "keywords": [
+        "taunt"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "と",
+      "order": 20,
+      "row": "た行",
+      "cost": 5,
+      "power": 4,
+      "toughness": 6,
+      "keywords": [
+        "taunt"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "な",
+      "order": 21,
+      "row": "な行",
+      "cost": 1,
+      "power": 1,
+      "toughness": 1,
+      "keywords": [
+        "lifesteal"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "に",
+      "order": 22,
+      "row": "な行",
+      "cost": 2,
+      "power": 1,
+      "toughness": 2,
+      "keywords": [
+        "lifesteal"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "ぬ",
+      "order": 23,
+      "row": "な行",
+      "cost": 3,
+      "power": 2,
+      "toughness": 3,
+      "keywords": [
+        "lifesteal"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "ね",
+      "order": 24,
+      "row": "な行",
+      "cost": 4,
+      "power": 3,
+      "toughness": 4,
+      "keywords": [
+        "lifesteal"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "の",
+      "order": 25,
+      "row": "な行",
+      "cost": 5,
+      "power": 4,
+      "toughness": 5,
+      "keywords": [
+        "lifesteal"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "は",
+      "order": 26,
+      "row": "は行",
+      "cost": 1,
+      "power": 1,
+      "toughness": 1,
+      "keywords": [
+        "pierce"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "ひ",
+      "order": 27,
+      "row": "は行",
+      "cost": 2,
+      "power": 2,
+      "toughness": 1,
+      "keywords": [
+        "pierce"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "ふ",
+      "order": 28,
+      "row": "は行",
+      "cost": 3,
+      "power": 3,
+      "toughness": 2,
+      "keywords": [
+        "pierce"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "へ",
+      "order": 29,
+      "row": "は行",
+      "cost": 4,
+      "power": 4,
+      "toughness": 3,
+      "keywords": [
+        "pierce"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "ほ",
+      "order": 30,
+      "row": "は行",
+      "cost": 5,
+      "power": 5,
+      "toughness": 4,
+      "keywords": [
+        "pierce"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "ま",
+      "order": 31,
+      "row": "ま行",
+      "cost": 1,
+      "power": 1,
+      "toughness": 3,
+      "keywords": [],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "み",
+      "order": 32,
+      "row": "ま行",
+      "cost": 2,
+      "power": 1,
+      "toughness": 4,
+      "keywords": [],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "む",
+      "order": 33,
+      "row": "ま行",
+      "cost": 3,
+      "power": 2,
+      "toughness": 5,
+      "keywords": [],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "め",
+      "order": 34,
+      "row": "ま行",
+      "cost": 4,
+      "power": 3,
+      "toughness": 6,
+      "keywords": [],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "も",
+      "order": 35,
+      "row": "ま行",
+      "cost": 5,
+      "power": 4,
+      "toughness": 7,
+      "keywords": [],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "や",
+      "order": 36,
+      "row": "や行",
+      "cost": 1,
+      "power": 2,
+      "toughness": 1,
+      "keywords": [],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "ゆ",
+      "order": 37,
+      "row": "や行",
+      "cost": 3,
+      "power": 4,
+      "toughness": 2,
+      "keywords": [],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "よ",
+      "order": 38,
+      "row": "や行",
+      "cost": 5,
+      "power": 6,
+      "toughness": 4,
+      "keywords": [],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 4
+    },
+    {
+      "kana": "ら",
+      "order": 39,
+      "row": "ら行",
+      "cost": 1,
+      "power": 0,
+      "toughness": 1,
+      "keywords": [],
+      "onPlay": "draw",
+      "onPlayValue": 1,
+      "deckLimit": 4
+    },
+    {
+      "kana": "り",
+      "order": 40,
+      "row": "ら行",
+      "cost": 2,
+      "power": 1,
+      "toughness": 2,
+      "keywords": [],
+      "onPlay": "draw",
+      "onPlayValue": 1,
+      "deckLimit": 4
+    },
+    {
+      "kana": "る",
+      "order": 41,
+      "row": "ら行",
+      "cost": 3,
+      "power": 2,
+      "toughness": 3,
+      "keywords": [],
+      "onPlay": "draw",
+      "onPlayValue": 1,
+      "deckLimit": 4
+    },
+    {
+      "kana": "れ",
+      "order": 42,
+      "row": "ら行",
+      "cost": 4,
+      "power": 3,
+      "toughness": 4,
+      "keywords": [],
+      "onPlay": "draw",
+      "onPlayValue": 1,
+      "deckLimit": 4
+    },
+    {
+      "kana": "ろ",
+      "order": 43,
+      "row": "ら行",
+      "cost": 5,
+      "power": 4,
+      "toughness": 5,
+      "keywords": [],
+      "onPlay": "draw",
+      "onPlayValue": 1,
+      "deckLimit": 4
+    },
+    {
+      "kana": "わ",
+      "order": 44,
+      "row": "わ行",
+      "cost": 1,
+      "power": 1,
+      "toughness": 1,
+      "keywords": [],
+      "onPlay": "heal",
+      "onPlayValue": 1,
+      "deckLimit": 4
+    },
+    {
+      "kana": "を",
+      "order": 45,
+      "row": "わ行",
+      "cost": 5,
+      "power": 4,
+      "toughness": 5,
+      "keywords": [],
+      "onPlay": "heal",
+      "onPlayValue": 5,
+      "deckLimit": 4
+    },
+    {
+      "kana": "ん",
+      "order": 46,
+      "row": "ん",
+      "cost": 6,
       "power": 7,
       "toughness": 7,
-      "deckLimit": 4
-    },
-    {
-      "letter": "R",
-      "rank": 18,
-      "cost": 2,
-      "power": 2,
-      "toughness": 2,
-      "deckLimit": 4
-    },
-    {
-      "letter": "S",
-      "rank": 19,
-      "cost": 2,
-      "power": 2,
-      "toughness": 2,
-      "deckLimit": 4
-    },
-    {
-      "letter": "T",
-      "rank": 20,
-      "cost": 2,
-      "power": 2,
-      "toughness": 2,
-      "deckLimit": 4
-    },
-    {
-      "letter": "U",
-      "rank": 21,
-      "cost": 3,
-      "power": 3,
-      "toughness": 3,
-      "deckLimit": 4
-    },
-    {
-      "letter": "V",
-      "rank": 22,
-      "cost": 5,
-      "power": 5,
-      "toughness": 5,
-      "deckLimit": 4
-    },
-    {
-      "letter": "W",
-      "rank": 23,
-      "cost": 5,
-      "power": 5,
-      "toughness": 5,
-      "deckLimit": 4
-    },
-    {
-      "letter": "X",
-      "rank": 24,
-      "cost": 7,
-      "power": 7,
-      "toughness": 7,
-      "deckLimit": 4
-    },
-    {
-      "letter": "Y",
-      "rank": 25,
-      "cost": 5,
-      "power": 5,
-      "toughness": 5,
-      "deckLimit": 4
-    },
-    {
-      "letter": "Z",
-      "rank": 26,
-      "cost": 8,
-      "power": 8,
-      "toughness": 8,
-      "deckLimit": 4
+      "keywords": [
+        "pierce"
+      ],
+      "onPlay": "none",
+      "onPlayValue": 0,
+      "deckLimit": 1
     }
   ]
 }

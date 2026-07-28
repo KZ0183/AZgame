@@ -1,81 +1,71 @@
-/// 対戦相手を務める AI。
+/// プレイヤー側を自動で打つヒューリスティック。
+///
+/// 対戦相手ではない（相手は [EnemyDef] の行動表）。
+/// バランス実測で「そこそこ上手い人」の代わりを務めるためのもの。
 library;
 
 import '../data/catalog.g.dart';
-import 'game.dart';
+import 'battle.dart';
 import 'models.dart';
 
-class SimpleAi {
-  const SimpleAi();
+class AutoPlayer {
+  const AutoPlayer();
 
   /// 1 ターンぶんを打ち切る。ターン終了は呼び出し側が行う。
-  void takeTurn(Game game) {
-    _playCards(game);
-    _attack(game);
+  void takeTurn(Battle battle) {
+    _playCards(battle);
+    _attack(battle);
   }
 
-  /// 出せる中で最も重いクリーチャーから順に、マナを使い切るまで出す。
-  void _playCards(Game game) {
+  /// 出せる中で最も重いカードから順に、マナを使い切るまで出す。
+  void _playCards(Battle battle) {
     while (true) {
-      final playable = game.active.hand
-          .where((letter) => game.validatePlay(letter) == null)
+      final playable = battle.hand
+          .where((kana) => battle.validatePlay(kana) == null)
           .toList()
         ..sort((a, b) => cardCatalog[b]!.cost.compareTo(cardCatalog[a]!.cost));
       if (playable.isEmpty) break;
-      game.play(playable.first);
+      battle.play(playable.first);
     }
   }
 
-  void _attack(Game game) {
-    while (true) {
-      final me = game.active;
-      final foe = game.inactive;
-      final attackers = me.readyAttackers;
-      if (attackers.isEmpty || game.isOver) break;
-
-      // 本体を殴り切って勝てるなら、盤面を無視して顔に行く。
-      final totalPower = attackers.fold<int>(
-          0, (sum, c) => sum + cardCatalog[c.letter]!.power);
-      if (totalPower >= foe.life) {
-        game.attack(attackers.first, null);
-        continue;
-      }
-
+  void _attack(Battle battle) {
+    while (!battle.isOver) {
+      final attackers = battle.readyAttackers;
+      if (attackers.isEmpty) break;
       final attacker = attackers.first;
-      game.attack(attacker, _chooseTarget(attacker, foe.creatures));
+      battle.attack(attacker, _chooseTarget(battle, attacker));
     }
   }
 
   /// 攻撃対象を選ぶ。
   ///
-  /// 「一方的に討ち取れる相手」を最優先し、次に「相打ちでも大物を倒せる相手」。
-  /// どちらもなければ本体を殴る。
-  Permanent? _chooseTarget(Permanent attacker, List<Permanent> enemies) {
-    final card = cardCatalog[attacker.letter]!;
-
-    Permanent? oneSided;
-    Permanent? trade;
-
-    for (final enemy in enemies) {
-      final enemyCard = cardCatalog[enemy.letter]!;
-      final kills = card.power >= enemyCard.toughness - enemy.damage;
-      final survives = enemyCard.power < card.toughness - attacker.damage;
-      if (!kills) continue;
-
-      if (survives) {
-        // 一方的に討ち取れるなら、より大きい相手を選ぶ。
-        if (oneSided == null ||
-            enemyCard.cost > cardCatalog[oneSided.letter]!.cost) {
-          oneSided = enemy;
-        }
-      } else if (enemyCard.cost > card.cost) {
-        // 相打ちでも、自分より重い相手を倒せるなら得。
-        if (trade == null || enemyCard.cost > cardCatalog[trade.letter]!.cost) {
-          trade = enemy;
-        }
-      }
+  /// 挑発がいれば選択の余地はない。いなければ、削り切れるなら本体、
+  /// そうでなければ「一方的に討ち取れる雑魚」を優先する。
+  Minion? _chooseTarget(Battle battle, Minion attacker) {
+    final taunts = battle.enemyTaunts;
+    if (taunts.isNotEmpty) {
+      final killable =
+          taunts.where((t) => t.remaining <= attacker.card.power).toList();
+      final pool = killable.isNotEmpty ? killable : taunts;
+      pool.sort((a, b) => a.remaining.compareTo(b.remaining));
+      return pool.first;
     }
 
-    return oneSided ?? trade;
+    // このターンで削り切れるなら、盤面を無視して本体へ。
+    final reach = battle.readyAttackers
+        .fold<int>(0, (sum, m) => sum + m.card.power);
+    if (reach >= battle.enemyLife) return null;
+
+    Minion? oneSided;
+    for (final enemy in battle.enemyMinions) {
+      final kills = attacker.card.power >= enemy.remaining;
+      final survives = enemy.card.power < attacker.remaining;
+      if (!kills || !survives) continue;
+      if (oneSided == null || enemy.card.cost > oneSided.card.cost) {
+        oneSided = enemy;
+      }
+    }
+    return oneSided;
   }
 }

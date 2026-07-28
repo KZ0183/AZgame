@@ -23,7 +23,7 @@ class AzGameApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AZ GAME',
+      title: 'かな戦記',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       home: const HomeScreen(),

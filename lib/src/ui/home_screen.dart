@@ -3,10 +3,10 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'battle_screen.dart';
 import 'catalog_screen.dart';
+import 'run_screen.dart';
 import 'theme.dart';
-import 'widgets/letter_card_view.dart';
+import 'widgets/kana_card_view.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -21,45 +21,44 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
+                const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    CardView(letter: 'A', width: 52),
+                  children: [
+                    CardView(kana: 'あ', width: 52),
                     SizedBox(width: 8),
-                    CardView(letter: 'Z', width: 52),
+                    CardView(kana: 'ん', width: 52),
                   ],
                 ),
                 const SizedBox(height: 20),
                 const Text(
-                  'AZ GAME',
+                  'かな戦記',
                   style: TextStyle(
                       fontSize: 34,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 6),
+                      letterSpacing: 8),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'A〜Z の 26 枚で戦うカードゲーム',
+                  'あ〜ん の 46 枚で、敵を順に退ける',
                   style: TextStyle(color: kTextMuted, fontSize: 13),
                 ),
-                const SizedBox(height: 32),
-                const _Rules(),
                 const SizedBox(height: 28),
+                const _Rules(),
+                const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
                     onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                          builder: (_) => const BattleScreen()),
+                      MaterialPageRoute<void>(builder: (_) => const RunScreen()),
                     ),
                     style: FilledButton.styleFrom(
-                      backgroundColor: kWordColor,
+                      backgroundColor: kAccentColor,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       textStyle: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w700),
                     ),
-                    child: const Text('対戦開始'),
+                    child: const Text('道中を始める'),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -93,11 +92,11 @@ class _Rules extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const rules = [
-      'マナは毎ターン自動で 1 ずつ増える。土地を置く操作はない',
-      '26 枚すべてクリーチャー。コスト N なら N/N',
-      '出したターンは攻撃できない（召喚酔い）',
-      'クリーチャーをタップ → 攻撃相手をタップ。ブロックはない',
-      '相手のライフ 20 を 0 にすれば勝ち',
+      'カードを使うのはこちらだけ。相手は決まった行動表をなぞる敵',
+      '敵の次の一手は常に見えている。運ではなく段取りで解く',
+      '行が種族、段がコスト。「か行は突撃」「た行は挑発」',
+      'マナは毎ターン自動で 1 増える。土地を置く操作はない',
+      'ミニオンをタップ → 攻撃相手をタップ。ブロックはない',
     ];
 
     return Container(
