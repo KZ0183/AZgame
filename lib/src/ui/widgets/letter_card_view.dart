@@ -69,31 +69,23 @@ class CardView extends StatelessWidget {
                 ),
               ),
             ),
-            if (card.isCreature) ...[
-              Positioned(
-                top: 3,
-                left: 5,
-                child: _Badge(text: '${card.cost}', color: kEnergyColor),
-              ),
-              Positioned(
-                bottom: 3,
-                right: 5,
-                child: Text(
-                  '${card.power}/${card.toughness}',
-                  style: TextStyle(
-                    fontSize: width * 0.2,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
+            Positioned(
+              top: 3,
+              left: 5,
+              child: _Badge(text: '${card.cost}', color: kEnergyColor),
+            ),
+            Positioned(
+              bottom: 3,
+              right: 5,
+              child: Text(
+                '${card.power}/${card.toughness}',
+                style: TextStyle(
+                  fontSize: width * 0.2,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white.withValues(alpha: 0.9),
                 ),
               ),
-            ] else
-              Positioned(
-                bottom: 3,
-                right: 5,
-                child: Icon(Icons.eco,
-                    size: width * 0.24, color: Colors.white.withValues(alpha: 0.8)),
-              ),
+            ),
           ],
         ),
       ),
@@ -128,15 +120,23 @@ class CreatureView extends StatelessWidget {
     super.key,
     required this.permanent,
     this.width = 46,
-    this.attacking = false,
+    this.selected = false,
+    this.targetable = false,
+    this.canAct = false,
     this.onTap,
   });
 
   final Permanent permanent;
   final double width;
 
-  /// 攻撃者として選ばれているか。
-  final bool attacking;
+  /// 攻撃者として選択中か。
+  final bool selected;
+
+  /// 攻撃対象として選べる状態か。
+  final bool targetable;
+
+  /// 今このクリーチャーで攻撃できるか。できるものだけ縁を光らせる。
+  final bool canAct;
 
   final VoidCallback? onTap;
 
@@ -155,11 +155,17 @@ class CreatureView extends StatelessWidget {
           borderRadius: BorderRadius.circular(width * 0.16),
           color: cardColor(card).withValues(alpha: 0.85),
           border: Border.all(
-            color: attacking ? kLifeColor : kOutline,
-            width: attacking ? 2.6 : 1,
+            color: selected
+                ? Colors.white
+                : targetable
+                    ? kLifeColor
+                    : canAct
+                        ? kEnergyColor
+                        : kOutline,
+            width: (selected || targetable) ? 2.6 : (canAct ? 2 : 1),
           ),
         ),
-        foregroundDecoration: permanent.summoningSick || permanent.tapped
+        foregroundDecoration: permanent.summoningSick || permanent.attacked
             ? BoxDecoration(
                 borderRadius: BorderRadius.circular(width * 0.16),
                 color: kBackground.withValues(alpha: 0.45),

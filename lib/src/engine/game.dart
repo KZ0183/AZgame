@@ -1,4 +1,8 @@
-/// 初期 MTG を単純化したルールエンジン。
+/// ルールエンジン。
+///
+/// スマホで遊べることを最優先に、MTG から次の 3 つを外している。
+/// 土地（マナは自動）、ブロック（攻撃側が対象を選ぶ）、攻撃の一括宣言
+/// （1 体ずつ即座に解決する）。
 library;
 
 import 'dart:math';
@@ -7,14 +11,20 @@ import '../data/catalog.g.dart';
 import 'models.dart';
 
 const int kStartingLife = 20;
-const int kStartingHand = 7;
-const int kHandLimit = 7;
+const int kStartingHand = 4;
+const int kHandLimit = 8;
 const int kDeckSize = 30;
 
-/// カードを唱えられなかった理由。
-enum PlayError { notInHand, landAlreadyPlayed, notEnoughMana, gameOver }
+/// マナ上限。ターンごとに 1 ずつ増え、ここで頭打ちになる。
+const int kMaxMana = 10;
 
-/// 対戦者ひとりぶんの状態。
+/// 場に出せるクリーチャーの上限。盤面が横に伸びすぎると画面に収まらない。
+const int kFieldLimit = 6;
+
+enum PlayError { notInHand, notEnoughMana, fieldFull, gameOver }
+
+enum AttackError { notYourCreature, alreadyAttacked, summoningSick, gameOver }
+
 class PlayerState {
   PlayerState({required this.name, required List<String> deck})
       : library = List<String>.of(deck);
@@ -23,24 +33,29 @@ class PlayerState {
 
   int life = kStartingLife;
 
-  /// 山札。索引 0 が一番上。
+  /// このターン使えるマナ。ターン開始時に上限まで回復する。
+  int mana = 0;
+
+  /// マナ上限。自分のターンが来るたびに 1 増える。
+  int maxMana = 0;
+
   final List<String> library;
   final List<String> hand = [];
   final List<String> graveyard = [];
-
-  /// 戦場の土地とクリーチャー。
-  final List<Permanent> lands = [];
   final List<Permanent> creatures = [];
 
-  /// このターンすでに土地を置いたか。
-  bool landPlayedThisTurn = false;
+  /// 後攻に配られる先攻補正。最初の自分のターンに 1 度だけマナが 1 増える。
+  /// ブロックがないぶん先攻の押し込みが強く、これがないと大きく傾く。
+  bool hasCoin = false;
 
   bool deckedOut = false;
 
   bool get isDefeated => life <= 0 || deckedOut;
 
-  /// 今すぐ使えるマナ。アンタップ状態の土地の数。
-  int get availableMana => lands.where((land) => !land.tapped).length;
+  /// 攻撃できるクリーチャー。
+  List<Permanent> get readyAttackers => creatures
+      .where((c) => !c.attacked && !c.summoningSick)
+      .toList();
 
   List<String> draw(int count) {
     final drawn = <String>[];
@@ -56,32 +71,13 @@ class PlayerState {
     return drawn;
   }
 
-  /// [amount] ぶんの土地をタップしてマナを支払う。
-  void payMana(int amount) {
-    var remaining = amount;
-    for (final land in lands) {
-      if (remaining == 0) break;
-      if (land.tapped) continue;
-      land.tapped = true;
-      remaining--;
-    }
-    if (remaining > 0) throw StateError('マナが足りません');
-  }
-
-  /// 攻撃できるクリーチャー。
-  List<Permanent> get readyAttackers =>
-      creatures.where((c) => !c.summoningSick && !c.tapped).toList();
-
-  /// ブロックできるクリーチャー。タップ状態のものはブロックできない。
-  List<Permanent> get readyBlockers =>
-      creatures.where((c) => !c.tapped).toList();
-
-  /// タフネス以上のダメージを受けたクリーチャーを墓地へ送る。
+  /// 死亡したクリーチャーを墓地へ送る。
   List<String> removeDead() {
     final dead = <String>[];
     creatures.removeWhere((creature) {
-      final card = cardCatalog[creature.letter]!;
-      if (creature.damage < card.toughness) return false;
+      if (creature.damage < cardCatalog[creature.letter]!.toughness) {
+        return false;
+      }
       graveyard.add(creature.letter);
       dead.add(creature.letter);
       return true;
@@ -90,38 +86,28 @@ class PlayerState {
   }
 
   @override
-  String toString() => '$name(ライフ $life, 土地 ${lands.length}, '
-      'クリーチャー ${creatures.map((c) => c.letter).join()})';
+  String toString() =>
+      '$name(ライフ $life, マナ $mana/$maxMana, 場 ${creatures.join()})';
 }
 
-/// ブロックの割り当てを決める関数。
-///
-/// 攻撃してきたクリーチャーごとに、ブロックに使うクリーチャーを返す。
-/// 割り当てないものは `null`。1 体のブロッカーは 1 体しかブロックできない。
-typedef BlockChooser = Map<Permanent, Permanent?> Function(
-  List<Permanent> attackers,
-  List<Permanent> blockers,
-);
-
-/// 1 体ぶんの戦闘結果。
-class CombatLine {
-  const CombatLine({
+/// 攻撃 1 回の結果。
+class AttackResult {
+  const AttackResult({
     required this.attacker,
-    required this.blocker,
+    required this.target,
     required this.damageToPlayer,
+    required this.attackerDied,
+    required this.targetDied,
   });
 
   final String attacker;
-  final String? blocker;
+
+  /// 攻撃した相手のクリーチャー。本体を殴った場合は `null`。
+  final String? target;
+
   final int damageToPlayer;
-}
-
-/// 1 回の戦闘の結果。
-class CombatResult {
-  const CombatResult({required this.lines, required this.totalDamage});
-
-  final List<CombatLine> lines;
-  final int totalDamage;
+  final bool attackerDied;
+  final bool targetDied;
 }
 
 class GameLog {
@@ -129,13 +115,10 @@ class GameLog {
   void add(String message) => entries.add(message);
 }
 
-/// 対戦を進行させるエンジン。
 class Game {
   Game({
     required this.first,
     required this.second,
-    required this.firstBlocker,
-    required this.secondBlocker,
     Random? rng,
     GameLog? log,
   })  : rng = rng ?? Random(),
@@ -143,11 +126,6 @@ class Game {
 
   final PlayerState first;
   final PlayerState second;
-
-  /// それぞれのプレイヤーがブロックを決める方法。
-  final BlockChooser firstBlocker;
-  final BlockChooser secondBlocker;
-
   final Random rng;
   final GameLog log;
 
@@ -156,9 +134,6 @@ class Game {
 
   PlayerState get active => isFirstPlayerTurn ? first : second;
   PlayerState get inactive => isFirstPlayerTurn ? second : first;
-
-  BlockChooser get _activeBlocker =>
-      isFirstPlayerTurn ? secondBlocker : firstBlocker;
 
   bool get isOver => first.isDefeated || second.isDefeated;
 
@@ -172,41 +147,49 @@ class Game {
     _shuffle(first.library);
     _shuffle(second.library);
     first.draw(kStartingHand);
-    second.draw(kStartingHand);
+    // 後攻は 1 枚多く引き、さらにコイン（初回のみマナ +1）を得る。
+    second.draw(kStartingHand + 1);
+    second.hasCoin = true;
     log.add('対戦開始');
     beginTurn();
   }
 
-  /// ターンを開始する。アンタップ → ドローの順。
+  /// ターンを開始する。マナ回復 → ドローの順。
   void beginTurn() {
     if (isOver) return;
     turnNumber++;
     final player = active;
 
-    for (final permanent in [...player.lands, ...player.creatures]) {
-      permanent.tapped = false;
-      permanent.summoningSick = false;
+    // マナは自動で増える。土地を置く操作はない。
+    player.maxMana = min(player.maxMana + 1, kMaxMana);
+    player.mana = player.maxMana;
+    if (player.hasCoin) {
+      player.hasCoin = false;
+      player.mana += 1;
+      log.add('${player.name} はコインを使った（マナ +1）');
     }
-    player.landPlayedThisTurn = false;
+
+    for (final creature in player.creatures) {
+      creature.attacked = false;
+      creature.summoningSick = false;
+    }
 
     // 先攻の 1 ターン目はドローしない。
     if (turnNumber > 1) player.draw(1);
 
-    log.add('--- ターン $turnNumber: ${player.name} ---');
+    log.add('--- ターン $turnNumber: ${player.name} (マナ ${player.mana}) ---');
   }
 
   PlayError? validatePlay(String letter) {
     if (isOver) return PlayError.gameOver;
     final player = active;
     if (!player.hand.contains(letter)) return PlayError.notInHand;
-    final card = cardCatalog[letter]!;
-    if (card.isLand) {
-      return player.landPlayedThisTurn ? PlayError.landAlreadyPlayed : null;
-    }
-    return player.availableMana < card.cost ? PlayError.notEnoughMana : null;
+    if (player.creatures.length >= kFieldLimit) return PlayError.fieldFull;
+    if (player.mana < cardCatalog[letter]!.cost) return PlayError.notEnoughMana;
+    return null;
   }
 
-  /// 手札から [letter] を戦場に出す。
+  /// 手札からクリーチャーを出す。
   void play(String letter) {
     final error = validatePlay(letter);
     if (error != null) throw StateError('$letter を出せません: $error');
@@ -214,89 +197,75 @@ class Game {
     final player = active;
     final card = cardCatalog[letter]!;
     player.hand.remove(letter);
-
-    if (card.isLand) {
-      player.landPlayedThisTurn = true;
-      // 土地は召喚酔いの影響を受けない。
-      player.lands.add(Permanent(letter)..summoningSick = false);
-      log.add('${player.name} が土地 $letter を置いた');
-    } else {
-      player.payMana(card.cost);
-      player.creatures.add(Permanent(letter));
-      log.add('${player.name} が $letter (${card.power}/${card.toughness}) を唱えた');
-    }
+    player.mana -= card.cost;
+    player.creatures.add(Permanent(letter));
+    log.add('${player.name} が $letter (${card.power}/${card.toughness}) を出した');
   }
 
-  /// 戦闘。[attackers] で攻撃を宣言し、防御側がブロックを割り当てる。
-  CombatResult attack(List<Permanent> attackers) {
-    final attacker = active;
-    final defender = inactive;
+  AttackError? validateAttack(Permanent attacker) {
+    if (isOver) return AttackError.gameOver;
+    if (!active.creatures.contains(attacker)) {
+      return AttackError.notYourCreature;
+    }
+    if (attacker.attacked) return AttackError.alreadyAttacked;
+    if (attacker.summoningSick) return AttackError.summoningSick;
+    return null;
+  }
 
-    final declared =
-        attackers.where(attacker.readyAttackers.contains).toList();
-    for (final creature in declared) {
-      creature.tapped = true;
+  /// [attacker] で攻撃する。[target] が `null` なら相手本体を殴る。
+  ///
+  /// ブロックはない。攻撃した側が対象を選び、その場で解決する。
+  AttackResult attack(Permanent attacker, Permanent? target) {
+    final error = validateAttack(attacker);
+    if (error != null) throw StateError('攻撃できません: $error');
+
+    final me = active;
+    final foe = inactive;
+    final card = cardCatalog[attacker.letter]!;
+    attacker.attacked = true;
+
+    if (target == null) {
+      foe.life -= card.power;
+      log.add('${me.name} の ${attacker.letter} が本体に ${card.power} ダメージ'
+          '（残り ${foe.life}）');
+      return AttackResult(
+        attacker: attacker.letter,
+        target: null,
+        damageToPlayer: card.power,
+        attackerDied: false,
+        targetDied: false,
+      );
     }
 
-    final blocks = declared.isEmpty
-        ? <Permanent, Permanent?>{}
-        : _activeBlocker(declared, defender.readyBlockers);
+    final targetCard = cardCatalog[target.letter]!;
+    target.damage += card.power;
+    attacker.damage += targetCard.power;
 
-    final lines = <CombatLine>[];
-    var totalDamage = 0;
-    final usedBlockers = <Permanent>{};
+    final targetDied = target.damage >= targetCard.toughness;
+    final attackerDied = attacker.damage >= card.toughness;
 
-    for (final creature in declared) {
-      final card = cardCatalog[creature.letter]!;
-      final blocker = blocks[creature];
-
-      if (blocker == null ||
-          !defender.readyBlockers.contains(blocker) ||
-          !usedBlockers.add(blocker)) {
-        defender.life -= card.power;
-        totalDamage += card.power;
-        lines.add(CombatLine(
-          attacker: creature.letter,
-          blocker: null,
-          damageToPlayer: card.power,
-        ));
-        continue;
-      }
-
-      final blockerCard = cardCatalog[blocker.letter]!;
-      blocker.damage += card.power;
-      creature.damage += blockerCard.power;
-      lines.add(CombatLine(
-        attacker: creature.letter,
-        blocker: blocker.letter,
-        damageToPlayer: 0,
-      ));
+    log.add('${me.name} の ${attacker.letter} が ${target.letter} を攻撃');
+    for (final dead in me.removeDead()) {
+      log.add('${me.name} の $dead が倒れた');
+    }
+    for (final dead in foe.removeDead()) {
+      log.add('${foe.name} の $dead が倒れた');
     }
 
-    for (final dead in attacker.removeDead()) {
-      log.add('${attacker.name} の $dead が破壊された');
-    }
-    for (final dead in defender.removeDead()) {
-      log.add('${defender.name} の $dead が破壊された');
-    }
-    if (totalDamage > 0) {
-      log.add('${defender.name} に $totalDamage ダメージ（残り ${defender.life}）');
-    }
-
-    return CombatResult(lines: lines, totalDamage: totalDamage);
+    return AttackResult(
+      attacker: attacker.letter,
+      target: target.letter,
+      damageToPlayer: 0,
+      attackerDied: attackerDied,
+      targetDied: targetDied,
+    );
   }
 
   /// ターンを終了し、手番を渡す。
   void endTurn() {
-    for (final player in [first, second]) {
-      for (final creature in player.creatures) {
-        creature.damage = 0;
-      }
-    }
     while (active.hand.length > kHandLimit) {
       active.graveyard.add(active.hand.removeLast());
     }
-
     if (isOver) return;
     isFirstPlayerTurn = !isFirstPlayerTurn;
     beginTurn();

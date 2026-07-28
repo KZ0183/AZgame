@@ -34,7 +34,6 @@ const Color kSequenceColor = Color(0xFF4FC3A1);
 
 /// カードの色。土地は緑、クリーチャーはコストが重いほど赤に寄る。
 Color cardColor(LetterCard card) {
-  if (card.isLand) return const Color(0xFF4C9A5B);
   return switch (card.cost) {
     1 => const Color(0xFF3FA7A0),
     2 => const Color(0xFF4E8FCB),
@@ -42,7 +41,8 @@ Color cardColor(LetterCard card) {
     4 => const Color(0xFF8E6FCE),
     5 => const Color(0xFFB56AB0),
     6 => const Color(0xFFC85F7C),
-    _ => const Color(0xFFD4504F),
+    7 => const Color(0xFFD4504F),
+    _ => const Color(0xFFE0634B),
   };
 }
 

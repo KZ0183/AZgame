@@ -13,11 +13,9 @@ class CatalogScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cards = cardCatalog.values.toList()
-      ..sort((a, b) => a.isLand != b.isLand
-          ? (a.isLand ? -1 : 1)
-          : a.cost != b.cost
-              ? a.cost.compareTo(b.cost)
-              : a.rank.compareTo(b.rank));
+      ..sort((a, b) => a.cost != b.cost
+          ? a.cost.compareTo(b.cost)
+          : a.rank.compareTo(b.rank));
 
     return Scaffold(
       appBar: AppBar(backgroundColor: kSurface, title: const Text('カード一覧')),
@@ -25,9 +23,9 @@ class CatalogScreen extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         children: [
           const Text(
-            'v0.5 のカードはすべてバニラで、能力を持たない。'
-            '母音 5 種が土地、子音 21 種がクリーチャーで、コストがそのまま '
-            'パワーとタフネスになる。ここから 1 枚ずつ個性を足していく。',
+            '26 枚すべてクリーチャーで、いまはまだ能力を持たない。'
+            'コストがそのままパワーとタフネスになる。'
+            'マナは毎ターン自動で増えるため、土地カードはない。',
             style: TextStyle(color: kTextMuted, fontSize: 12, height: 1.6),
           ),
           const SizedBox(height: 16),

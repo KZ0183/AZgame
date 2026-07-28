@@ -6,7 +6,6 @@ library;
 import 'dart:io';
 import 'dart:math';
 
-import 'package:azgame/src/data/catalog.g.dart';
 import 'package:azgame/src/engine/ai.dart';
 import 'package:azgame/src/engine/deck.dart';
 import 'package:azgame/src/engine/game.dart';
@@ -16,51 +15,49 @@ class Record {
     required this.turns,
     required this.firstWon,
     required this.decided,
-    required this.loserLife,
-    required this.landScrewTurns,
+    required this.idleTurns,
+    required this.maxBoard,
   });
 
   final int turns;
   final bool firstWon;
   final bool decided;
 
-  /// 敗者の残りライフ（0 以下なら削り切られた）。
-  final int loserLife;
+  /// 手札にカードがあるのに 1 枚も出せなかったターン数。
+  final int idleTurns;
 
-  /// 「土地が足りず、手札のクリーチャーを 1 枚も唱えられなかった」ターン数。
-  final int landScrewTurns;
+  /// 片側の盤面が最大何体まで並んだか。
+  final int maxBoard;
 }
 
 Record play(int seed) {
   final game = Game(
     first: PlayerState(name: '先攻', deck: starterDeck.toCardList()),
     second: PlayerState(name: '後攻', deck: starterDeck.toCardList()),
-    firstBlocker: SimpleAi.chooseBlocks,
-    secondBlocker: SimpleAi.chooseBlocks,
     rng: Random(seed),
   )..start();
 
   const ai = SimpleAi();
   var turns = 0;
-  var screwed = 0;
+  var idle = 0;
+  var maxBoard = 0;
 
   while (!game.isOver && turns < 200) {
     final before = game.active.creatures.length;
-    final hadCreatureInHand =
-        game.active.hand.any((letter) => cardCatalog[letter]!.isCreature);
+    final hadCards = game.active.hand.isNotEmpty;
     ai.takeTurn(game);
-    if (hadCreatureInHand && game.active.creatures.length == before) screwed++;
+    if (hadCards && game.active.creatures.length == before) idle++;
+    maxBoard = max(maxBoard, game.active.creatures.length);
     game.endTurn();
     turns++;
   }
 
-  final loser = game.winner == game.first ? game.second : game.first;
   return Record(
     turns: turns,
     firstWon: game.winner == game.first,
     decided: game.isOver,
-    loserLife: loser.life,
-    landScrewTurns: screwed,
+    idleTurns: idle,
+    maxBoard: maxBoard,
   );
 }
 
@@ -71,21 +68,19 @@ void main(List<String> args) {
   final turns = decided.map((r) => r.turns).toList()..sort();
 
   stdout
-    ..writeln('=== AZgame v0.5 バランス実測 ($trials 試合) ===')
+    ..writeln('=== AZgame v0.6 バランス実測 ($trials 試合) ===')
     ..writeln()
-    ..writeln('■ 試合')
-    ..writeln('  決着率      : ${_pct(decided.length / records.length)}')
-    ..writeln('  平均ターン  : ${_avg(turns).toStringAsFixed(1)}')
-    ..writeln('  中央値      : ${turns[turns.length ~/ 2]}')
-    ..writeln('  最短 / 最長 : ${turns.first} / ${turns.last}')
-    ..writeln('  先攻勝率    : '
+    ..writeln('  決着率        : ${_pct(decided.length / records.length)}')
+    ..writeln('  平均ターン    : ${_avg(turns).toStringAsFixed(1)}'
+        '（両者合計の手番数）')
+    ..writeln('  中央値        : ${turns[turns.length ~/ 2]}')
+    ..writeln('  最短 / 最長   : ${turns.first} / ${turns.last}')
+    ..writeln('  先攻勝率      : '
         '${_pct(decided.where((r) => r.firstWon).length / decided.length)}')
-    ..writeln()
-    ..writeln('■ ゲームの締まり方')
-    ..writeln('  敗者の残ライフ平均: '
-        '${_avg(decided.map((r) => r.loserLife)).toStringAsFixed(1)}')
-    ..writeln('  クリーチャーを出せなかったターンの割合: '
-        '${_pct(_avg(decided.map((r) => r.landScrewTurns)) / _avg(turns))}');
+    ..writeln('  何も出せない手番: '
+        '${_pct(_avg(decided.map((r) => r.idleTurns)) / _avg(turns))}')
+    ..writeln('  盤面の最大体数: '
+        '${_avg(decided.map((r) => r.maxBoard)).toStringAsFixed(1)}');
 }
 
 double _avg(Iterable<int> values) =>

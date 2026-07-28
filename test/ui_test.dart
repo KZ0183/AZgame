@@ -2,6 +2,7 @@
 library;
 
 import 'package:azgame/main.dart';
+import 'package:azgame/src/engine/game.dart';
 import 'package:azgame/src/ui/battle_screen.dart';
 import 'package:azgame/src/ui/catalog_screen.dart';
 import 'package:azgame/src/ui/widgets/letter_card_view.dart';
@@ -23,8 +24,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(BattleScreen), findsOneWidget);
-    // 初期手札 7 枚
-    expect(find.byType(CardView), findsNWidgets(7));
+    // 初期手札 4 枚
+    expect(find.byType(CardView), findsNWidgets(kStartingHand));
     expect(find.text('ターン終了'), findsOneWidget);
   });
 

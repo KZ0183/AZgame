@@ -1,15 +1,11 @@
 /// AZgame のコアデータモデル。Flutter に依存しない純粋な Dart。
 library;
 
-/// カードの種類。v0.5 は土地とクリーチャーの 2 つだけ。
-enum CardType { land, creature }
-
 /// カード 1 種のマスターデータ。A〜Z の 26 枚。
 class LetterCard {
   const LetterCard({
     required this.letter,
     required this.rank,
-    required this.type,
     required this.cost,
     required this.power,
     required this.toughness,
@@ -21,9 +17,7 @@ class LetterCard {
   /// アルファベット順位 1〜26。表示の並び順に使う。
   final int rank;
 
-  final CardType type;
-
-  /// 唱えるのに必要なマナ。土地は 0。
+  /// 唱えるのに必要なマナ。
   final int cost;
 
   final int power;
@@ -31,9 +25,6 @@ class LetterCard {
 
   /// デッキに入れられる最大枚数。
   final int deckLimit;
-
-  bool get isLand => type == CardType.land;
-  bool get isCreature => type == CardType.creature;
 
   @override
   String toString() => letter;
@@ -53,8 +44,8 @@ class Permanent {
 
   final String letter;
 
-  /// タップ済みか。土地はマナを出すと、クリーチャーは攻撃するとタップする。
-  bool tapped = false;
+  /// このターンすでに攻撃したか。攻撃は 1 体につき 1 回。
+  bool attacked = false;
 
   /// 召喚酔い。出したターンは攻撃できない。
   bool summoningSick = true;
@@ -63,5 +54,5 @@ class Permanent {
   int damage = 0;
 
   @override
-  String toString() => tapped ? letter.toLowerCase() : letter;
+  String toString() => attacked ? letter.toLowerCase() : letter;
 }

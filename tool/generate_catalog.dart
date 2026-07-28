@@ -2,16 +2,11 @@
 ///
 ///     dart run tool/generate_catalog.dart
 ///
-/// v0.5 のカードはすべてバニラなので、生成物は 26 枚のステータス表だけになる。
+/// カードはすべてバニラなので、生成物は 26 枚のステータス表だけになる。
 library;
 
 import 'dart:convert';
 import 'dart:io';
-
-const _types = <String, String>{
-  'land': 'CardType.land',
-  'creature': 'CardType.creature',
-};
 
 void main() {
   final cardsJson =
@@ -36,13 +31,10 @@ void main() {
 
   for (final card in cards) {
     final letter = card['letter'] as String;
-    final type = _types[card['type']];
-    if (type == null) throw StateError('未知の type: ${card['type']} ($letter)');
     buffer
       ..writeln("  '$letter': LetterCard(")
       ..writeln("    letter: '$letter',")
       ..writeln('    rank: ${card['rank']},')
-      ..writeln('    type: $type,')
       ..writeln('    cost: ${card['cost']},')
       ..writeln('    power: ${card['power']},')
       ..writeln('    toughness: ${card['toughness']},')
