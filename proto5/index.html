@@ -133,7 +133,12 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .lane.target { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass) inset; }
 .lane.pick { border-style: dashed; border-color: var(--brass); }
 .lane .mid { text-align: center; font-size: 10px; letter-spacing: .3em; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 2px; }
-.terrain { font-size: 11px; text-align: center; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.terrain { font-size: 11px; text-align: center; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--panel-2); border: 1px solid var(--line); border-radius: 99px; padding: 3px 6px; cursor: pointer; min-width: 0; }
+.terrain::after { content: " ⓘ"; color: var(--brass); }
+.terrain:active { border-color: var(--brass); }
+.tinfo { background: var(--panel-2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.tinfo b { font-size: 16px; }
+.tinfo p { margin: 0; line-height: 1.6; }
 .slot { border-radius: 8px; border: 1px dashed var(--line); display: flex; align-items: center; justify-content: center; min-height: 64px; }
 .unit {
   width: 100%; height: 100%; box-sizing: border-box;
@@ -344,7 +349,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const hits = st ? st.hits : [];
     const hitsAt = (p, l) => hits.filter((h) => h.p === p && h.l === l && !h.card).map(popHTML).join('');
     const lifeHits = (p) => hits.filter((h) => h.p === p && h.l == null && !h.card).map(popHTML).join('');
-    const t = (p, l) => { const x = E.TERRAIN[game.players[p].terrains[l]]; return `<div class="terrain" title="${esc(x.text)}">${x.icon} ${x.name}</div>`; };
+    const t = (p, l) => { const x = E.TERRAIN[game.players[p].terrains[l]]; return `<button class="terrain" data-tinfo="${l}" aria-label="${E.LANE_NAME[l]}レーンの地形：${x.name}">${x.icon} ${x.name}</button>`; };
     const m = play ? play.turn : game.turn;
 
     // まだ場に出ていない「公開済みのカード」をレーンに重ねて見せる
@@ -416,6 +421,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       <div class="act">${buttons}</div>
     </section>`;
 
+    app.querySelectorAll('[data-tinfo]').forEach((b) => b.onclick = (e) => { e.stopPropagation(); terrainInfo(+b.dataset.tinfo); });
     if (play) {
       document.getElementById('next').onclick = advance;
       document.getElementById('skip').onclick = () => { play.i = play.steps.length - 1; battle(); };
@@ -436,6 +442,29 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     });
     document.getElementById('pass').onclick = () => commit({ pass: true });
     document.getElementById('ok').onclick = () => commit(sel ? { card: sel, lane: needsLane(sel) ? lane : null } : { pass: true });
+  }
+
+  // 地形の説明シート。レーンの相手側・自分側を並べて見せる
+  function terrainInfo(l) {
+    const row = (p, who) => {
+      const x = E.TERRAIN[game.players[p].terrains[l]];
+      // 「自分」「相手」を、この地形を置いた側から見た実際の名前に置き換える
+      const text = x.text.replace(/自分|相手/g, (w) => (w === '自分') === (p === 0) ? 'あなた' : '相手');
+      return `<div class="tinfo"><span class="label">${who}側</span><b>${x.icon} ${esc(x.name)}</b><p>${esc(text)}</p></div>`;
+    };
+    const o = document.createElement('div');
+    o.className = 'overlay';
+    o.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${E.LANE_NAME[l]}レーンの地形">
+      <h2 style="font-size:20px">${E.LANE_NAME[l]}レーンの地形</h2>
+      ${row(1, '相手')}${row(0, 'あなた')}
+      <button class="btn" id="tclose">閉じる</button></div>`;
+    const close = () => { o.remove(); document.removeEventListener('keydown', esc_); };
+    const esc_ = (e) => { if (e.key === 'Escape') close(); };
+    o.onclick = (e) => { if (e.target === o) close(); };
+    document.addEventListener('keydown', esc_);
+    document.body.appendChild(o);
+    o.querySelector('#tclose').onclick = close;
+    o.querySelector('#tclose').focus();
   }
 
   function commit(myMove) {
