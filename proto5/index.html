@@ -1,0 +1,406 @@
+<title>五枚決闘</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@700;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+/* 縦一画面の卓。上が相手、下が自分。真ん中に3レーンの戦場。夜の卓布に真鍮の縁取り */
+:root {
+  --bg: #1b2230;
+  --panel: #252f40;
+  --panel-2: #2f3a4e;
+  --line: #3d4a61;
+  --ink: #ede7d9;
+  --muted: #9ba5b6;
+  --brass: #d8b26a;
+  --red: #e2694f;
+  --blue: #5ea3e8;
+  --grey: #b9b3a6;
+  --good: #7cc18a;
+  --bad: #e2694f;
+  --f-display: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --f-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 14px;
+  -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; color: inherit; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+#app {
+  height: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+.screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: balance; letter-spacing: .04em; }
+.btn {
+  border: 1px solid var(--brass);
+  background: var(--brass);
+  color: #1b2230;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+.btn.ghost { background: transparent; color: var(--brass); }
+.btn:disabled { opacity: .4; cursor: default; }
+.muted { color: var(--muted); }
+.label { font-size: 11px; letter-spacing: .12em; color: var(--muted); }
+
+/* ── タイトル ── */
+.title { justify-content: center; text-align: center; gap: 20px; }
+.title h1 { font-size: 52px; color: var(--brass); }
+.title .tag { font-size: 15px; }
+.rules { text-align: left; background: var(--panel); border-radius: 12px; padding: 14px 16px; line-height: 1.75; font-size: 13px; }
+.rules ul { margin: 0; padding-left: 1.2em; }
+.title .actions { display: grid; gap: 10px; }
+
+/* ── デッキ構築 ── */
+.build { overflow: hidden; }
+.build-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-bottom: 8px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { background: transparent; border: 0; padding: 8px 14px; cursor: pointer; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--ink); font-weight: 700; }
+.pool { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.terrains { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.terrains select { width: 100%; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px 4px; font: inherit; }
+.tnote { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.foot { display: flex; gap: 8px; align-items: center; }
+.foot .btn { flex: 1; }
+.errs { font-size: 12px; color: var(--bad); min-height: 1em; }
+
+/* ── カード ── */
+.card {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--grey);
+  border-radius: 10px;
+  padding: 8px 10px 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.card.c-red { border-left-color: var(--red); }
+.card.c-blue { border-left-color: var(--blue); }
+.card[aria-pressed="true"] { border-color: var(--brass); border-left-color: var(--brass); background: var(--panel-2); box-shadow: 0 0 0 1px var(--brass) inset; }
+.card.off { opacity: .4; }
+.card .top { display: flex; gap: 6px; align-items: baseline; }
+.card .cost { font-family: var(--f-display); font-weight: 800; color: var(--brass); font-variant-numeric: tabular-nums; }
+.card .cost.up { color: var(--red); }
+.card b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .pt { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.card p { margin: 0; font-size: 11px; line-height: 1.5; color: var(--muted); }
+
+/* ── 対戦 ── */
+.battle { gap: 8px; }
+.pbar { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 10px; padding: 8px 12px; }
+.pbar .who { font-weight: 700; }
+.pbar .life { margin-left: auto; font-family: var(--f-display); font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pbar .life small { font-size: 11px; color: var(--muted); font-family: var(--f-body); font-weight: 400; margin-right: 4px; }
+.chip { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.chip.red { border-color: var(--red); color: var(--red); }
+.chip.blue { border-color: var(--blue); color: var(--blue); }
+.seen { font-size: 11px; color: var(--muted); }
+
+.field { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.lane {
+  display: grid;
+  grid-template-rows: auto 1fr auto 1fr auto;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 5px;
+  background: color-mix(in srgb, var(--panel) 55%, var(--bg));
+  cursor: pointer;
+  min-width: 0;
+}
+.lane.target { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass) inset; }
+.lane.pick { border-style: dashed; border-color: var(--brass); }
+.lane .mid { text-align: center; font-size: 10px; letter-spacing: .3em; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 2px; }
+.terrain { font-size: 11px; text-align: center; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot { border-radius: 8px; border: 1px dashed var(--line); display: flex; align-items: center; justify-content: center; min-height: 64px; }
+.unit {
+  width: 100%; height: 100%; box-sizing: border-box;
+  border-radius: 8px; border: 1px solid var(--line); border-top: 3px solid var(--grey);
+  background: var(--panel);
+  padding: 5px 6px; display: flex; flex-direction: column; justify-content: space-between; gap: 2px;
+}
+.unit.c-red { border-top-color: var(--red); }
+.unit.c-blue { border-top-color: var(--blue); }
+.unit .n { font-size: 12px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.unit .kw { font-size: 10px; color: var(--muted); }
+.unit .s { font-family: var(--f-display); font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
+.unit .s .hurt { color: var(--bad); }
+
+.status { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.status .turn { font-family: var(--f-display); font-weight: 800; }
+.mana { display: inline-flex; gap: 3px; }
+.mana i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--brass); }
+.mana i.on { background: var(--brass); }
+.hand { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(96px, 1fr); gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.detail { background: var(--panel); border-radius: 10px; padding: 8px 12px; font-size: 12px; line-height: 1.6; min-height: 3.2em; }
+.detail b { color: var(--brass); }
+.act { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+
+/* ── 公開・結果 ── */
+.overlay {
+  position: fixed; inset: 0; z-index: 20;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.sheet { width: 100%; max-width: 440px; max-height: 100%; overflow-y: auto; background: var(--panel); border: 1px solid var(--brass); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
+.reveal { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.reveal .card { cursor: default; animation: flip .35s ease-out both; }
+.reveal .card:nth-child(2) { animation-delay: .12s; }
+.reveal .pass { border: 1px dashed var(--line); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--muted); padding: 16px; }
+@keyframes flip { from { transform: rotateY(80deg); } to { transform: none; } }
+.log { margin: 0; padding-left: 1.2em; font-size: 12px; line-height: 1.7; }
+.result h2 { font-size: 36px; text-align: center; }
+.result h2.win { color: var(--brass); }
+.result h2.lose { color: var(--bad); }
+@media (prefers-reduced-motion: reduce) { .reveal .card { animation: none; } }
+</style>
+
+<div id="app"></div>
+
+<script src="engine.js"></script>
+<script>
+(() => {
+  const E = window.Engine;
+  const C = E.CARD;
+  const app = document.getElementById('app');
+  const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const KW = { flying: '飛行', trample: '貫通' };
+
+  const DEFAULT_DECK = { main: 'red', sub: null, cards: ['imp', 'fireball', 'berserker', 'colossus', 'dragon'], terrains: ['volcano', 'wall', 'altar'] };
+  let deck = load() || structuredClone(DEFAULT_DECK);
+  let game = null, cpuDeck = null, sel = null, lane = null;
+
+  function load() {
+    try {
+      const d = JSON.parse(localStorage.getItem('gomai-deck'));
+      return d && E.validateDeck(d).length === 0 ? d : null;
+    } catch { return null; }
+  }
+  function save() { try { localStorage.setItem('gomai-deck', JSON.stringify(deck)); } catch {} }
+
+  function cardHTML(id, { cost, pressed, off, full = true, attrs = '' } = {}) {
+    const c = C[id];
+    const base = c.cost;
+    const k = cost ?? base;
+    const pt = c.type === 'creature' ? `${c.power}/${c.toughness}` : '呪文';
+    const kws = (c.keywords || []).map((x) => KW[x]).join('・');
+    const body = full ? `<p>${esc(c.text)}</p>` : (kws ? `<p>${kws}</p>` : '');
+    return `<button class="card c-${c.color}${off ? ' off' : ''}" ${pressed != null ? `aria-pressed="${pressed}"` : ''} ${attrs}>
+      <span class="top"><span class="cost${k > base ? ' up' : ''}">${k}</span><b>${esc(c.name)}</b></span>
+      <span class="pt">${pt}</span>${body}</button>`;
+  }
+
+  // ── タイトル ──
+  function title() {
+    app.innerHTML = `<section class="screen title">
+      <div><h1>五枚決闘</h1><p class="tag muted">五枚のデッキ、五つのターン。</p></div>
+      <div class="rules">
+        <ul>
+          <li>デッキは<b>5枚</b>。毎ターン<b>1枚</b>、相手と<b>同時に</b>伏せて公開する</li>
+          <li>マナはターン数と同じ（1〜5）。副属性のカードはコスト+1</li>
+          <li>クリーチャーは3つのレーンに置く。向かい合えば殴り合い、正面が空いていれば相手を直接殴る</li>
+          <li>飛行は飛行同士でしか止まらない。貫通は倒した余りが相手に届く</li>
+          <li>ライフ10。0にするか、5ターン後にライフが多い方の勝ち</li>
+        </ul>
+      </div>
+      <div class="actions">
+        <button class="btn" id="go">いまのデッキで対戦</button>
+        <button class="btn ghost" id="build">デッキを組む</button>
+      </div>
+    </section>`;
+    document.getElementById('go').onclick = start;
+    document.getElementById('build').onclick = build;
+  }
+
+  // ── デッキ構築 ──
+  function build() {
+    const colors = ['red', 'blue'];
+    const allowed = (c) => c.color === 'none' || c.color === deck.main || c.color === deck.sub;
+    const pool = E.CARDS.filter(allowed);
+    const errs = E.validateDeck(deck);
+    const tOpts = (cur) => E.TERRAINS.map((t) => `<option value="${t.id}"${t.id === cur ? ' selected' : ''}>${t.icon} ${t.name}</option>`).join('');
+    app.innerHTML = `<section class="screen build">
+      <div class="row"><h2 style="font-size:24px">デッキを組む</h2><span class="muted" style="margin-left:auto">${deck.cards.length} / 5</span></div>
+      <div class="build-scroll">
+        <div class="row"><span class="label">主属性（公開）</span>
+          <div class="seg">${colors.map((c) => `<button data-main="${c}" aria-pressed="${deck.main === c}">${E.COLOR_NAME[c]}</button>`).join('')}</div>
+        </div>
+        <div class="row"><span class="label">副属性（非公開・コスト+1）</span>
+          <div class="seg"><button data-sub="" aria-pressed="${!deck.sub}">なし</button>${colors.filter((c) => c !== deck.main).map((c) => `<button data-sub="${c}" aria-pressed="${deck.sub === c}">${E.COLOR_NAME[c]}</button>`).join('')}</div>
+        </div>
+        <div class="pool">${pool.map((c) => cardHTML(c.id, { cost: E.costFor(deck, c.id), pressed: deck.cards.includes(c.id), attrs: `data-card="${c.id}"` })).join('')}</div>
+        <div>
+          <div class="label" style="margin-bottom:6px">自陣の地形（試合開始時に公開）</div>
+          <div class="terrains">${[0, 1, 2].map((i) => `<label><span class="label">${E.LANE_NAME[i]}</span><select id="terrain-${i}" data-t="${i}">${tOpts(deck.terrains[i])}</select></label>`).join('')}</div>
+          <p class="tnote">${deck.terrains.map((t) => `${E.TERRAIN[t].icon} ${E.TERRAIN[t].name}：${E.TERRAIN[t].text}`).join('<br>')}</p>
+        </div>
+      </div>
+      <div class="errs">${errs.map(esc).join(' / ')}</div>
+      <div class="foot"><button class="btn ghost" id="back">戻る</button><button class="btn" id="go" ${errs.length ? 'disabled' : ''}>このデッキで対戦</button></div>
+    </section>`;
+    app.querySelectorAll('[data-main]').forEach((b) => b.onclick = () => {
+      deck.main = b.dataset.main;
+      if (deck.sub === deck.main) deck.sub = null;
+      deck.cards = deck.cards.filter((id) => allowed(C[id]));
+      build();
+    });
+    app.querySelectorAll('[data-sub]').forEach((b) => b.onclick = () => {
+      deck.sub = b.dataset.sub || null;
+      deck.cards = deck.cards.filter((id) => allowed(C[id]));
+      build();
+    });
+    app.querySelectorAll('[data-card]').forEach((b) => b.onclick = () => {
+      const id = b.dataset.card;
+      if (deck.cards.includes(id)) deck.cards = deck.cards.filter((x) => x !== id);
+      else if (deck.cards.length < 5) deck.cards.push(id);
+      const y = app.querySelector('.build-scroll').scrollTop;
+      build();
+      app.querySelector('.build-scroll').scrollTop = y;
+    });
+    app.querySelectorAll('[data-t]').forEach((s) => s.onchange = () => {
+      deck.terrains[+s.dataset.t] = s.value;
+      const y = app.querySelector('.build-scroll').scrollTop;
+      build();
+      app.querySelector('.build-scroll').scrollTop = y;
+    });
+    document.getElementById('back').onclick = () => { if (!E.validateDeck(deck).length) save(); title(); };
+    document.getElementById('go').onclick = () => { save(); start(); };
+  }
+
+  // ── 対戦 ──
+  function start() {
+    if (E.validateDeck(deck).length) return build();
+    cpuDeck = E.CPU_DECKS[Math.floor(Math.random() * E.CPU_DECKS.length)];
+    game = E.newGame([structuredClone(deck), structuredClone(cpuDeck)], ['あなた', '相手']);
+    sel = null; lane = null;
+    battle();
+  }
+
+  function needsLane(id) { const c = C[id]; return c.type === 'creature' || c.target === 'lane'; }
+
+  function unitHTML(p, l) {
+    const cr = game.players[p].board[l];
+    if (!cr) return '';
+    const c = C[cr.id];
+    const pw = E.powerOf(game, p, l);
+    const kws = (c.keywords || []).map((x) => KW[x]).join('・');
+    return `<div class="unit c-${c.color}"><span class="n">${esc(c.name)}</span>${kws ? `<span class="kw">${kws}</span>` : ''}
+      <span class="s">${pw}/<span class="${cr.hp < cr.toughness ? 'hurt' : ''}">${cr.hp}</span></span></div>`;
+  }
+
+  function battle() {
+    const me = game.players[0], op = game.players[1];
+    const m = game.turn;
+    const t = (p, l) => { const x = E.TERRAIN[game.players[p].terrains[l]]; return `<div class="terrain" title="${esc(x.text)}">${x.icon} ${x.name}</div>`; };
+    const selCard = sel ? C[sel] : null;
+    const pickLane = selCard && needsLane(sel);
+    const ready = !sel || !pickLane || lane != null;
+    const seen = me.seen.length ? `<div class="seen">見張り塔で見た手札：${me.seen.map((id) => esc(C[id].name)).join('、')}</div>` : '';
+
+    let detail = '<span class="muted">手札をタップして選ぶ。何も選ばずに決定するとパス。</span>';
+    if (selCard) {
+      const where = selCard.type === 'creature' ? '自分のどのレーンに出すか' : '相手のどのレーンを狙うか';
+      detail = `<b>${esc(selCard.name)}</b>　${esc(selCard.text || (selCard.type === 'creature' ? 'バニラ' : ''))}`
+        + (pickLane ? `<br>${lane == null ? `<span class="muted">${where}、戦場をタップ</span>` : `→ <b>${E.LANE_NAME[lane]}</b>レーン`}` : '');
+    }
+
+    app.innerHTML = `<section class="screen battle">
+      <div class="pbar"><span class="who">相手</span><span class="chip ${op.deck.main}">主属性 ${E.COLOR_NAME[op.deck.main]}</span><span class="chip">手札 ${op.hand.length}</span>
+        <span class="life"><small>ライフ</small>${op.life}</span></div>
+      ${seen}
+      <div class="field">${[0, 1, 2].map((l) => `<div class="lane${pickLane ? ' pick' : ''}${lane === l ? ' target' : ''}" data-lane="${l}" role="button" tabindex="0" aria-label="${E.LANE_NAME[l]}レーン">
+        ${t(1, l)}<div class="slot">${unitHTML(1, l)}</div><div class="mid">${E.LANE_NAME[l]}</div><div class="slot">${unitHTML(0, l)}</div>${t(0, l)}</div>`).join('')}</div>
+      <div class="pbar"><span class="who">あなた</span><span class="status"><span class="turn">ターン ${game.turn}/${E.MAX_TURN}</span>
+        <span class="mana" aria-label="マナ${m}">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= m ? 'on' : ''}"></i>`).join('')}</span></span>
+        <span class="life"><small>ライフ</small>${me.life}</span></div>
+      <div class="hand">${me.hand.map((id, i) => cardHTML(id, { cost: E.costFor(me.deck, id), pressed: sel === id, off: E.costFor(me.deck, id) > m, full: false, attrs: `data-hand="${id}"` })).join('') || '<span class="muted">手札なし</span>'}</div>
+      <div class="detail">${detail}</div>
+      <div class="act"><button class="btn ghost" id="pass">パス</button><button class="btn" id="ok" ${ready ? '' : 'disabled'}>${sel ? '伏せて決定' : 'パスで決定'}</button></div>
+    </section>`;
+
+    app.querySelectorAll('[data-hand]').forEach((b) => b.onclick = () => {
+      const id = b.dataset.hand;
+      if (E.costFor(me.deck, id) > game.turn) return;
+      if (sel === id) { sel = null; lane = null; }
+      else { sel = id; lane = needsLane(id) ? lane : null; }
+      battle();
+    });
+    app.querySelectorAll('[data-lane]').forEach((el) => {
+      const pick = () => { if (sel && needsLane(sel)) { lane = +el.dataset.lane; battle(); } };
+      el.onclick = pick;
+      el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
+    });
+    document.getElementById('pass').onclick = () => commit({ pass: true });
+    document.getElementById('ok').onclick = () => commit(sel ? { card: sel, lane: needsLane(sel) ? lane : null } : { pass: true });
+  }
+
+  function commit(myMove) {
+    const cpu = E.cpuMove(game, 1);
+    const turn = game.turn;
+    E.resolveTurn(game, [myMove, cpu]);
+    sel = null; lane = null;
+    const face = (mv, who) => mv && !mv.pass
+      ? cardHTML(mv.card, { full: true, attrs: `tabindex="-1" aria-label="${who}：${esc(C[mv.card].name)}"` }).replace('<span class="pt">', `<span class="label">${who}${mv.lane != null ? `・${E.LANE_NAME[mv.lane]}` : ''}</span><span class="pt">`)
+      : `<div class="pass">${who}：パス</div>`;
+    overlay(`<div class="label">ターン ${turn} 公開</div>
+      <div class="reveal">${face(cpu, '相手')}${face(myMove, 'あなた')}</div>
+      <ol class="log">${game.log.slice(2).map((s) => `<li>${esc(s)}</li>`).join('') || '<li>何も起きなかった</li>'}</ol>
+      <button class="btn" id="next">${game.over ? '結果を見る' : '次のターンへ'}</button>`, () => game.over ? result() : battle());
+    battle();
+  }
+
+  function overlay(html, onNext) {
+    const o = document.createElement('div');
+    o.className = 'overlay';
+    o.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
+    document.body.appendChild(o);
+    const next = o.querySelector('#next');
+    next.focus();
+    next.onclick = () => { o.remove(); onNext && onNext(); };
+  }
+
+  function result() {
+    const w = game.winner;
+    const head = w === 0 ? ['勝利', 'win'] : w === 1 ? ['敗北', 'lose'] : ['引き分け', ''];
+    const opDeck = cpuDeck;
+    const o = document.createElement('div');
+    o.className = 'overlay';
+    o.innerHTML = `<div class="sheet result" role="dialog" aria-modal="true">
+      <h2 class="${head[1]}">${head[0]}</h2>
+      <p class="muted" style="text-align:center;margin:0">${esc(game.endReason)}</p>
+      <div class="label">相手のデッキ：${esc(opDeck.label)}（副属性 ${opDeck.sub ? E.COLOR_NAME[opDeck.sub] : 'なし'}）</div>
+      <div class="pool">${opDeck.cards.map((id) => cardHTML(id, { cost: E.costFor(opDeck, id), full: false, attrs: 'tabindex="-1"' })).join('')}</div>
+      <div class="foot"><button class="btn ghost" id="rebuild">デッキを組む</button><button class="btn" id="again">もう一度</button></div>
+    </div>`;
+    document.body.appendChild(o);
+    o.querySelector('#again').focus();
+    o.querySelector('#again').onclick = () => { o.remove(); start(); };
+    o.querySelector('#rebuild').onclick = () => { o.remove(); build(); };
+  }
+
+  title();
+})();
+</script>
