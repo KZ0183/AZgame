@@ -157,6 +157,27 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .detail { background: var(--panel); border-radius: 10px; padding: 8px 12px; font-size: 12px; line-height: 1.6; min-height: 3.2em; }
 .detail b { color: var(--brass); }
 .act { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+.slot { position: relative; }
+.unit.ghost { border-style: dashed; border-color: var(--brass); opacity: .75; background: transparent; }
+.unit.ghost .kw { color: var(--brass); letter-spacing: .1em; }
+.next, .aim { position: absolute; left: 4px; right: 4px; bottom: 4px; font-size: 10px; text-align: center; border-radius: 6px; padding: 1px 2px; background: var(--bg); border: 1px dashed var(--brass); color: var(--brass); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aim { top: 4px; bottom: auto; border-style: solid; }
+.pop { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-family: var(--f-display); font-weight: 800; font-size: 26px; pointer-events: none; text-shadow: 0 0 6px var(--bg), 0 0 2px var(--bg); animation: pop .4s ease-out both; white-space: nowrap; }
+.pop.dmg { color: var(--bad); }
+.pop.heal { color: var(--good); }
+.pop.tag { font-family: var(--f-body); font-size: 13px; color: var(--bg); background: var(--brass); border-radius: 6px; padding: 2px 8px; text-shadow: none; }
+.life { position: relative; }
+.life .pop { left: auto; right: 100%; margin-right: 6px; transform: translateY(-50%); font-size: 20px; }
+@keyframes pop { from { opacity: 0; scale: .5; } to { opacity: 1; scale: 1; } }
+.lane.target { background: color-mix(in srgb, var(--brass) 10%, var(--panel)); }
+.detail.step { display: flex; flex-direction: column; gap: 6px; }
+.detail.step .log { padding-left: 1.1em; }
+.played { font-size: 12px; padding: 2px 8px; border-radius: 6px; border-left: 3px solid var(--grey); background: var(--panel-2); }
+.played.c-red { border-left-color: var(--red); }
+.played.c-blue { border-left-color: var(--blue); }
+.played.void b { text-decoration: line-through; color: var(--muted); }
+.playing .field { min-height: 0; }
+@media (prefers-reduced-motion: reduce) { .pop { animation: none; } }
 
 /* ── 公開・結果 ── */
 .overlay {
@@ -166,17 +187,11 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
 }
 .sheet { width: 100%; max-width: 440px; max-height: 100%; overflow-y: auto; background: var(--panel); border: 1px solid var(--brass); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
-.reveal { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.reveal .card { cursor: default; animation: flip .35s ease-out both; }
-.reveal .card:nth-child(2) { animation-delay: .12s; }
-.reveal .pass { border: 1px dashed var(--line); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--muted); padding: 16px; }
-@keyframes flip { from { transform: rotateY(80deg); } to { transform: none; } }
 .log { margin: 0; padding-left: 1.2em; font-size: 12px; line-height: 1.7; }
 .result h2 { font-size: 36px; text-align: center; }
 .result h2.win { color: var(--brass); }
 .result h2.lose { color: var(--bad); }
-@media (prefers-reduced-motion: reduce) { .reveal .card { animation: none; } }
-</style>
+@media (prefers-reduced-motion: reduce) { </style>
 
 <div id="app"></div>
 
@@ -295,52 +310,118 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     if (E.validateDeck(deck).length) return build();
     cpuDeck = E.CPU_DECKS[Math.floor(Math.random() * E.CPU_DECKS.length)];
     game = E.newGame([structuredClone(deck), structuredClone(cpuDeck)], ['あなた', '相手']);
-    sel = null; lane = null;
+    sel = null; lane = null; play = null;
     battle();
   }
 
   function needsLane(id) { const c = C[id]; return c.type === 'creature' || c.target === 'lane'; }
 
-  function unitHTML(p, l) {
-    const cr = game.players[p].board[l];
-    if (!cr) return '';
-    const c = C[cr.id];
-    const pw = E.powerOf(game, p, l);
+  // play = { steps, i, moves, turn } のあいだは、記録された盤面を1段階ずつ見せる
+  let play = null;
+
+  function unitHTML(u) {
+    if (!u) return '';
+    const c = C[u.id];
     const kws = (c.keywords || []).map((x) => KW[x]).join('・');
     return `<div class="unit c-${c.color}"><span class="n">${esc(c.name)}</span>${kws ? `<span class="kw">${kws}</span>` : ''}
-      <span class="s">${pw}/<span class="${cr.hp < cr.toughness ? 'hurt' : ''}">${cr.hp}</span></span></div>`;
+      <span class="s">${u.pw}/<span class="${u.hp < u.toughness ? 'hurt' : ''}">${u.hp}</span></span></div>`;
+  }
+  function ghostHTML(id, tag) {
+    const c = C[id];
+    const pt = c.type === 'creature' ? `${c.power}/${c.toughness}` : '';
+    return `<div class="unit ghost c-${c.color}"><span class="kw">${tag}</span><span class="n">${esc(c.name)}</span><span class="s">${pt}</span></div>`;
+  }
+  function popHTML(h) {
+    const txt = h.label || (h.n > 0 ? `+${h.n}` : `${h.n}`);
+    const cls = h.label ? 'tag' : h.n > 0 ? 'heal' : 'dmg';
+    return `<span class="pop ${cls}">${esc(txt)}</span>`;
   }
 
   function battle() {
     const me = game.players[0], op = game.players[1];
-    const m = game.turn;
+    const st = play ? play.steps[play.i] : null;
+    const v = st ? st.view : E.view(game);
+    const hits = st ? st.hits : [];
+    const hitsAt = (p, l) => hits.filter((h) => h.p === p && h.l === l && !h.card).map(popHTML).join('');
+    const lifeHits = (p) => hits.filter((h) => h.p === p && h.l == null && !h.card).map(popHTML).join('');
     const t = (p, l) => { const x = E.TERRAIN[game.players[p].terrains[l]]; return `<div class="terrain" title="${esc(x.text)}">${x.icon} ${x.name}</div>`; };
-    const selCard = sel ? C[sel] : null;
-    const pickLane = selCard && needsLane(sel);
-    const ready = !sel || !pickLane || lane != null;
-    const seen = me.seen.length ? `<div class="seen">見張り塔で見た手札：${me.seen.map((id) => esc(C[id].name)).join('、')}</div>` : '';
+    const m = play ? play.turn : game.turn;
 
-    let detail = '<span class="muted">手札をタップして選ぶ。何も選ばずに決定するとパス。</span>';
-    if (selCard) {
-      const where = selCard.type === 'creature' ? '自分のどのレーンに出すか' : '相手のどのレーンを狙うか';
-      detail = `<b>${esc(selCard.name)}</b>　${esc(selCard.text || (selCard.type === 'creature' ? 'バニラ' : ''))}`
-        + (pickLane ? `<br>${lane == null ? `<span class="muted">${where}、戦場をタップ</span>` : `→ <b>${E.LANE_NAME[lane]}</b>レーン`}` : '');
+    // まだ場に出ていない「公開済みのカード」をレーンに重ねて見せる
+    const pend = [[null, null, null], [null, null, null]];
+    const aim = [[null, null, null], [null, null, null]];
+    let countered = [false, false];
+    if (play) {
+      const done = (title) => play.steps.slice(0, play.i + 1).some((s) => s.title.startsWith(title));
+      play.steps.slice(0, play.i + 1).forEach((s) => s.hits.forEach((h) => { if (h.label === '打ち消し') countered[h.p] = true; }));
+      play.moves.forEach((mv, p) => {
+        if (!mv || countered[p]) return;
+        const c = C[mv.card];
+        if (c.type === 'creature' && !done('登場')) pend[p][mv.lane] = mv.card;
+        if (c.target === 'lane' && !done(`呪文：${c.name}`)) aim[1 - p][mv.lane] = c.name;
+      });
+    } else if (sel && lane != null) {
+      if (C[sel].type === 'creature') pend[0][lane] = sel;
+      else aim[1][lane] = C[sel].name;
+    }
+    const slot = (p, l) => {
+      const u = v.players[p].board[l];
+      let inner = u ? unitHTML(u) : '';
+      if (pend[p][l]) inner = u ? inner + `<span class="next">次：${esc(C[pend[p][l]].name)}</span>` : ghostHTML(pend[p][l], play ? '公開' : 'セット');
+      if (aim[p][l]) inner += `<span class="aim">${esc(aim[p][l])}の狙い</span>`;
+      return `<div class="slot">${inner}${hitsAt(p, l)}</div>`;
+    };
+
+    const seen = me.seen.length ? `<div class="seen">見張り塔で見た手札：${me.seen.map((id) => esc(C[id].name)).join('、')}</div>` : '';
+    const selCard = sel ? C[sel] : null;
+    const pickLane = !play && selCard && needsLane(sel);
+    const hl = (l) => (st ? st.lanes.includes(l) : lane === l && pickLane);
+
+    let panel, buttons;
+    if (play) {
+      const chip = (p, who) => {
+        const mv = play.moves[p];
+        if (!mv) return `<span class="played muted">${who}：パス</span>`;
+        return `<span class="played c-${C[mv.card].color}${countered[p] ? ' void' : ''}">${who}：<b>${esc(C[mv.card].name)}</b>${mv.lane != null ? `→${E.LANE_NAME[mv.lane]}` : ''}</span>`;
+      };
+      const last = play.i === play.steps.length - 1;
+      panel = `<div class="detail step"><div class="row"><b>${esc(st.title)}</b><span class="muted" style="margin-left:auto">${play.i + 1} / ${play.steps.length}</span></div>
+        <div class="row">${chip(1, '相手')}${chip(0, 'あなた')}</div>
+        ${st.lines.length ? `<ul class="log">${st.lines.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}</div>`;
+      buttons = `<button class="btn ghost" id="skip" ${last ? 'disabled' : ''}>最後まで</button>
+        <button class="btn" id="next">${last ? (game.over ? '結果を見る' : `ターン${game.turn}へ`) : '次へ'}</button>`;
+    } else {
+      let d = '<span class="muted">手札をタップして選ぶ。何も選ばずに決定するとパス。</span>';
+      if (selCard) {
+        const where = selCard.type === 'creature' ? '自分のどのレーンに出すか' : '相手のどのレーンを狙うか';
+        d = `<b>${esc(selCard.name)}</b>　${esc(selCard.text || 'バニラ')}`
+          + (pickLane ? `<br>${lane == null ? `<span class="muted">${where}、戦場をタップ</span>` : `→ <b>${E.LANE_NAME[lane]}</b>レーンにセット中`}` : '');
+      }
+      panel = `<div class="detail">${d}</div>`;
+      const ready = !sel || !pickLane || lane != null;
+      buttons = `<button class="btn ghost" id="pass">パス</button><button class="btn" id="ok" ${ready ? '' : 'disabled'}>${sel ? '伏せて決定' : 'パスで決定'}</button>`;
     }
 
-    app.innerHTML = `<section class="screen battle">
-      <div class="pbar"><span class="who">相手</span><span class="chip ${op.deck.main}">主属性 ${E.COLOR_NAME[op.deck.main]}</span><span class="chip">手札 ${op.hand.length}</span>
-        <span class="life"><small>ライフ</small>${op.life}</span></div>
+    app.innerHTML = `<section class="screen battle${play ? ' playing' : ''}">
+      <div class="pbar"><span class="who">相手</span><span class="chip ${op.deck.main}">主属性 ${E.COLOR_NAME[op.deck.main]}</span><span class="chip">手札 ${v.players[1].handCount}</span>
+        <span class="life"><small>ライフ</small>${v.players[1].life}${lifeHits(1)}</span></div>
       ${seen}
-      <div class="field">${[0, 1, 2].map((l) => `<div class="lane${pickLane ? ' pick' : ''}${lane === l ? ' target' : ''}" data-lane="${l}" role="button" tabindex="0" aria-label="${E.LANE_NAME[l]}レーン">
-        ${t(1, l)}<div class="slot">${unitHTML(1, l)}</div><div class="mid">${E.LANE_NAME[l]}</div><div class="slot">${unitHTML(0, l)}</div>${t(0, l)}</div>`).join('')}</div>
-      <div class="pbar"><span class="who">あなた</span><span class="status"><span class="turn">ターン ${game.turn}/${E.MAX_TURN}</span>
+      <div class="field">${[0, 1, 2].map((l) => `<div class="lane${pickLane ? ' pick' : ''}${hl(l) ? ' target' : ''}" data-lane="${l}" role="button" tabindex="0" aria-label="${E.LANE_NAME[l]}レーン">
+        ${t(1, l)}${slot(1, l)}<div class="mid">${E.LANE_NAME[l]}</div>${slot(0, l)}${t(0, l)}</div>`).join('')}</div>
+      <div class="pbar"><span class="who">あなた</span><span class="status"><span class="turn">ターン ${m}/${E.MAX_TURN}</span>
         <span class="mana" aria-label="マナ${m}">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= m ? 'on' : ''}"></i>`).join('')}</span></span>
-        <span class="life"><small>ライフ</small>${me.life}</span></div>
-      <div class="hand">${me.hand.map((id, i) => cardHTML(id, { cost: E.costFor(me.deck, id), pressed: sel === id, off: E.costFor(me.deck, id) > m, full: false, attrs: `data-hand="${id}"` })).join('') || '<span class="muted">手札なし</span>'}</div>
-      <div class="detail">${detail}</div>
-      <div class="act"><button class="btn ghost" id="pass">パス</button><button class="btn" id="ok" ${ready ? '' : 'disabled'}>${sel ? '伏せて決定' : 'パスで決定'}</button></div>
+        <span class="life"><small>ライフ</small>${v.players[0].life}${lifeHits(0)}</span></div>
+      ${play ? '' : `<div class="hand">${me.hand.map((id) => cardHTML(id, { cost: E.costFor(me.deck, id), pressed: sel === id, off: E.costFor(me.deck, id) > m, full: false, attrs: `data-hand="${id}"` })).join('') || '<span class="muted">手札なし</span>'}</div>`}
+      ${panel}
+      <div class="act">${buttons}</div>
     </section>`;
 
+    if (play) {
+      document.getElementById('next').onclick = advance;
+      document.getElementById('skip').onclick = () => { play.i = play.steps.length - 1; battle(); };
+      document.getElementById('next').focus();
+      return;
+    }
     app.querySelectorAll('[data-hand]').forEach((b) => b.onclick = () => {
       const id = b.dataset.hand;
       if (E.costFor(me.deck, id) > game.turn) return;
@@ -362,24 +443,14 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const turn = game.turn;
     E.resolveTurn(game, [myMove, cpu]);
     sel = null; lane = null;
-    const face = (mv, who) => mv && !mv.pass
-      ? cardHTML(mv.card, { full: true, attrs: `tabindex="-1" aria-label="${who}：${esc(C[mv.card].name)}"` }).replace('<span class="pt">', `<span class="label">${who}${mv.lane != null ? `・${E.LANE_NAME[mv.lane]}` : ''}</span><span class="pt">`)
-      : `<div class="pass">${who}：パス</div>`;
-    overlay(`<div class="label">ターン ${turn} 公開</div>
-      <div class="reveal">${face(cpu, '相手')}${face(myMove, 'あなた')}</div>
-      <ol class="log">${game.log.slice(2).map((s) => `<li>${esc(s)}</li>`).join('') || '<li>何も起きなかった</li>'}</ol>
-      <button class="btn" id="next">${game.over ? '結果を見る' : '次のターンへ'}</button>`, () => game.over ? result() : battle());
+    play = { steps: game.steps, i: 0, moves: game.revealed, turn };
     battle();
   }
 
-  function overlay(html, onNext) {
-    const o = document.createElement('div');
-    o.className = 'overlay';
-    o.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
-    document.body.appendChild(o);
-    const next = o.querySelector('#next');
-    next.focus();
-    next.onclick = () => { o.remove(); onNext && onNext(); };
+  function advance() {
+    if (play.i < play.steps.length - 1) { play.i++; battle(); return; }
+    play = null;
+    if (game.over) { battle(); result(); } else battle();
   }
 
   function result() {

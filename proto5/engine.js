@@ -142,10 +142,39 @@
     return { uid: state.nextUid(), id, power: c.power, toughness: c.toughness, hp: c.toughness };
   }
 
+  // ── 演出用の記録 ──
+  // 処理の区切りごとに step() を呼ぶと、その時点の盤面・ログ・強調箇所が steps に積まれる
+  function mark(state, hit) {
+    state._hits.push(hit);
+    if (hit.l != null) state._lanes.add(hit.l);
+  }
+
+  function view(state) {
+    return {
+      buff: state.buff.slice(),
+      players: state.players.map((pl, p) => ({
+        life: pl.life,
+        handCount: pl.hand.length,
+        board: pl.board.map((cr, l) => cr && { id: cr.id, pw: powerOf(state, p, l), hp: cr.hp, toughness: cr.toughness }),
+      })),
+    };
+  }
+
+  function step(state, title, force) {
+    const lines = state.log.slice(state._logAt);
+    if (!lines.length && !state._hits.length && !force) { state._lanes = new Set(); return; }
+    state._logAt = state.log.length;
+    state.steps.push({ title, lines, hits: state._hits, lanes: [...state._lanes], view: view(state) });
+    state._hits = [];
+    state._lanes = new Set();
+  }
+
   function damagePlayer(state, p, n, lane, src) {
     let d = n;
     if (lane != null && state.players[p].terrains[lane] === 'wall') d = Math.max(0, d - 1);
     state.players[p].life -= d;
+    mark(state, { p, l: null, n: -d, from: lane });
+    if (lane != null) state._lanes.add(lane);
     state.log.push(`${src} → ${state.players[p].name}に${d}ダメージ${d < n ? '（城壁で軽減）' : ''}`);
   }
 
@@ -153,6 +182,7 @@
     const cr = state.players[p].board[lane];
     if (!cr) return;
     cr.hp -= n;
+    mark(state, { p, l: lane, n: -n });
     state.log.push(`${src} → ${CARD[cr.id].name}に${n}ダメージ`);
   }
 
@@ -161,6 +191,7 @@
     if (!cr) return false;
     state.players[p].board[lane] = null;
     state.players[p].hand.push(cr.id);
+    mark(state, { p, l: lane, label: '手札へ' });
     state.log.push(`${src} → ${state.players[p].name}の${CARD[cr.id].name}を手札に戻した`);
     return true;
   }
@@ -173,9 +204,11 @@
         if (cr && cr.hp <= 0) {
           pl.board[l] = null;
           pl.grave.push(cr.id);
+          mark(state, { p, l, label: '撃破' });
           state.log.push(`${pl.name}の${CARD[cr.id].name}は倒れた`);
           if (pl.terrains[l] === 'altar') {
             pl.life += 2;
+            mark(state, { p, l: null, n: 2 });
             state.log.push(`祭壇 → ${pl.name}のライフ+2`);
           }
         }
@@ -188,6 +221,10 @@
     if (state.over) return;
     const P = state.players;
     state.log = [];
+    state.steps = [];
+    state._hits = [];
+    state._lanes = new Set();
+    state._logAt = 0;
     state.buff = [0, 0];
     const played = [null, null];
 
@@ -201,9 +238,12 @@
       const idx = P[p].hand.indexOf(m.card);
       P[p].hand.splice(idx, 1);
       played[p] = m;
+      if (m.lane != null) state._lanes.add(m.lane);
       const where = m.lane != null ? `（${LANE_NAME[m.lane]}）` : '';
       state.log.push(`${P[p].name}：${CARD[m.card].name}${where}`);
     }
+    state.revealed = played.map((m) => m && { card: m.card, lane: m.lane });
+    step(state, '公開', true);
 
     // 2. 打ち消し（同時に処理。お互いに打ち消し合うこともある）
     const countered = [false, false];
@@ -213,10 +253,12 @@
     for (let p = 0; p < 2; p++) {
       if (countered[p]) {
         state.log.push(`封じの言葉 → ${P[p].name}の${CARD[played[p].card].name}を打ち消した`);
+        mark(state, { p, l: null, label: '打ち消し', card: true });
         P[p].grave.push(played[p].card);
         played[p] = null;
       }
     }
+    step(state, '打ち消し');
 
     // 3. 呪文
     for (let p = 0; p < 2; p++) {
@@ -225,22 +267,26 @@
       const o = 1 - p;
       const name = CARD[m.card].name;
       switch (m.card) {
-        case 'warcry': state.buff[p] += 2; state.log.push(`${name} → ${P[p].name}のクリーチャーはパワー+2`); break;
+        case 'warcry': state.buff[p] += 2; state.log.push(`${name} → ${P[p].name}のクリーチャーはパワー+2`); mark(state, { p, l: null, label: 'パワー+2', card: true }); break;
         case 'fireball':
           if (P[o].board[m.lane]) damageCreature(state, o, m.lane, 3, name);
           else damagePlayer(state, o, 2, null, name);
+          state._lanes.add(m.lane);
           break;
         case 'firerain':
           for (let l = 0; l < 3; l++) if (P[o].board[l]) damageCreature(state, o, l, 2, name);
           break;
         case 'whirlpool':
           if (!bounce(state, o, m.lane, name)) state.log.push(`${name} → 対象がいなかった`);
+          state._lanes.add(m.lane);
           break;
-        case 'seal': state.log.push(`${name} → 打ち消す相手がいなかった`); break;
+        case 'seal': if (!countered[o]) state.log.push(`${name} → 打ち消す相手がいなかった`); break;
       }
       P[p].grave.push(m.card);
+      step(state, `呪文：${name}`, !(m.card === 'seal' && countered[o]));
+      reapDeaths(state);
+      step(state, '撃破');
     }
-    reapDeaths(state);
 
     // 4. クリーチャー登場
     const entered = [];
@@ -254,38 +300,49 @@
       }
       const cr = makeCreature(state, m.card);
       P[p].board[m.lane] = cr;
+      mark(state, { p, l: m.lane, label: '登場' });
+      state.log.push(`${P[p].name}の${CARD[m.card].name}が${LANE_NAME[m.lane]}レーンに登場`);
       entered.push({ p, lane: m.lane, cr });
     }
+    step(state, '登場');
     // 登場時効果・地形効果（同時に出たものは、片方が先に戻されても両方の効果が出る）
     for (const { p, lane, cr } of entered) {
       const o = 1 - p;
       const c = CARD[cr.id];
       if (c.etb === 'bounceFront') {
         if (!bounce(state, o, lane, c.name)) state.log.push(`${c.name} → 向かいに相手がいなかった`);
+        state._lanes.add(lane);
       } else if (c.etb === 'discard') {
         if (P[o].hand.length) {
           const i = Math.floor(state.rng() * P[o].hand.length);
           const id = P[o].hand.splice(i, 1)[0];
           P[o].grave.push(id);
+          mark(state, { p: o, l: null, label: '手札−1' });
           state.log.push(`${c.name} → ${P[o].name}は${CARD[id].name}を捨てた`);
         }
       }
+      step(state, `登場時効果：${c.name}`);
       if (P[o].terrains[lane] === 'swamp' && P[p].board[lane] === cr) {
         cr.power -= 1; cr.toughness -= 1; cr.hp -= 1;
+        mark(state, { p, l: lane, label: '−1/−1' });
         state.log.push(`沼地 → ${c.name}は−1/−1`);
+        step(state, '地形：沼地');
       }
       if (P[p].terrains[lane] === 'tower' && P[o].hand.length) {
         const id = P[o].hand[Math.floor(state.rng() * P[o].hand.length)];
         P[p].seen.push(id);
+        mark(state, { p, l: lane, label: '偵察' });
         state.log.push(`見張り塔 → ${P[p].name}は相手の手札を1枚見た`);
+        step(state, '地形：見張り塔');
       }
     }
     reapDeaths(state);
+    step(state, '撃破');
 
-    // 5. 戦闘（全レーン同時）
-    const creatureDmg = [[0, 0, 0], [0, 0, 0]];
-    const playerDmg = [];
+    // 5. 戦闘（各レーンは互いに影響しないので、レーンごとに処理して見せる）
     for (let l = 0; l < 3; l++) {
+      const creatureDmg = [0, 0];
+      const playerDmg = [];
       for (let p = 0; p < 2; p++) {
         const o = 1 - p;
         const a = P[p].board[l];
@@ -296,24 +353,29 @@
         if (b && has(a, 'flying') === has(b, 'flying')) {
           let d = pw;
           if (P[o].terrains[l] === 'lake' && CARD[b.id].color === 'blue') d = Math.max(0, d - 1);
-          creatureDmg[o][l] += d;
-          if (has(a, 'trample') && pw > b.hp) playerDmg.push({ p: o, n: pw - b.hp, lane: l, src: `${CARD[a.id].name}（貫通）` });
+          creatureDmg[o] += d;
+          if (has(a, 'trample') && pw > b.hp) playerDmg.push({ p: o, n: pw - b.hp, src: `${CARD[a.id].name}（貫通）` });
         } else {
-          playerDmg.push({ p: o, n: pw, lane: l, src: CARD[a.id].name });
+          playerDmg.push({ p: o, n: pw, src: b ? `${CARD[a.id].name}（素通り）` : CARD[a.id].name });
         }
       }
-    }
-    for (let p = 0; p < 2; p++) {
-      for (let l = 0; l < 3; l++) {
-        if (creatureDmg[p][l] > 0) {
+      for (let p = 0; p < 2; p++) {
+        if (creatureDmg[p] > 0) {
           const cr = P[p].board[l];
-          cr.hp -= creatureDmg[p][l];
-          state.log.push(`戦闘（${LANE_NAME[l]}）→ ${P[p].name}の${CARD[cr.id].name}に${creatureDmg[p][l]}ダメージ`);
+          cr.hp -= creatureDmg[p];
+          mark(state, { p, l, n: -creatureDmg[p] });
+          state.log.push(`${P[p].name}の${CARD[cr.id].name}に${creatureDmg[p]}ダメージ`);
         }
       }
+      for (const d of playerDmg) damagePlayer(state, d.p, d.n, l, d.src);
+      if (state._hits.length) {
+        state._lanes.add(l);
+        step(state, `戦闘：${LANE_NAME[l]}レーン`);
+        reapDeaths(state);
+        state._lanes.add(l);
+        step(state, `戦闘：${LANE_NAME[l]}レーン`);
+      }
     }
-    for (const d of playerDmg) damagePlayer(state, d.p, d.n, d.lane, `${d.src}（${LANE_NAME[d.lane]}）`);
-    reapDeaths(state);
     state.buff = [0, 0];
 
     // 6. 勝敗判定
@@ -353,7 +415,7 @@
 
   // ── CPU ──
   function clone(state) {
-    const s = JSON.parse(JSON.stringify({ ...state, nextUid: undefined, rng: undefined }));
+    const s = JSON.parse(JSON.stringify({ ...state, nextUid: undefined, rng: undefined, steps: undefined, _lanes: undefined, _hits: undefined }));
     let uid = 100000;
     s.nextUid = () => uid++;
     s.rng = () => 0.5;
@@ -418,7 +480,7 @@
 
   const api = {
     MAX_TURN, START_LIFE, DECK_SIZE, COLOR_NAME, CARDS, CARD, TERRAINS, TERRAIN, LANE_NAME, CPU_DECKS,
-    validateDeck, costFor, newGame, legalMoves, isLegal, resolveTurn, powerOf, cpuMove, boardPower,
+    validateDeck, costFor, newGame, legalMoves, isLegal, resolveTurn, powerOf, cpuMove, boardPower, view,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Engine = api;
