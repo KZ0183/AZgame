@@ -39,7 +39,7 @@
     { id: 'lake', name: '霧の湖', icon: '🌫️', text: 'ここの自分の青クリーチャーが受ける戦闘ダメージ−1。' },
     { id: 'wall', name: '城壁', icon: '🧱', text: 'このレーンから自分が受けるダメージ−1。' },
     { id: 'altar', name: '祭壇', icon: '🕯️', text: 'ここで自分のクリーチャーが死ぬと、自分のライフ+2。' },
-    { id: 'swamp', name: '沼地', icon: '🪷', text: '向かいに出た相手クリーチャーは−1/−1。' },
+    { id: 'swamp', name: '沼地', icon: '🪷', text: '向かいに出た相手のクリーチャーは−1/−1。' },
     { id: 'tower', name: '見張り塔', icon: '🗼', text: 'ここに自分のクリーチャーを出すと、相手の手札を1枚ランダムに見る。' },
   ];
   const TERRAIN = Object.fromEntries(TERRAINS.map((t) => [t.id, t]));
