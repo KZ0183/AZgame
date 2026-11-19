@@ -102,13 +102,12 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .hero .exp { font-size: 10px; color: var(--muted); }
 .hero .exp.awake { color: var(--brass); font-weight: 700; letter-spacing: .1em; }
 .hero .lv .stars { letter-spacing: 1px; }
-.exprow { display: flex; align-items: center; gap: 6px; }
-.expbar { flex: 1; position: relative; height: 5px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
-.expbar i { position: absolute; inset: 0 auto 0 0; background: var(--brass); }
-.exprow em { font-style: normal; font-size: 10px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.exprow.near em { color: var(--brass); font-weight: 700; }
-.exprow.near .expbar { animation: glow 1.2s ease-in-out infinite alternate; }
-@keyframes glow { from { box-shadow: 0 0 0 1px var(--brass); } to { box-shadow: 0 0 6px 1px var(--brass); } }
+.lvcost { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lvcost b { color: var(--ink); font-size: 12px; }
+.lvcost.ready { color: var(--brass); font-weight: 700; animation: glow-t 1.2s ease-in-out infinite alternate; }
+.lvcost.ready b { color: var(--brass); }
+@keyframes glow-t { from { opacity: .75; } to { opacity: 1; text-shadow: 0 0 6px var(--brass); } }
+.mini.lvbtn:not(:disabled) { background: var(--brass); color: var(--bg); font-weight: 700; }
 .field { position: relative; }
 .lvups { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: color-mix(in srgb, var(--bg) 55%, transparent); border-radius: 12px; cursor: pointer; }
 .lvup { width: 86%; box-sizing: border-box; background: var(--panel); border: 2px solid var(--hc); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; animation: rise .45s cubic-bezier(.2, .9, .3, 1.3) both; box-shadow: 0 0 24px color-mix(in srgb, var(--hc) 45%, transparent); }
@@ -153,7 +152,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .result h2 { font-size: 36px; text-align: center; }
 .result h2.win { color: var(--brass); }
 .result h2.lose { color: var(--bad); }
-@media (prefers-reduced-motion: reduce) { .pop, .lvup, .exprow.near .expbar { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .pop, .lvup, .lvcost.ready { animation: none; } }
 </style>
 
 <div id="app"></div>
@@ -186,7 +185,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         <li>ヒーローは<b>前衛</b>か<b>後衛</b>に立つ。前衛は攻撃できるが狙われる。後衛は遠距離技しか受けない（前衛がいなければ、普通の攻撃も−1で届く）</li>
         <li>毎ターン、各ヒーローが<b>今いる位置に合ったカード</b>を1枚生む。手札は最大5枚</li>
         <li>マナはラウンド数+1（最大6）。カード・通常攻撃（1）・移動（1）に使う</li>
-        <li>ヒーローは固有の条件で<b>Lv3まで育ち</b>、新しいカードと覚醒技が解放される</li>
+        <li>マナを払うとヒーローが<b>レベルアップ</b>（Lv3まで）。新しいカードと覚醒技が解放される。コストはヒーローごとに違う</li>
         <li>相手のヒーローを倒すと1点。<b>3点先取</b>で勝ち。倒されたヒーローは次のターンにLv1で復活する</li>
       </ul></div>
       <div class="actions"><button class="btn" id="go">いまの二人で対戦</button><button class="btn ghost" id="pick">ヒーローを選ぶ</button></div>
@@ -210,7 +209,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         const { cards } = heroInfo(h.id);
         return `<button class="hero-pick c-${h.color}" aria-pressed="${i >= 0}" data-hero="${h.id}">
           <span class="hd"><b>${h.name}</b><span class="st">HP ${h.hp}・攻撃 ${h.atk}</span>${i >= 0 ? `<span class="order">${team.front === i ? '最初は前衛' : '最初は後衛'}</span>` : ''}</span>
-          <span class="grow">成長：${esc(h.grow)}</span><ul>${cards}</ul></button>`;
+          <span class="grow">育ち方：${esc(h.grow)}　<span class="muted">Lv2【${h.lvCost[0]}マナ】→ Lv3【${h.lvCost[1]}マナ】</span></span><ul>${cards}</ul></button>`;
       }).join('')}</div>
       ${team.heroes.length === 2 ? `<div class="row"><span class="label">最初に前衛に立つ</span>${team.heroes.map((id, i) => `<button class="mini${team.front === i ? ' on' : ''}" data-front="${i}">${H[id].name}</button>`).join('')}</div>` : ''}
       <div class="foot"><button class="btn ghost" id="back">戻る</button><button class="btn" id="go" ${errs.length ? 'disabled' : ''}>この二人で対戦</button></div>
@@ -278,7 +277,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const tgt = ctx.targets.some((t) => t.p === p && t.k === k);
     const cls = `hero c-${def.color}${isFocus ? ' focus' : ''}${tgt ? ' target' + (p === 0 ? ' ally' : '') : ''}${h.ko ? ' ko' : ''}${hidden ? ' hidden' : ''}`;
     if (hidden) return `<div class="${cls}" data-hero="${p}-${k}" role="button" tabindex="0" aria-label="正体不明の後衛"><span class="q">？？？</span>${popsHTML(hits)}</div>`;
-    const need = def.lvExp[h.lv - 1];
+    const cost = E.levelCost(h);
+    const canLv = p === 0 && myTurn() && cost != null && !h.ko && v.mana >= cost;
     const flags = [];
     if (h.ko) flags.push(['', '倒れている']);
     if (h.taunt) flags.push(['hot', '挑発']);
@@ -291,7 +291,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       <span class="hpbar"><i class="${pct <= 50 ? 'low' : ''}" style="width:${pct}%"></i></span>
       <span class="nums"><span>HP <b>${h.hp}</b>/${h.maxHp}</span><span>攻撃 <b>${h.atk}</b></span>${h.shield ? `<span>盾 <b>${h.shield}</b></span>` : ''}</span>
       ${h.lv < 3
-        ? `<span class="exprow${need - h.exp <= 1 ? ' near' : ''}"><span class="expbar" title="経験値 ${h.exp}/${need}"><i style="width:${Math.min(100, h.exp / need * 100)}%"></i></span><em>Lv${h.lv + 1}まで${need - h.exp}</em></span>`
+        ? `<span class="lvcost${canLv ? ' ready' : ''}">Lv${h.lv + 1}へ <b>${cost}</b>マナ${canLv ? '・上げられる' : ''}</span>`
         : '<span class="exp awake">覚醒済み</span>'}
       ${flags.length ? `<span class="flags">${flags.map((f) => `<i class="${f[0]}">${f[1]}</i>`).join('')}</span>` : ''}
       ${popsHTML(hits)}</div>`;
@@ -363,14 +363,19 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         if (hidden) d = '<b class="h">正体不明の後衛</b><br><span class="muted">前衛に出るか、カードを使うか、ダメージを受けると正体が分かる。</span>';
         else {
           const def = H[h.id];
-          d = `<b class="h">${def.name}</b>　<span class="muted">${focus.p === 0 ? 'あなた' : '相手'}・${E.POS_NAME[h.pos]}・Lv${h.lv}</span><br>成長：${esc(def.grow)}`;
+          d = `<b class="h">${def.name}</b>　<span class="muted">${focus.p === 0 ? 'あなた' : '相手'}・${E.POS_NAME[h.pos]}・Lv${h.lv}</span>`;
+          const nextCard = h.lv < 3 && C[def.cards.find((id) => C[id].lv === h.lv + 1)];
           if (focus.p === 0 && mine && !h.ko) {
             const atkErr = E.check(game, 0, { type: 'attack', k: focus.k, target: E.targetsFor(game, 0, 'front')[0] });
             const mvErr = E.check(game, 0, { type: 'move', k: focus.k });
-            d += `<div class="row" style="margin-top:6px">
+            const lvErr = E.check(game, 0, { type: 'level', k: focus.k });
+            d += `<div class="row" style="margin:4px 0 2px">
+              ${h.lv < 3 ? `<button class="mini lvbtn" id="lvup" ${lvErr ? 'disabled' : ''}>${lvErr ? `Lv${h.lv + 1}にできない：${esc(lvErr)}` : `Lv${h.lv + 1}に上げる【${E.levelCost(h)}マナ】`}</button>` : ''}
               ${h.pos === 'front' ? `<button class="mini" id="atk" ${atkErr ? 'disabled' : ''}>${atkErr ? `攻撃できない：${esc(atkErr)}` : `通常攻撃【1マナ】`}</button>` : ''}
               <button class="mini" id="mv" ${mvErr ? 'disabled' : ''}>${mvErr ? `移動できない：${esc(mvErr)}` : `${h.pos === 'front' ? '後衛' : '前衛'}へ移動【1マナ】`}</button></div>`;
           }
+          d += `<span class="muted">育ち方：${esc(def.grow)}（Lv2【${def.lvCost[0]}】→ Lv3【${def.lvCost[1]}】）</span>`
+            + (nextCard ? `<br><span class="muted">Lv${h.lv + 1}で得るカード：<b>${esc(nextCard.name)}</b>【${nextCard.cost}】${esc(nextCard.text)}</span>` : '');
         }
       } else if (last) {
         d = `<ul class="log" style="margin:0">${last.lines.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>`;
@@ -398,7 +403,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         ${rowHTML(0, 'front')}${rowHTML(0, 'back')}
       </div>
       <div class="pbar${v.active === 0 ? ' turn-on' : ''}"><span class="who">あなた</span><span class="manatxt">${v.active === 0 ? `マナ <b>${v.mana}</b>` : '相手のターン'}</span>${pts(v.players[0].points)}</div>
-      <div class="hand">${[0, 1, 2, 3, 4].map((i) => {
+      <div class="hand" style="grid-template-columns: repeat(${Math.max(5, hand.length)}, minmax(0, 1fr))">${[...Array(Math.max(5, hand.length)).keys()].map((i) => {
         const c = hand[i];
         if (!c) return '<div class="card empty" aria-hidden="true"></div>';
         const def = C[c.id];
@@ -470,6 +475,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       mode = 'attack'; battle();
     });
     on('mv', () => doAct({ type: 'move', k: focus.k }));
+    on('lvup', () => doAct({ type: 'level', k: focus.k }));
     on('use', () => doAct({ type: 'card', uid: sel, target: null }));
     on('cancel', () => { sel = null; focus = null; mode = null; battle(); });
     on('end', () => {

@@ -8,17 +8,17 @@
   const HAND_MAX = 5;
   const MANA_MAX = 6;
 
-  // lvExp: Lv2・Lv3 になるのに必要な累計経験値
+  // lvCost: Lv2・Lv3 に上げるのに払うマナ。ヒーローごとの差が育ち方の個性になる
   const HEROES = [
-    { id: 'sword', name: '剣士', color: 'red', hp: 12, atk: 3, lvExp: [4, 9], grow: '与えたダメージ1につき経験値1',
+    { id: 'sword', name: '剣士', color: 'red', hp: 12, atk: 3, lvCost: [2, 5], grow: '早熟。すぐ強くなるが、覚醒は重い',
       cards: ['sw_slash', 'sw_focus', 'sw_lunge', 'sw_double', 'sw_ult'] },
-    { id: 'saint', name: '聖女', color: 'gold', hp: 10, atk: 1, lvExp: [3, 7], grow: '回復した量・張った盾1につき経験値1',
+    { id: 'saint', name: '聖女', color: 'gold', hp: 10, atk: 1, lvCost: [3, 3], grow: '安定。どの段階も同じ重さ',
       cards: ['st_heal', 'st_mace', 'st_bless', 'st_prayer', 'st_ult'] },
-    { id: 'knight', name: '守護騎士', color: 'grey', hp: 15, atk: 2, lvExp: [4, 9], grow: '受けたダメージ（盾で防いだ分も）1につき経験値1',
+    { id: 'knight', name: '守護騎士', color: 'grey', hp: 15, atk: 2, lvCost: [3, 4], grow: '堅実',
       cards: ['kn_bash', 'kn_taunt', 'kn_guard', 'kn_wall', 'kn_ult'] },
-    { id: 'mage', name: '魔術師', color: 'blue', hp: 8, atk: 1, lvExp: [3, 7], grow: '後衛でターンを始めるたび経験値2。魔法でダメージを与えるたび経験値1',
+    { id: 'mage', name: '魔術師', color: 'blue', hp: 8, atk: 1, lvCost: [4, 6], grow: '大器晩成。育てるのは重いが、覚醒が一番強い',
       cards: ['mg_bolt', 'mg_flame', 'mg_meditate', 'mg_thunder', 'mg_ult'] },
-    { id: 'rogue', name: '盗賊', color: 'green', hp: 10, atk: 3, lvExp: [3, 7], grow: '後衛の敵にダメージを与える・手札を奪うたび経験値2',
+    { id: 'rogue', name: '盗賊', color: 'green', hp: 10, atk: 3, lvCost: [2, 4], grow: '身軽。早めに覚醒まで届く',
       cards: ['rg_dagger', 'rg_trip', 'rg_steal', 'rg_backstab', 'rg_ult'] },
   ];
   const HERO = Object.fromEntries(HEROES.map((h) => [h.id, h]));
@@ -73,7 +73,7 @@
 
   function makeHero(id, pos) {
     const h = HERO[id];
-    return { id, hp: h.hp, maxHp: h.hp, atk: h.atk, pos, lv: 1, exp: 0, shield: 0, ko: false, revealed: pos === 'front',
+    return { id, hp: h.hp, maxHp: h.hp, atk: h.atk, pos, lv: 1, shield: 0, ko: false, revealed: pos === 'front',
       attacked: false, moved: false, focus: 0, taunt: false, undying: false };
   }
 
@@ -125,24 +125,26 @@
   function heroName(state, p, k) { return `${state.players[p].name}の${HERO[state.players[p].heroes[k].id].name}`; }
 
   // ── 成長 ──
-  function gainExp(state, p, k, n) {
+  // 次のレベルに上げるコスト（Lv3 なら null）
+  function levelCost(h) { return h.lv >= 3 ? null : HERO[h.id].lvCost[h.lv - 1]; }
+
+  function levelUp(state, p, k) {
     const h = state.players[p].heroes[k];
-    if (h.ko || n <= 0 || h.lv >= 3) return;
-    h.exp += n;
-    const need = HERO[h.id].lvExp;
-    while (h.lv < 3 && h.exp >= need[h.lv - 1]) {
+    {
       h.lv++;
+      h.revealed = true;
       mark(state, { p, k, label: `Lv${h.lv}！` });
       const card = HERO[h.id].cards.find((id) => CARD[id].lv === h.lv);
       state.log.push(`${heroName(state, p, k)}がLv${h.lv}に上がった`);
-      const uid = card ? addCard(state, p, card, true) : null;
+      const uid = card ? addCard(state, p, card, true, true) : null;
       (state._ups = state._ups || []).push({ p, k, hero: h.id, lv: h.lv, card, uid });
     }
   }
 
-  function addCard(state, p, id, announce) {
+  // force: レベルアップで得るカードは手札の上限を超えても受け取る
+  function addCard(state, p, id, announce, force) {
     const pl = state.players[p];
-    if (pl.hand.length >= HAND_MAX) {
+    if (pl.hand.length >= HAND_MAX && !force) {
       state.log.push(`手札がいっぱいで、${CARD[id].name}は消えた`);
       return null;
     }
@@ -174,14 +176,6 @@
     if (h.undying && h.hp < 1) h.hp = 1;
     mark(state, { p, k, n: -rest, label: absorbed ? `盾−${absorbed}` : null });
     state.log.push(`${src} → ${heroName(state, p, k)}に${n}ダメージ${absorbed ? `（盾で${absorbed}防いだ）` : ''}`);
-    // 成長
-    if (sp != null) {
-      const sid = state.players[sp].heroes[sk].id;
-      if (sid === 'sword') gainExp(state, sp, sk, n);
-      if (sid === 'mage' && kind === 'spell') gainExp(state, sp, sk, 1);
-      if (sid === 'rogue' && h.pos === 'back') gainExp(state, sp, sk, 2);
-    }
-    if (h.id === 'knight' && h.hp > 0) gainExp(state, p, k, n);
     if (h.hp <= 0) knockOut(state, p, k, sp);
     return n;
   }
@@ -206,7 +200,6 @@
     h.hp += d;
     mark(state, { p, k, n: d, heal: true });
     state.log.push(`${src} → ${heroName(state, p, k)}のHPを${d}回復`);
-    if (state.players[sp].heroes[sk].id === 'saint') gainExp(state, sp, sk, d);
   }
 
   function shield(state, sp, sk, p, k, n, src) {
@@ -215,7 +208,6 @@
     h.shield += n;
     mark(state, { p, k, label: `盾+${n}` });
     state.log.push(`${src} → ${heroName(state, p, k)}に盾${n}`);
-    if (state.players[sp].heroes[sk].id === 'saint') gainExp(state, sp, sk, n);
   }
 
   // ── 狙える相手 ──
@@ -249,7 +241,6 @@
       }
       h.shield = 0; h.taunt = false; h.undying = false; h.attacked = false; h.moved = false;
     });
-    pl.heroes.forEach((h, k) => { if (h.id === 'mage' && h.pos === 'back') gainExp(state, p, k, 2); });
     const before = pl.hand.length;
     for (let k = 0; k < 2; k++) generate(state, p, k);
     state.log.push(`カードを${pl.hand.length - before}枚生んだ`);
@@ -266,7 +257,7 @@
   }
 
   // ── 行動 ──
-  // action = { type: 'card', uid, target } | { type: 'attack', k, target } | { type: 'move', k }
+  // action = { type: 'card', uid, target } | { type: 'attack', k, target } | { type: 'move', k } | { type: 'level', k }
   function cardHeroIndex(state, p, id) { return state.players[p].heroes.findIndex((h) => h.id === CARD[id].hero); }
 
   function check(state, p, a) {
@@ -301,6 +292,13 @@
       if (state.mana < 1) return 'マナが足りない';
       return null;
     }
+    if (a.type === 'level') {
+      const h = pl.heroes[a.k];
+      if (!h || h.ko) return '倒れている';
+      if (h.lv >= 3) return 'もう覚醒している';
+      if (state.mana < levelCost(h)) return 'マナが足りない';
+      return null;
+    }
     return '不明な行動';
   }
 
@@ -309,6 +307,13 @@
     const err = check(state, p, a);
     if (err) return err;
     const pl = state.players[p], o = 1 - p;
+    if (a.type === 'level') {
+      const h = pl.heroes[a.k];
+      state.mana -= levelCost(h);
+      levelUp(state, p, a.k);
+      step(state, `レベルアップ：${HERO[h.id].name}`, true);
+      return null;
+    }
     if (a.type === 'move') {
       state.mana -= 1;
       const h = pl.heroes[a.k];
@@ -392,7 +397,6 @@
           const lost = oh.splice(i, 1)[0];
           mark(state, { p: o, k: null, label: '手札−1' });
           state.log.push(`${state.players[o].name}は「${CARD[lost.id].name}」を失った`);
-          gainExp(state, p, k, 2);
         } else state.log.push('相手の手札がなかった');
         break;
       }
@@ -442,6 +446,7 @@
     for (let k = 0; k < 2; k++) {
       for (const t of [0, 1]) { const a = { type: 'attack', k, target: t }; if (!check(state, p, a)) out.push(a); }
       const m = { type: 'move', k }; if (!check(state, p, m)) out.push(m);
+      const lv = { type: 'level', k }; if (!check(state, p, lv)) out.push(lv);
     }
     return out;
   }
@@ -466,7 +471,7 @@
       let v = pl.points * 40 + Math.min(pl.hand.length, HAND_MAX - 2) * 0.4 - Math.max(0, pl.hand.length - (HAND_MAX - 2)) * 1.5;
       pl.heroes.forEach((h) => {
         if (h.ko) { v -= 8; return; }
-        v += h.hp + h.shield * 0.6 + h.lv * 6 + h.exp * 0.8 + (h.taunt ? 2 : 0) + (h.undying ? 4 : 0);
+        v += h.hp + h.shield * 0.6 + h.lv * 6 + (h.taunt ? 2 : 0) + (h.undying ? 4 : 0);
         // 次の相手のターンに倒されそうなら減点（前衛ほど危ない）
         const exposed = h.pos === 'front' || pl.heroes.every((x) => x.ko || x.pos === 'back');
         if (exposed && h.hp + h.shield <= threat && !h.undying) v -= 10 + h.lv * 4;
@@ -505,7 +510,7 @@
 
   const api = {
     WIN_POINTS, MAX_ROUND, HAND_MAX, MANA_MAX, HEROES, HERO, CARDS, CARD, POS_NAME, CPU_TEAMS,
-    validateTeam, newGame, view, check, act, actions, endTurn, targetsFor, cardHeroIndex, cpuTurn, value,
+    validateTeam, newGame, view, check, act, actions, endTurn, targetsFor, cardHeroIndex, cpuTurn, value, levelCost,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Engine = api;
