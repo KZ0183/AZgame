@@ -99,7 +99,7 @@
   }
 
   // ── 演出用の記録 ──
-  function begin(state) { state.log = []; state.steps = []; state._hits = []; state._logAt = 0; }
+  function begin(state) { state.log = []; state.steps = []; state._hits = []; state._ups = []; state._logAt = 0; }
   function mark(state, hit) { state._hits.push(hit); }
 
   function view(state) {
@@ -116,8 +116,10 @@
     const lines = state.log.slice(state._logAt);
     if (!lines.length && !state._hits.length && !force) return;
     state._logAt = state.log.length;
-    state.steps.push({ title, lines, hits: state._hits, view: view(state) });
+    // ups: この段階で起きたレベルアップ（演出用）
+    state.steps.push({ title, lines, hits: state._hits, ups: state._ups || [], view: view(state) });
     state._hits = [];
+    state._ups = [];
   }
 
   function heroName(state, p, k) { return `${state.players[p].name}の${HERO[state.players[p].heroes[k].id].name}`; }
@@ -133,7 +135,8 @@
       mark(state, { p, k, label: `Lv${h.lv}！` });
       const card = HERO[h.id].cards.find((id) => CARD[id].lv === h.lv);
       state.log.push(`${heroName(state, p, k)}がLv${h.lv}に上がった`);
-      if (card) addCard(state, p, card, true);
+      const uid = card ? addCard(state, p, card, true) : null;
+      (state._ups = state._ups || []).push({ p, k, hero: h.id, lv: h.lv, card, uid });
     }
   }
 
@@ -141,10 +144,12 @@
     const pl = state.players[p];
     if (pl.hand.length >= HAND_MAX) {
       state.log.push(`手札がいっぱいで、${CARD[id].name}は消えた`);
-      return;
+      return null;
     }
-    pl.hand.push({ uid: state.nextUid(), id });
+    const uid = state.nextUid();
+    pl.hand.push({ uid, id });
     if (announce) state.log.push(`${pl.name}は${CARD[id].name}を得た`);
+    return uid;
   }
 
   // ヒーローが今の位置に合ったカードを1枚生む
@@ -447,7 +452,7 @@
     let uid = 100000;
     s.nextUid = () => uid++;
     s.rng = () => 0.5;
-    s.steps = []; s.log = []; s._hits = [];
+    s.steps = []; s.log = []; s._hits = []; s._ups = [];
     return s;
   }
 
