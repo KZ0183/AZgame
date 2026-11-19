@@ -1,0 +1,445 @@
+<title>ふたりの英雄</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@700;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+/* 縦一画面。上から 相手の後衛・相手の前衛・境界・自分の前衛・自分の後衛。2列は2人のヒーロー */
+:root {
+  --bg: #1b2230;
+  --panel: #252f40;
+  --panel-2: #2f3a4e;
+  --line: #3d4a61;
+  --ink: #ede7d9;
+  --muted: #9ba5b6;
+  --brass: #d8b26a;
+  --bad: #e2694f;
+  --good: #7cc18a;
+  --h-red: #e2694f;
+  --h-gold: #e6c56f;
+  --h-grey: #b9b3a6;
+  --h-blue: #5ea3e8;
+  --h-green: #73c08d;
+  --f-display: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --f-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: inherit; }
+button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+#app {
+  height: 100%; max-width: 480px; margin: 0 auto; box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 10px;
+  display: flex; flex-direction: column;
+}
+.screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: balance; letter-spacing: .04em; }
+.btn { border: 1px solid var(--brass); background: var(--brass); color: var(--bg); font-weight: 700; border-radius: 10px; padding: 12px 16px; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--brass); }
+.btn:disabled { opacity: .4; cursor: default; }
+.mini { border: 1px solid var(--brass); background: transparent; color: var(--brass); border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+.mini.on { background: var(--brass); color: var(--bg); }
+.mini:disabled { border-color: var(--line); color: var(--muted); cursor: default; }
+.muted { color: var(--muted); }
+.label { font-size: 11px; letter-spacing: .12em; color: var(--muted); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.c-red { --hc: var(--h-red); } .c-gold { --hc: var(--h-gold); } .c-grey { --hc: var(--h-grey); } .c-blue { --hc: var(--h-blue); } .c-green { --hc: var(--h-green); }
+
+/* タイトル */
+.title { justify-content: center; text-align: center; gap: 18px; }
+.title h1 { font-size: 44px; color: var(--brass); }
+.rules { text-align: left; background: var(--panel); border-radius: 12px; padding: 12px 16px; line-height: 1.75; font-size: 13px; }
+.rules ul { margin: 0; padding-left: 1.2em; }
+.title .actions { display: grid; gap: 10px; }
+
+/* 編成 */
+.pick-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.hero-pick { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--hc); border-radius: 10px; padding: 10px 12px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.hero-pick[aria-pressed="true"] { border-color: var(--brass); border-left-color: var(--hc); box-shadow: 0 0 0 1px var(--brass) inset; background: var(--panel-2); }
+.hero-pick .hd { display: flex; align-items: baseline; gap: 8px; }
+.hero-pick .hd b { font-family: var(--f-display); font-size: 18px; }
+.hero-pick .st { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hero-pick .grow { font-size: 12px; }
+.hero-pick ul { margin: 0; padding-left: 1.1em; font-size: 11.5px; line-height: 1.6; color: var(--muted); }
+.hero-pick .order { margin-left: auto; font-size: 11px; color: var(--brass); }
+.foot { display: flex; gap: 8px; }
+.foot .btn { flex: 1; }
+
+/* 対戦 */
+.pbar { display: flex; align-items: center; gap: 8px; background: var(--panel); border-radius: 10px; padding: 7px 12px; }
+.pbar.turn-on { box-shadow: 0 0 0 1px var(--brass) inset; }
+.pbar .who { font-weight: 700; }
+.pts { display: inline-flex; gap: 3px; margin-left: auto; align-items: center; }
+.pts i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--brass); }
+.pts i.on { background: var(--brass); }
+.pts small { font-size: 11px; color: var(--muted); margin-right: 4px; }
+.chip { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.manatxt b { color: var(--brass); font-family: var(--f-display); font-size: 16px; }
+
+.field { flex: 1; min-height: 0; display: grid; grid-template-rows: 1fr 1fr auto 1fr 1fr; gap: 5px; }
+.frow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; position: relative; min-height: 0; }
+.divider { text-align: center; font-size: 10px; letter-spacing: .4em; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 2px; }
+.cell { border: 1px dashed var(--line); border-radius: 10px; position: relative; min-height: 0; display: flex; }
+.cell .tag-row { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--line); letter-spacing: .2em; }
+.hero {
+  flex: 1; min-width: 0; border-radius: 10px; border: 1px solid var(--line); border-top: 3px solid var(--hc);
+  background: var(--panel); padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; position: relative; box-sizing: border-box;
+}
+.hero.focus { border-color: var(--brass); border-top-color: var(--hc); box-shadow: 0 0 0 1px var(--brass) inset; }
+.hero.target { box-shadow: 0 0 0 2px var(--bad) inset; }
+.hero.target.ally { box-shadow: 0 0 0 2px var(--good) inset; }
+.hero.ko { opacity: .45; border-style: dashed; }
+.hero .nm { display: flex; align-items: baseline; gap: 6px; }
+.hero .nm b { font-family: var(--f-display); font-size: 15px; }
+.hero .nm .lv { font-size: 11px; color: var(--brass); }
+.hero .hpbar { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+.hero .hpbar i { display: block; height: 100%; background: var(--good); }
+.hero .hpbar i.low { background: var(--bad); }
+.hero .nums { display: flex; gap: 8px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.hero .nums b { color: var(--ink); font-size: 13px; }
+.hero .exp { font-size: 10px; color: var(--muted); }
+.hero .flags { display: flex; gap: 3px; flex-wrap: wrap; }
+.hero .flags i { font-style: normal; font-size: 10px; padding: 0 5px; border-radius: 4px; line-height: 15px; border: 1px solid var(--line); color: var(--muted); }
+.hero .flags i.hot { border-color: var(--brass); color: var(--brass); }
+.hero.hidden { border-top-color: var(--line); }
+.hero.hidden .q { font-family: var(--f-display); font-size: 22px; color: var(--muted); margin: auto; }
+
+.hand { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--hc); border-radius: 8px; padding: 5px 6px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.card[aria-pressed="true"] { border-color: var(--brass); border-top-color: var(--hc); background: var(--panel-2); box-shadow: 0 0 0 1px var(--brass) inset; }
+.card.off { opacity: .4; }
+.card .cost { font-family: var(--f-display); font-weight: 800; color: var(--brass); }
+.card b { font-size: 12px; line-height: 1.25; overflow-wrap: anywhere; }
+.card .src { font-size: 10px; color: var(--muted); }
+.card.empty { border-style: dashed; border-top: 1px dashed var(--line); cursor: default; background: transparent; }
+.detail { background: var(--panel); border-radius: 10px; padding: 8px 12px; font-size: 12px; line-height: 1.6; min-height: 3.4em; max-height: 9.5em; overflow-y: auto; }
+.detail b.h { color: var(--brass); }
+.detail .log { margin: 4px 0 0; padding-left: 1.1em; }
+.act { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+
+.pop { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-family: var(--f-display); font-weight: 800; font-size: 26px; pointer-events: none; text-shadow: 0 0 6px var(--bg), 0 0 2px var(--bg); animation: pop .4s ease-out both; white-space: nowrap; z-index: 2; }
+.pop.dmg { color: var(--bad); }
+.pop.heal { color: var(--good); }
+.pop.tag { font-family: var(--f-body); font-size: 12px; color: var(--bg); background: var(--brass); border-radius: 6px; padding: 2px 8px; text-shadow: none; }
+.pops { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; pointer-events: none; }
+.pops .pop { position: static; transform: none; }
+@keyframes pop { from { opacity: 0; scale: .5; } to { opacity: 1; scale: 1; } }
+
+.overlay { position: fixed; inset: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 82%, transparent); display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.sheet { width: 100%; max-width: 440px; max-height: 100%; overflow-y: auto; background: var(--panel); border: 1px solid var(--brass); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
+.result h2 { font-size: 36px; text-align: center; }
+.result h2.win { color: var(--brass); }
+.result h2.lose { color: var(--bad); }
+@media (prefers-reduced-motion: reduce) { .pop { animation: none; } }
+</style>
+
+<div id="app"></div>
+
+<script src="engine.js"></script>
+<script>
+(() => {
+  const E = window.Engine;
+  const H = E.HERO, C = E.CARD;
+  const app = document.getElementById('app');
+  const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+  let team = load() || { heroes: ['sword', 'saint'], front: 0 };
+  let game = null, cpuTeam = null;
+  // 入力中：sel = 選んだ手札の uid、focus = 詳しく見ているヒーロー {p,k}、mode = 'attack' のときは攻撃の対象選び
+  let sel = null, focus = null, mode = null, last = null, play = null;
+
+  function load() { try { const t = JSON.parse(localStorage.getItem('futari-team')); return t && !E.validateTeam(t).length ? t : null; } catch { return null; } }
+  function save() { try { localStorage.setItem('futari-team', JSON.stringify(team)); } catch {} }
+
+  // ── タイトル ──
+  function title() {
+    app.innerHTML = `<section class="screen title">
+      <div><h1>ふたりの英雄</h1><p class="muted">二人を選び、前と後ろに立たせて戦う。</p></div>
+      <div class="rules"><ul>
+        <li>ヒーローを<b>2人</b>選ぶだけでデッキが決まる。各ヒーローは固有のカードを5枚持つ</li>
+        <li>ヒーローは<b>前衛</b>か<b>後衛</b>に立つ。前衛は攻撃できるが狙われる。後衛は遠距離技しか受けない（前衛がいなければ、普通の攻撃も−1で届く）</li>
+        <li>毎ターン、各ヒーローが<b>今いる位置に合ったカード</b>を1枚生む。手札は最大5枚</li>
+        <li>マナはラウンド数+1（最大6）。カード・通常攻撃（1）・移動（1）に使う</li>
+        <li>ヒーローは固有の条件で<b>Lv3まで育ち</b>、新しいカードと覚醒技が解放される</li>
+        <li>相手のヒーローを倒すと1点。<b>3点先取</b>で勝ち。倒されたヒーローは次のターンにLv1で復活する</li>
+      </ul></div>
+      <div class="actions"><button class="btn" id="go">いまの二人で対戦</button><button class="btn ghost" id="pick">ヒーローを選ぶ</button></div>
+    </section>`;
+    document.getElementById('go').onclick = start;
+    document.getElementById('pick').onclick = pick;
+  }
+
+  // ── 編成 ──
+  function heroInfo(id) {
+    const h = H[id];
+    const cards = h.cards.map((cid) => { const c = C[cid]; return `<li>Lv${c.lv}・${E.POS_NAME[c.pos]}【${c.cost}】<b>${esc(c.name)}</b>：${esc(c.text)}</li>`; }).join('');
+    return { h, cards };
+  }
+  function pick() {
+    const errs = E.validateTeam(team);
+    app.innerHTML = `<section class="screen">
+      <div class="row"><h2 style="font-size:24px">ヒーローを選ぶ</h2><span class="muted" style="margin-left:auto">${team.heroes.length} / 2</span></div>
+      <div class="pick-scroll">${E.HEROES.map((h) => {
+        const i = team.heroes.indexOf(h.id);
+        const { cards } = heroInfo(h.id);
+        return `<button class="hero-pick c-${h.color}" aria-pressed="${i >= 0}" data-hero="${h.id}">
+          <span class="hd"><b>${h.name}</b><span class="st">HP ${h.hp}・攻撃 ${h.atk}</span>${i >= 0 ? `<span class="order">${team.front === i ? '最初は前衛' : '最初は後衛'}</span>` : ''}</span>
+          <span class="grow">成長：${esc(h.grow)}</span><ul>${cards}</ul></button>`;
+      }).join('')}</div>
+      ${team.heroes.length === 2 ? `<div class="row"><span class="label">最初に前衛に立つ</span>${team.heroes.map((id, i) => `<button class="mini${team.front === i ? ' on' : ''}" data-front="${i}">${H[id].name}</button>`).join('')}</div>` : ''}
+      <div class="foot"><button class="btn ghost" id="back">戻る</button><button class="btn" id="go" ${errs.length ? 'disabled' : ''}>この二人で対戦</button></div>
+    </section>`;
+    app.querySelectorAll('[data-hero]').forEach((b) => b.onclick = () => {
+      const id = b.dataset.hero;
+      const y = app.querySelector('.pick-scroll').scrollTop;
+      if (team.heroes.includes(id)) team.heroes = team.heroes.filter((x) => x !== id);
+      else if (team.heroes.length < 2) team.heroes.push(id);
+      else team.heroes = [team.heroes[1], id];
+      if (team.front >= team.heroes.length) team.front = 0;
+      pick();
+      app.querySelector('.pick-scroll').scrollTop = y;
+    });
+    app.querySelectorAll('[data-front]').forEach((b) => b.onclick = () => { team.front = +b.dataset.front; pick(); });
+    document.getElementById('back').onclick = () => { if (!E.validateTeam(team).length) save(); title(); };
+    document.getElementById('go').onclick = () => { save(); start(); };
+  }
+
+  // ── 対戦 ──
+  function start() {
+    if (E.validateTeam(team).length) return pick();
+    cpuTeam = E.CPU_TEAMS[Math.floor(Math.random() * E.CPU_TEAMS.length)];
+    game = E.newGame([structuredClone(team), structuredClone(cpuTeam)], ['あなた', '相手']);
+    sel = null; focus = null; mode = null; last = null;
+    const steps = game.steps.slice();
+    if (game.active === 1) steps.push(...cpuSide());
+    playback(steps);
+  }
+
+  function cpuSide() {
+    const steps = E.cpuTurn(game, 1);
+    if (!game.over) { E.endTurn(game); steps.push(...game.steps); }
+    return steps;
+  }
+  function playback(steps) { play = { steps, i: 0 }; last = null; battle(); }
+  function advance() {
+    if (play.i < play.steps.length - 1) { play.i++; battle(); return; }
+    play = null;
+    battle();
+    if (game.over) result();
+  }
+
+  function popsHTML(list) {
+    if (!list.length) return '';
+    return `<span class="pops">${list.map((h) => {
+      const parts = [];
+      if (h.n != null && (h.n !== 0 || !h.label)) parts.push(`<span class="pop ${h.heal ? 'heal' : 'dmg'}">${h.heal ? '+' : ''}${h.n}</span>`);
+      if (h.label) parts.push(`<span class="pop tag">${esc(h.label)}</span>`);
+      return parts.join('');
+    }).join('')}</span>`;
+  }
+
+  function heroHTML(v, p, k, ctx) {
+    const h = v.players[p].heroes[k];
+    const def = H[h.id];
+    const hidden = p === 1 && !h.revealed && !game.over;
+    const hits = ctx.hits.filter((x) => x.p === p && x.k === k);
+    const isFocus = focus && focus.p === p && focus.k === k;
+    const tgt = ctx.targets.some((t) => t.p === p && t.k === k);
+    const cls = `hero c-${def.color}${isFocus ? ' focus' : ''}${tgt ? ' target' + (p === 0 ? ' ally' : '') : ''}${h.ko ? ' ko' : ''}${hidden ? ' hidden' : ''}`;
+    if (hidden) return `<div class="${cls}" data-hero="${p}-${k}" role="button" tabindex="0" aria-label="正体不明の後衛"><span class="q">？？？</span>${popsHTML(hits)}</div>`;
+    const need = def.lvExp[h.lv - 1];
+    const flags = [];
+    if (h.ko) flags.push(['', '倒れている']);
+    if (h.taunt) flags.push(['hot', '挑発']);
+    if (h.undying) flags.push(['hot', '不屈']);
+    if (h.focus) flags.push(['hot', `次の攻撃+${h.focus}`]);
+    if (p === v.active && !h.ko) { if (h.attacked) flags.push(['', '攻撃済み']); if (h.moved) flags.push(['', '移動済み']); }
+    const pct = Math.max(0, h.hp / h.maxHp * 100);
+    return `<div class="${cls}" data-hero="${p}-${k}" role="button" tabindex="0" aria-label="${def.name}">
+      <span class="nm"><b>${def.name}</b><span class="lv">Lv${h.lv}</span></span>
+      <span class="hpbar"><i class="${pct <= 50 ? 'low' : ''}" style="width:${pct}%"></i></span>
+      <span class="nums"><span>HP <b>${h.hp}</b>/${h.maxHp}</span><span>攻撃 <b>${h.atk}</b></span>${h.shield ? `<span>盾 <b>${h.shield}</b></span>` : ''}</span>
+      <span class="exp">${h.lv < 3 ? `経験値 ${h.exp}/${need}` : '覚醒済み'}</span>
+      ${flags.length ? `<span class="flags">${flags.map((f) => `<i class="${f[0]}">${f[1]}</i>`).join('')}</span>` : ''}
+      ${popsHTML(hits)}</div>`;
+  }
+
+  function myTurn() { return !play && !game.over && game.active === 0; }
+
+  // 今選んでいるもので狙える相手
+  function currentTargets() {
+    if (!myTurn()) return [];
+    if (mode === 'attack' && focus) return E.targetsFor(game, 0, 'front').map((k) => ({ p: 1, k }));
+    if (sel) {
+      const c = game.players[0].hand.find((x) => x.uid === sel);
+      const def = C[c.id];
+      if (def.target === 'front' || def.target === 'any') return E.targetsFor(game, 0, def.target).map((k) => ({ p: 1, k }));
+      if (def.target === 'ally') return [0, 1].filter((k) => !game.players[0].heroes[k].ko).map((k) => ({ p: 0, k }));
+    }
+    return [];
+  }
+
+  function battle() {
+    const st = play ? play.steps[play.i] : null;
+    const v = st ? st.view : E.view(game);
+    const mine = myTurn();
+    const ctx = { hits: st ? st.hits : last ? last.hits : [], targets: currentTargets() };
+    const me = game.players[0];
+
+    const rowHTML = (p, pos) => `<div class="frow" data-name="${p === 0 ? 'あなた' : '相手'}・${E.POS_NAME[pos]}">${[0, 1].map((k) => {
+      const h = v.players[p].heroes[k];
+      const here = h.pos === pos;
+      return `<div class="cell">${here ? heroHTML(v, p, k, ctx) : `<span class="tag-row">${E.POS_NAME[pos]}</span>`}</div>`;
+    }).join('')}</div>`;
+    const pts = (n) => `<span class="pts"><small>撃破</small>${[0, 1, 2].map((i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
+
+    let panel, buttons;
+    if (play) {
+      const lastStep = play.i === play.steps.length - 1;
+      panel = `<div class="detail"><div class="row"><b class="h">${esc(st.title)}</b><span class="muted" style="margin-left:auto">${play.i + 1} / ${play.steps.length}</span></div>
+        ${st.lines.length ? `<ul class="log">${st.lines.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}</div>`;
+      buttons = `<button class="btn ghost" id="skip" ${lastStep ? 'disabled' : ''}>最後まで</button><button class="btn" id="next">${lastStep ? (game.over ? '結果を見る' : 'あなたのターンへ') : '次へ'}</button>`;
+    } else {
+      let d = '';
+      const selCard = sel && me.hand.find((x) => x.uid === sel);
+      if (mode === 'attack' && focus) {
+        d = `<b class="h">${H[me.heroes[focus.k].id].name}の通常攻撃</b>（1マナ・${me.heroes[focus.k].atk}ダメージ）<br><span class="muted">赤く光っている相手をタップ</span>`;
+      } else if (selCard) {
+        const def = C[selCard.id];
+        const err = E.check(game, 0, { type: 'card', uid: sel, target: currentTargets()[0]?.k ?? null });
+        d = `<b class="h">${esc(def.name)}</b>　<span class="muted">${H[def.hero].name}・${E.POS_NAME[def.pos]}のカード【${def.cost}マナ】</span><br>${esc(def.text)}`
+          + (err ? `<br><span style="color:var(--bad)">使えない：${esc(err)}</span>` : def.target === 'none' ? '' : `<br><span class="muted">${def.target === 'ally' ? '緑に光っている味方' : '赤く光っている相手'}をタップして使う</span>`);
+      } else if (focus) {
+        const h = v.players[focus.p].heroes[focus.k];
+        const hidden = focus.p === 1 && !h.revealed;
+        if (hidden) d = '<b class="h">正体不明の後衛</b><br><span class="muted">前衛に出るか、カードを使うか、ダメージを受けると正体が分かる。</span>';
+        else {
+          const def = H[h.id];
+          d = `<b class="h">${def.name}</b>　<span class="muted">${focus.p === 0 ? 'あなた' : '相手'}・${E.POS_NAME[h.pos]}・Lv${h.lv}</span><br>成長：${esc(def.grow)}`;
+          if (focus.p === 0 && mine && !h.ko) {
+            const atkErr = E.check(game, 0, { type: 'attack', k: focus.k, target: E.targetsFor(game, 0, 'front')[0] });
+            const mvErr = E.check(game, 0, { type: 'move', k: focus.k });
+            d += `<div class="row" style="margin-top:6px">
+              ${h.pos === 'front' ? `<button class="mini" id="atk" ${atkErr ? 'disabled' : ''}>${atkErr ? `攻撃できない：${esc(atkErr)}` : `通常攻撃【1マナ】`}</button>` : ''}
+              <button class="mini" id="mv" ${mvErr ? 'disabled' : ''}>${mvErr ? `移動できない：${esc(mvErr)}` : `${h.pos === 'front' ? '後衛' : '前衛'}へ移動【1マナ】`}</button></div>`;
+          }
+        }
+      } else if (last) {
+        d = `<ul class="log" style="margin:0">${last.lines.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>`;
+      } else {
+        d = '<span class="muted">手札のカードを使うか、自分のヒーローをタップして通常攻撃・移動をする。終わったら「ターン終了」。</span>';
+      }
+      panel = `<div class="detail">${d}</div>`;
+      const useBtn = (() => {
+        if (!selCard) return null;
+        const def = C[selCard.id];
+        if (def.target !== 'none') return null;
+        const err = E.check(game, 0, { type: 'card', uid: sel, target: null });
+        return `<button class="btn" id="use" ${err ? 'disabled' : ''}>「${esc(def.name)}」を使う</button>`;
+      })();
+      buttons = `<button class="btn ghost" id="cancel" ${sel || focus || mode ? '' : 'disabled'}>選択を解除</button>${useBtn || `<button class="btn" id="end">ターン終了</button>`}`;
+    }
+
+    const hand = mine || !play ? me.hand : [];
+    app.innerHTML = `<section class="screen battle">
+      <div class="pbar${v.active === 1 ? ' turn-on' : ''}"><span class="who">相手</span><span class="chip">手札 ${v.players[1].handCount}</span>${pts(v.players[1].points)}</div>
+      <div class="field">
+        ${rowHTML(1, 'back')}${rowHTML(1, 'front')}
+        <div class="divider">R${v.round} / ${E.MAX_ROUND}</div>
+        ${rowHTML(0, 'front')}${rowHTML(0, 'back')}
+      </div>
+      <div class="pbar${v.active === 0 ? ' turn-on' : ''}"><span class="who">あなた</span><span class="manatxt">${v.active === 0 ? `マナ <b>${v.mana}</b>` : '相手のターン'}</span>${pts(v.players[0].points)}</div>
+      <div class="hand">${[0, 1, 2, 3, 4].map((i) => {
+        const c = hand[i];
+        if (!c) return '<div class="card empty" aria-hidden="true"></div>';
+        const def = C[c.id];
+        const usable = mine && [null, 0, 1].some((t) => !E.check(game, 0, { type: 'card', uid: c.uid, target: t }));
+        return `<button class="card c-${H[def.hero].color}${usable ? '' : ' off'}" aria-pressed="${sel === c.uid}" data-card="${c.uid}">
+          <span class="row" style="gap:4px"><span class="cost">${def.cost}</span><span class="src">${H[def.hero].name}・${def.pos === 'front' ? '前' : '後'}</span></span><b>${esc(def.name)}</b></button>`;
+      }).join('')}</div>
+      ${panel}
+      <div class="act">${buttons}</div>
+    </section>`;
+    bind();
+  }
+
+  function doAct(a) {
+    const err = E.act(game, 0, a);
+    if (err) return;
+    const steps = game.steps;
+    last = { lines: steps.flatMap((s) => s.lines), hits: steps.flatMap((s) => s.hits) };
+    sel = null; mode = null; focus = null;
+    battle();
+    if (game.over) result();
+  }
+
+  function bind() {
+    const on = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
+    if (play) {
+      on('next', advance);
+      on('skip', () => { play.i = play.steps.length - 1; battle(); });
+      document.getElementById('next').focus();
+    }
+    app.querySelectorAll('[data-hero]').forEach((el) => {
+      const tap = () => {
+        if (play) return;
+        const [p, k] = el.dataset.hero.split('-').map(Number);
+        const tg = currentTargets();
+        if (myTurn() && tg.some((t) => t.p === p && t.k === k)) {
+          if (mode === 'attack') return doAct({ type: 'attack', k: focus.k, target: k });
+          if (sel) return doAct({ type: 'card', uid: sel, target: k });
+        }
+        sel = null; mode = null;
+        focus = focus && focus.p === p && focus.k === k ? null : { p, k };
+        last = null;
+        battle();
+      };
+      el.onclick = tap;
+      el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tap(); } };
+    });
+    if (!myTurn()) return;
+    app.querySelectorAll('[data-card]').forEach((b) => b.onclick = () => {
+      const uid = +b.dataset.card;
+      mode = null; focus = null; last = null;
+      sel = sel === uid ? null : uid;
+      battle();
+    });
+    on('atk', () => {
+      const ts = E.targetsFor(game, 0, 'front');
+      if (ts.length === 1) return doAct({ type: 'attack', k: focus.k, target: ts[0] });
+      mode = 'attack'; battle();
+    });
+    on('mv', () => doAct({ type: 'move', k: focus.k }));
+    on('use', () => doAct({ type: 'card', uid: sel, target: null }));
+    on('cancel', () => { sel = null; focus = null; mode = null; battle(); });
+    on('end', () => {
+      sel = null; focus = null; mode = null; last = null;
+      E.endTurn(game);
+      const steps = game.steps.slice();
+      if (!game.over) steps.push(...cpuSide());
+      playback(steps);
+    });
+  }
+
+  function result() {
+    const w = game.winner;
+    const head = w === 0 ? ['勝利', 'win'] : w === 1 ? ['敗北', 'lose'] : ['引き分け', ''];
+    const o = document.createElement('div');
+    o.className = 'overlay';
+    o.innerHTML = `<div class="sheet result" role="dialog" aria-modal="true">
+      <h2 class="${head[1]}">${head[0]}</h2>
+      <p class="muted" style="text-align:center;margin:0">${esc(game.endReason)}</p>
+      <p style="margin:0;text-align:center">相手の二人：<b>${esc(cpuTeam.label)}</b></p>
+      <div class="foot"><button class="btn ghost" id="repick">ヒーローを選ぶ</button><button class="btn" id="again">もう一度</button></div></div>`;
+    document.body.appendChild(o);
+    o.querySelector('#again').focus();
+    o.querySelector('#again').onclick = () => { o.remove(); start(); };
+    o.querySelector('#repick').onclick = () => { o.remove(); pick(); };
+  }
+
+  title();
+})();
+</script>
