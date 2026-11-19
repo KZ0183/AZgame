@@ -77,6 +77,19 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .pts small { font-size: 11px; color: var(--muted); margin-right: 4px; }
 .chip { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .manatxt b { color: var(--brass); font-family: var(--f-display); font-size: 16px; }
+.mana { display: inline-flex; align-items: center; gap: 8px; }
+.gems { display: inline-flex; gap: 5px; align-items: center; }
+.gem { width: 12px; height: 12px; transform: rotate(45deg); border: 1.5px solid var(--brass); border-radius: 2px; box-sizing: border-box; }
+.gem.on { background: var(--brass); box-shadow: 0 0 6px color-mix(in srgb, var(--brass) 60%, transparent); }
+.gem.pend { background: var(--bad); border-color: var(--bad); box-shadow: 0 0 6px color-mix(in srgb, var(--bad) 70%, transparent); animation: blink .8s ease-in-out infinite alternate; }
+.gem.used { border-color: var(--line); background: transparent; }
+.gem.bonus { border-style: dashed; }
+@keyframes blink { from { opacity: .45; } to { opacity: 1; } }
+.mnum { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mnum b { font-size: 18px; }
+.mnum small { color: var(--brass); margin-left: 2px; }
+.pchip em.pc { font-style: normal; font-family: var(--f-display); font-weight: 800; color: var(--bg); background: var(--brass); border-radius: 99px; min-width: 16px; text-align: center; font-size: 11px; line-height: 16px; margin-left: -5px; }
+.pchip em.pc.gain { background: var(--good); }
 
 .field { flex: 1; min-height: 0; display: grid; grid-template-rows: 1fr 1fr auto 1fr 1fr; gap: 5px; }
 .frow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; position: relative; min-height: 0; }
@@ -172,7 +185,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .result h2 { font-size: 36px; text-align: center; }
 .result h2.win { color: var(--brass); }
 .result h2.lose { color: var(--bad); }
-@media (prefers-reduced-motion: reduce) { .pop, .lvup, .lvcost.ready, .shake, .lunge-up, .lunge-down { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .pop, .lvup, .lvcost.ready, .shake, .lunge-up, .lunge-down, .gem.pend { animation: none; } }
 </style>
 
 <div id="app"></div>
@@ -349,6 +362,46 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     return `${H[def.hero].name}：${def.name}${to}`;
   }
 
+  // 予約の各行動で使うマナ（負の数はマナが増える）
+  function planCosts() {
+    const out = [];
+    let before = game.mana;
+    for (let i = 0; i < plan.length; i++) {
+      const after = E.previewPlan(game, 0, plan.slice(0, i + 1)).mana;
+      out.push(before - after);
+      before = after;
+    }
+    return out;
+  }
+
+  // 今選んでいるもので使う予定のマナ
+  function pendingCost() {
+    if (mode === 'attack' && focus) return 1;
+    if (sel) {
+      const def = C[game.players[0].hand.find((x) => x.uid === sel).id];
+      const err = E.checkPlan(game, 0, plan.concat([{ type: 'card', uid: sel, target: def.target === 'none' ? null : 0 }]));
+      return err ? 0 : def.cost;
+    }
+    return 0;
+  }
+
+  // マナを宝石で見せる：使える（金）・使う予定（赤く点滅）・予約で使った（空）
+  function manaGems(pv) {
+    const bonus = plan.reduce((t, a) => {
+      if (a.type !== 'card') return t;
+      const c = game.players[0].hand.find((x) => x.uid === a.uid);
+      return t + (E.MANA_GAIN[c.id] || 0);
+    }, 0);
+    const total = game.mana + bonus;
+    const left = pv.mana;
+    const pend = Math.min(pendingCost(), left);
+    const gems = [...Array(total).keys()].map((i) => {
+      const cls = i < left - pend ? 'on' : i < left ? 'on pend' : 'used';
+      return `<i class="gem ${cls}${i >= game.mana ? ' bonus' : ''}"></i>`;
+    }).join('');
+    return `<span class="mana" aria-label="マナ 残り${left} / ${total}"><span class="gems">${gems}</span><span class="mnum"><b>${left}</b>/${total}${bonus ? `<small>（+${bonus}）</small>` : ''}</span></span>`;
+  }
+
   // 予約の印：狙っている相手・支援する味方に付ける
   function planMarks() {
     const marks = [[[], []], [[], []]];
@@ -450,7 +503,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       buttons = play ? `<button class="btn ghost" id="skip" ${lastStep ? 'disabled' : ''}>最後まで</button><button class="btn" id="next">${lastStep ? (game.over ? '結果を見る' : '計画へ') : '次へ'}</button>` : '';
     } else {
       topline = `<div class="timer" id="timer"><span>ラウンド${game.round}の計画　残り <b></b>秒</span><span class="bar"><i></i></span></div>`;
-      const chips = plan.map((a, i) => `<button class="pchip" data-rm="${i}" aria-label="${esc(actionLabel(a))}を取り消す">${esc(actionLabel(a))}<span aria-hidden="true">×</span></button>`).join('');
+      const costs = planCosts();
+      const chips = plan.map((a, i) => `<button class="pchip" data-rm="${i}" aria-label="${esc(actionLabel(a))}を取り消す"><em class="pc${costs[i] < 0 ? ' gain' : ''}">${costs[i] < 0 ? `+${-costs[i]}` : costs[i]}</em>${esc(actionLabel(a))}<span aria-hidden="true">×</span></button>`).join('');
       let d = '';
       const selCard = sel && me.hand.find((x) => x.uid === sel);
       if (mode === 'attack' && focus) {
@@ -497,7 +551,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 
     const inPlan = new Set(plan.filter((a) => a.type === 'card').map((a) => a.uid));
     const hand = me.hand;
-    const manaTxt = planning ? `マナ 残り<b>${pv.mana}</b>/${game.mana}` : `ラウンド${v.round}`;
+    const manaTxt = planning ? manaGems(pv) : `ラウンド${v.round}・マナ${v.mana}`;
     app.innerHTML = `<section class="screen battle">
       <div class="pbar"><span class="who">相手</span><span class="chip">手札 ${v.players[1].handCount}</span>${planning ? '<span class="chip">計画中</span>' : ''}${pts(v.players[1].points)}</div>
       ${topline}
