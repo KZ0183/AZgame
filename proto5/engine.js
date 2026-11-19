@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
 
-  const MAX_TURN = 5;
+  const MAX_TURN = 10;
   const START_LIFE = 10;
   const DECK_SIZE = 5;
 
@@ -10,6 +10,8 @@
 
   // type: creature | spell
   // target: lane = 相手側のレーンを 1 つ選ぶ / none = 対象なし
+  // ab: 起動能力。1 体につき 1 ターン 1 回、マナを払って使う
+  //   target: enemyLane = 相手側のレーン / adjacent = 自陣の隣のレーン / none
   const CARDS = [
     // ── 赤：攻め・火力 ──
     { id: 'imp', name: '火の小鬼', color: 'red', cost: 1, type: 'creature', power: 2, toughness: 1, text: '' },
@@ -17,19 +19,28 @@
     { id: 'fireball', name: '火球', color: 'red', cost: 2, type: 'spell', target: 'lane', text: '選んだレーンの相手クリーチャーに3ダメージ。いなければ相手に2ダメージ。' },
     { id: 'berserker', name: '溶岩の狂戦士', color: 'red', cost: 3, type: 'creature', power: 4, toughness: 2, keywords: ['trample'], text: '貫通' },
     { id: 'firerain', name: '炎の雨', color: 'red', cost: 4, type: 'spell', target: 'none', text: '相手のクリーチャー全体に2ダメージ。' },
+    { id: 'salamander', name: '火吹きトカゲ', color: 'red', cost: 2, type: 'creature', power: 2, toughness: 2, ab: { kind: 'breath', cost: 2, target: 'none', text: '向かいの相手クリーチャーに2ダメージ。' } },
+    { id: 'bladedancer', name: '炎の剣士', color: 'red', cost: 3, type: 'creature', power: 3, toughness: 2, ab: { kind: 'pump', cost: 1, target: 'none', text: 'このターン、パワー+2。' } },
     { id: 'dragon', name: '紅蓮の竜', color: 'red', cost: 5, type: 'creature', power: 5, toughness: 4, keywords: ['flying'], text: '飛行' },
     // ── 青：妨害・飛行 ──
     { id: 'sprite', name: '霧の精', color: 'blue', cost: 1, type: 'creature', power: 1, toughness: 2, keywords: ['flying'], text: '飛行' },
     { id: 'seal', name: '封じの言葉', color: 'blue', cost: 2, type: 'spell', target: 'none', text: 'このターン相手が出したカードを打ち消す。' },
     { id: 'tidecaller', name: '潮の術師', color: 'blue', cost: 2, type: 'creature', power: 2, toughness: 2, etb: 'bounceFront', text: '登場時、向かいの相手クリーチャーを手札に戻す。' },
     { id: 'whirlpool', name: '渦潮', color: 'blue', cost: 3, type: 'spell', target: 'lane', text: '選んだレーンの相手クリーチャーを手札に戻す。' },
+    { id: 'scout', name: '風読みの斥候', color: 'blue', cost: 2, type: 'creature', power: 1, toughness: 3, keywords: ['flying'], text: '飛行', ab: { kind: 'move', cost: 1, target: 'adjacent', text: '隣の空いている自陣レーンへ移る。' } },
+    { id: 'tidesage', name: '潮見の賢者', color: 'blue', cost: 4, type: 'creature', power: 1, toughness: 4, ab: { kind: 'bounce', cost: 4, target: 'enemyLane', text: '選んだレーンの相手クリーチャーを手札に戻す。' } },
     { id: 'skywhale', name: '空鯨', color: 'blue', cost: 4, type: 'creature', power: 3, toughness: 5, keywords: ['flying'], text: '飛行' },
     { id: 'archmage', name: '嵐の大魔導', color: 'blue', cost: 5, type: 'creature', power: 3, toughness: 3, keywords: ['flying'], etb: 'discard', text: '飛行。登場時、相手の手札を1枚ランダムに捨てさせる。' },
     // ── 無色 ──
     { id: 'mercenary', name: '傭兵', color: 'none', cost: 2, type: 'creature', power: 2, toughness: 3, text: '' },
+    { id: 'slinger', name: '投石兵', color: 'none', cost: 2, type: 'creature', power: 1, toughness: 2, ab: { kind: 'shoot', cost: 2, target: 'enemyLane', text: '選んだレーンの相手クリーチャーに1ダメージ。' } },
     { id: 'golem', name: '石のゴーレム', color: 'none', cost: 3, type: 'creature', power: 3, toughness: 3, text: '' },
     { id: 'colossus', name: '鉄の巨兵', color: 'none', cost: 4, type: 'creature', power: 4, toughness: 4, text: '' },
+    { id: 'catapult', name: '攻城弩', color: 'none', cost: 4, type: 'creature', power: 0, toughness: 4, ab: { kind: 'siege', cost: 3, target: 'none', text: '相手に2ダメージ。' } },
   ];
+  for (const c of CARDS) {
+    if (c.ab) c.text = [c.text, `【${c.ab.cost}】${c.ab.text}`].filter(Boolean).join('。');
+  }
   const CARD = Object.fromEntries(CARDS.map((c) => [c.id, c]));
 
   // 地形は自陣側の各レーンに 1 つずつ置く。効果は基本的に自陣側にだけ働く
@@ -106,7 +117,49 @@
 
   function mana(state) { return state.turn; }
 
-  // move = { pass: true } | { card: id, lane: 0..2 | null }
+  // move = { card: id | null, lane: 0..2 | null, acts: [{ from: 自陣レーン, target: レーン | null }] }
+  // { pass: true } はカードも起動もしない手
+  function normalize(m) {
+    if (!m || m.pass) return { card: null, lane: null, acts: (m && m.acts) || [] };
+    return { card: m.card || null, lane: m.lane ?? null, acts: m.acts || [] };
+  }
+
+  function abTargets(ab, from) {
+    if (ab.target === 'enemyLane') return [0, 1, 2];
+    if (ab.target === 'adjacent') return [from - 1, from + 1].filter((l) => l >= 0 && l < 3);
+    return [null];
+  }
+
+  function moveCost(state, p, m) {
+    const pl = state.players[p];
+    let c = m.card ? costFor(pl.deck, m.card) : 0;
+    for (const a of m.acts) { const cr = pl.board[a.from]; if (cr && CARD[cr.id].ab) c += CARD[cr.id].ab.cost; }
+    return c;
+  }
+
+  // 手の正しさを調べる。問題なければ null、あれば理由
+  function checkMove(state, p, move) {
+    const m = normalize(move);
+    const pl = state.players[p];
+    if (m.card) {
+      const c = CARD[m.card];
+      if (!c || !pl.hand.includes(m.card)) return '手札にないカード';
+      const needLane = c.type === 'creature' || c.target === 'lane';
+      if (needLane ? !(m.lane >= 0 && m.lane < 3) : m.lane != null) return 'レーンの指定が不正';
+    }
+    const seen = new Set();
+    for (const a of m.acts) {
+      const cr = pl.board[a.from];
+      if (!cr || !CARD[cr.id].ab) return '起動能力のないクリーチャー';
+      if (seen.has(a.from)) return '同じクリーチャーは1ターンに1回まで';
+      seen.add(a.from);
+      if (!abTargets(CARD[cr.id].ab, a.from).includes(a.target ?? null)) return '起動能力の対象が不正';
+    }
+    if (moveCost(state, p, m) > mana(state)) return 'マナが足りない';
+    return null;
+  }
+
+  // カードの出し方だけを列挙する（起動能力は含まない）
   function legalMoves(state, p) {
     const pl = state.players[p];
     const moves = [{ pass: true }];
@@ -122,17 +175,14 @@
     return moves;
   }
 
-  function isLegal(state, p, move) {
-    if (move.pass) return true;
-    return legalMoves(state, p).some((m) => m.card === move.card && m.lane === move.lane);
-  }
+  function isLegal(state, p, move) { return checkMove(state, p, move) === null; }
 
   function has(cr, kw) { return (CARD[cr.id].keywords || []).includes(kw); }
 
   function powerOf(state, p, lane) {
     const cr = state.players[p].board[lane];
     if (!cr) return 0;
-    let pw = cr.power + state.buff[p];
+    let pw = cr.power + state.buff[p] + (cr.tmp || 0);
     if (state.players[p].terrains[lane] === 'volcano' && CARD[cr.id].color === 'red') pw += 1;
     return Math.max(0, pw);
   }
@@ -229,20 +279,30 @@
     const played = [null, null];
 
     // 1. 公開・コスト支払い（手札から取り除く）
+    const acts = [[], []];
     for (let p = 0; p < 2; p++) {
-      const m = moves[p];
-      if (!m || m.pass || !isLegal(state, p, m)) {
-        state.log.push(`${P[p].name}：パス`);
-        continue;
+      let m = normalize(moves[p]);
+      if (checkMove(state, p, m)) m = normalize(null);
+      if (m.card) {
+        P[p].hand.splice(P[p].hand.indexOf(m.card), 1);
+        played[p] = m;
+        if (m.lane != null) state._lanes.add(m.lane);
+        const where = m.lane != null ? `（${LANE_NAME[m.lane]}）` : '';
+        state.log.push(`${P[p].name}：${CARD[m.card].name}${where}`);
+      } else {
+        state.log.push(`${P[p].name}：カードなし`);
       }
-      const idx = P[p].hand.indexOf(m.card);
-      P[p].hand.splice(idx, 1);
-      played[p] = m;
-      if (m.lane != null) state._lanes.add(m.lane);
-      const where = m.lane != null ? `（${LANE_NAME[m.lane]}）` : '';
-      state.log.push(`${P[p].name}：${CARD[m.card].name}${where}`);
+      // 起動するクリーチャーは公開の時点で決まる。あとで入れ替わったり戻されたりしたら不発
+      for (const a of m.acts) {
+        const cr = P[p].board[a.from];
+        acts[p].push({ uid: cr.uid, id: cr.id, from: a.from, target: a.target ?? null });
+        state.log.push(`${P[p].name}：起動 ${CARD[cr.id].name}${a.target != null ? `→${LANE_NAME[a.target]}` : ''}`);
+      }
     }
-    state.revealed = played.map((m) => m && { card: m.card, lane: m.lane });
+    state.revealed = [0, 1].map((p) => ({
+      card: played[p] && played[p].card, lane: played[p] && played[p].lane,
+      acts: acts[p].map((a) => ({ id: a.id, from: a.from, target: a.target })),
+    }));
     step(state, '公開', true);
 
     // 2. 打ち消し（同時に処理。お互いに打ち消し合うこともある）
@@ -339,7 +399,65 @@
     reapDeaths(state);
     step(state, '撃破');
 
-    // 5. 戦闘（各レーンは互いに影響しないので、レーンごとに処理して見せる）
+    // 5. 起動能力（同時に処理する。ダメージ・手札戻し・強化を先に全部、そのあと移動）
+    const live = [];
+    for (let p = 0; p < 2; p++) {
+      for (const a of acts[p]) {
+        const lane = P[p].board.findIndex((cr) => cr && cr.uid === a.uid);
+        if (lane < 0) {
+          state.log.push(`${P[p].name}の${CARD[a.id].name}の起動は不発（場にいない）`);
+          step(state, `起動：${CARD[a.id].name}`);
+        } else live.push({ ...a, p, lane, cr: P[p].board[lane] });
+      }
+    }
+    for (const a of live.filter((x) => CARD[x.id].ab.kind !== 'move')) {
+      const o = 1 - a.p;
+      const ab = CARD[a.id].ab;
+      const name = CARD[a.id].name;
+      state._lanes.add(a.lane);
+      switch (ab.kind) {
+        case 'shoot':
+          if (P[o].board[a.target]) damageCreature(state, o, a.target, 1, name);
+          else state.log.push(`${name} → ${LANE_NAME[a.target]}レーンに相手がいなかった`);
+          state._lanes.add(a.target);
+          break;
+        case 'breath':
+          if (P[o].board[a.lane]) damageCreature(state, o, a.lane, 2, name);
+          else state.log.push(`${name} → 向かいに相手がいなかった`);
+          break;
+        case 'pump':
+          a.cr.tmp = (a.cr.tmp || 0) + 2;
+          mark(state, { p: a.p, l: a.lane, label: 'パワー+2' });
+          state.log.push(`${name} → このターン、パワー+2`);
+          break;
+        case 'bounce':
+          if (!bounce(state, o, a.target, name)) state.log.push(`${name} → ${LANE_NAME[a.target]}レーンに相手がいなかった`);
+          state._lanes.add(a.target);
+          break;
+        case 'siege':
+          damagePlayer(state, o, 2, null, name);
+          break;
+      }
+      step(state, `起動：${name}`, true);
+    }
+    for (const a of live.filter((x) => CARD[x.id].ab.kind === 'move')) {
+      const name = CARD[a.id].name;
+      const lane = P[a.p].board.indexOf(a.cr);
+      if (lane < 0) state.log.push(`${name} → 場にいないので移れなかった`);
+      else if (P[a.p].board[a.target]) state.log.push(`${name} → ${LANE_NAME[a.target]}レーンが埋まっていて移れなかった`);
+      else {
+        P[a.p].board[lane] = null;
+        P[a.p].board[a.target] = a.cr;
+        mark(state, { p: a.p, l: a.target, label: '移動' });
+        state.log.push(`${name} → ${LANE_NAME[a.target]}レーンへ移った`);
+      }
+      state._lanes.add(a.lane); state._lanes.add(a.target);
+      step(state, `起動：${name}`, true);
+    }
+    reapDeaths(state);
+    step(state, '撃破');
+
+    // 6. 戦闘（各レーンは互いに影響しないので、レーンごとに処理して見せる）
     for (let l = 0; l < 3; l++) {
       const creatureDmg = [0, 0];
       const playerDmg = [];
@@ -377,13 +495,14 @@
       }
     }
     state.buff = [0, 0];
+    for (const pl of P) for (const cr of pl.board) if (cr) cr.tmp = 0;
 
-    // 6. 勝敗判定
+    // 7. 勝敗判定
     const dead = P.map((pl) => pl.life <= 0);
     if (dead[0] || dead[1]) {
       finish(state, dead[0] && dead[1] ? 'どちらもライフが尽きた' : 'ライフが尽きた');
     } else if (state.turn >= MAX_TURN) {
-      finish(state, '5ターン終了');
+      finish(state, `${MAX_TURN}ターン終了`);
     } else {
       state.turn++;
     }
@@ -439,32 +558,51 @@
     return v;
   }
 
-  // 相手の手札は見ない。相手の一手は「パス」と「適当な 3/3 をどこかに出す」で見積もる
+  // 相手の手札は見ない。相手の一手は「何もしない」と「適当な 3/3 をどこかに出す」で見積もる
+  function simulate(state, p, m) {
+    const o = 1 - p;
+    let total = 0, n = 0;
+    for (const probe of [null, 0, 1, 2]) {
+      const s = clone(state);
+      let om = { pass: true };
+      if (probe != null) {
+        s.players[o].hand.push('golem');
+        om = { card: 'golem', lane: probe };
+        if (costFor(s.players[o].deck, 'golem') > s.turn) { s.turn = 3; }
+      }
+      resolveTurn(s, p === 0 ? [m, om] : [om, m]);
+      const w = probe == null ? 2 : 1;
+      total += evaluate(s, p) * w;
+      n += w;
+    }
+    return total / n;
+  }
+
   function cpuMove(state, p, rng) {
     rng = rng || Math.random;
-    const o = 1 - p;
-    const moves = legalMoves(state, p);
+    const pl = state.players[p];
+    const m0 = mana(state);
+    const canPlay = pl.hand.some((id) => costFor(pl.deck, id) <= m0);
+    // カードの候補ごとに、残りのマナで起動能力を良くなる限り足し、全体で一番いい手を選ぶ
     let best = null, bestV = -Infinity;
-    for (const m of moves) {
-      let total = 0, n = 0;
-      const guesses = [{ pass: true }, { probe: 0 }, { probe: 1 }, { probe: 2 }];
-      for (const g of guesses) {
-        const s = clone(state);
-        let om = { pass: true };
-        if (g.probe != null) {
-          // 仮想の 3/3 を相手の手札に入れて出させる
-          s.players[o].hand.push('golem');
-          s.turn = Math.max(s.turn, 3);
-          om = { card: 'golem', lane: g.probe };
+    for (const c of legalMoves(state, p)) {
+      let m = normalize(c);
+      let v = simulate(state, p, m);
+      for (let l = 0; l < 3; l++) {
+        const cr = pl.board[l];
+        if (!cr || !CARD[cr.id].ab) continue;
+        if (m.card && CARD[m.card].type === 'creature' && m.lane === l) continue; // 入れ替わるので不発
+        let pick = null, pickV = v + 0.3;
+        for (const t of abTargets(CARD[cr.id].ab, l)) {
+          const mm = { ...m, acts: [...m.acts, { from: l, target: t }] };
+          if (checkMove(state, p, mm)) continue;
+          const vv = simulate(state, p, mm);
+          if (vv > pickV) { pickV = vv; pick = mm; }
         }
-        const mm = { ...m };
-        resolveTurn(s, p === 0 ? [mm, om] : [om, mm]);
-        total += evaluate(s, p) * (g.pass ? 2 : 1);
-        n += g.pass ? 2 : 1;
+        if (pick) { m = pick; v = pickV; }
       }
-      let v = total / n;
-      if (m.pass) v -= 2 + state.turn; // 手札を余らせるのは損
-      if (m.card === 'seal') v += state.turn >= 3 ? 3 + state.turn : -5; // 読み
+      if (!m.card && canPlay) v -= 1.5; // 出せるのに出さないのは少し損
+      if (m.card === 'seal') v += state.turn >= 3 ? 3 + Math.min(state.turn, 6) : -5; // 読み
       v += rng() * 1.5;
       if (v > bestV) { bestV = v; best = m; }
     }
@@ -476,11 +614,13 @@
     { label: '青単・制圧', main: 'blue', sub: null, cards: ['sprite', 'tidecaller', 'seal', 'skywhale', 'archmage'], terrains: ['lake', 'tower', 'wall'] },
     { label: '赤青・火力', main: 'red', sub: 'blue', cards: ['imp', 'fireball', 'golem', 'seal', 'dragon'], terrains: ['volcano', 'altar', 'wall'] },
     { label: '青赤・空軍', main: 'blue', sub: 'red', cards: ['sprite', 'mercenary', 'whirlpool', 'skywhale', 'firerain'], terrains: ['swamp', 'lake', 'altar'] },
+    { label: '赤単・砲台', main: 'red', sub: null, cards: ['salamander', 'slinger', 'bladedancer', 'catapult', 'dragon'], terrains: ['volcano', 'wall', 'altar'] },
+    { label: '青単・遊撃', main: 'blue', sub: null, cards: ['scout', 'tidecaller', 'seal', 'tidesage', 'skywhale'], terrains: ['lake', 'tower', 'wall'] },
   ];
 
   const api = {
     MAX_TURN, START_LIFE, DECK_SIZE, COLOR_NAME, CARDS, CARD, TERRAINS, TERRAIN, LANE_NAME, CPU_DECKS,
-    validateDeck, costFor, newGame, legalMoves, isLegal, resolveTurn, powerOf, cpuMove, boardPower, view,
+    validateDeck, costFor, newGame, legalMoves, isLegal, checkMove, abTargets, moveCost, normalize, resolveTurn, powerOf, cpuMove, boardPower, view,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Engine = api;
