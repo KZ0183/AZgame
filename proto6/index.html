@@ -75,6 +75,20 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .pts i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--brass); }
 .pts i.on { background: var(--brass); }
 .pts small { font-size: 11px; color: var(--muted); margin-right: 4px; }
+.pts b { font-family: var(--f-display); font-size: 16px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.tower { position: relative; display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "nm bar num" "st st st"; align-items: center; column-gap: 8px; row-gap: 2px;
+  background: color-mix(in srgb, var(--brass) 8%, var(--panel)); border: 1px solid var(--line); border-radius: 10px; padding: 5px 10px; cursor: pointer; }
+.tower b { grid-area: nm; font-family: var(--f-display); font-size: 13px; }
+.tower .hpbar { grid-area: bar; height: 7px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+.tower .hpbar i { display: block; height: 100%; background: var(--good); }
+.tower .hpbar i.low { background: var(--bad); }
+.tower .tn { grid-area: num; font-family: var(--f-display); font-weight: 800; font-size: 16px; font-variant-numeric: tabular-nums; }
+.tower .tn small { font-size: 10px; color: var(--muted); }
+.tower .ts { grid-area: st; font-size: 10.5px; color: var(--muted); }
+.tower.open { border-color: var(--bad); }
+.tower.open .ts { color: var(--bad); font-weight: 700; }
+.tower.target { box-shadow: 0 0 0 2px var(--bad) inset; }
+.tower.focus { box-shadow: 0 0 0 1px var(--brass) inset; }
 .chip { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .manatxt b { color: var(--brass); font-family: var(--f-display); font-size: 16px; }
 .mana { display: inline-flex; align-items: center; gap: 8px; }
@@ -91,7 +105,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .pchip em.pc { font-style: normal; font-family: var(--f-display); font-weight: 800; color: var(--bg); background: var(--brass); border-radius: 99px; min-width: 16px; text-align: center; font-size: 11px; line-height: 16px; margin-left: -5px; }
 .pchip em.pc.gain { background: var(--good); }
 
-.field { flex: 1; min-height: 0; display: grid; grid-template-rows: 1fr 1fr auto 1fr 1fr; gap: 5px; }
+.field { flex: 1; min-height: 0; display: grid; grid-template-rows: auto 1fr 1fr auto 1fr 1fr auto; gap: 5px; }
 .frow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; position: relative; min-height: 0; }
 .divider { text-align: center; font-size: 10px; letter-spacing: .4em; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 2px; }
 .cell { border: 1px dashed var(--line); border-radius: 10px; position: relative; min-height: 0; display: flex; }
@@ -220,7 +234,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         <li>ヒーローは<b>前衛</b>か<b>後衛</b>に立つ。前衛向けの攻撃は、相手が後衛に下がっていたら<b>空振り</b>する。遠距離技は後衛にも届く</li>
         <li>毎ラウンド、各ヒーローが<b>今いる位置に合ったカード</b>を1枚生む。手札は最大5枚</li>
         <li>マナはラウンド数+2（最大6）。カード・通常攻撃（1）・移動（1）・<b>レベルアップ</b>（ヒーローごとに違う）に使う</li>
-        <li>相手のヒーローを倒すと1点。<b>2点先取</b>で勝ち。倒されたヒーローは次のラウンドにLv1で復活する</li>
+        <li>お互いの陣地に<b>タワー</b>（HP${E.TOWER_HP}）がある。<b>相手のタワーを壊したら勝ち</b>。タワーはいつでも狙えるが、相手の前衛に誰かいるあいだは、殴ると<b>${E.TOWER_COUNTER}ダメージの反撃</b>が来る</li>
+        <li>倒されたヒーローは次のラウンドにLv1で復活する。前衛が空になると、タワーは無防備になる</li>
       </ul></div>
       <div class="actions"><button class="btn" id="go">いまの二人で対戦</button><button class="btn ghost" id="pick">ヒーローを選ぶ</button></div>
     </section>`;
@@ -352,7 +367,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   function actionLabel(a) {
     const me = game.players[0];
     const hn = (k) => H[me.heroes[k].id].name;
-    const en = (k) => { const h = game.players[1].heroes[k]; return h.revealed ? H[h.id].name : '？？？'; };
+    const en = (k) => { if (k === E.TOWER) return 'タワー'; const h = game.players[1].heroes[k]; return h.revealed ? H[h.id].name : '？？？'; };
     if (a.type === 'move') return `${hn(a.k)}：移動`;
     if (a.type === 'level') return `${hn(a.k)}：レベルアップ`;
     if (a.type === 'attack') return `${hn(a.k)}：通常攻撃→${en(a.target)}`;
@@ -404,7 +419,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 
   // 予約の印：狙っている相手・支援する味方に付ける
   function planMarks() {
-    const marks = [[[], []], [[], []]];
+    const marks = [[[], [], []], [[], [], []]];
     const me = game.players[0];
     for (const a of plan) {
       if (a.type === 'attack') marks[1][a.target].push(`${H[me.heroes[a.k].id].name}の攻撃`);
@@ -453,10 +468,11 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   // 今選んでいるもので狙える相手
   function currentTargets() {
     if (phase !== 'plan') return [];
-    if (mode === 'attack' && focus) return [0, 1].filter((k) => !game.players[1].heroes[k].ko).map((k) => ({ p: 1, k }));
+    const foes = () => [0, 1].filter((k) => !game.players[1].heroes[k].ko).map((k) => ({ p: 1, k })).concat([{ p: 1, k: E.TOWER }]);
+    if (mode === 'attack' && focus) return foes();
     if (sel) {
       const def = C[game.players[0].hand.find((x) => x.uid === sel).id];
-      if (def.target === 'front' || def.target === 'any') return [0, 1].filter((k) => !game.players[1].heroes[k].ko).map((k) => ({ p: 1, k }));
+      if (def.target === 'front' || def.target === 'any') return foes();
       if (def.target === 'ally') return [0, 1].filter((k) => !game.players[0].heroes[k].ko).map((k) => ({ p: 0, k }));
     }
     return [];
@@ -493,7 +509,23 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       const here = posOf(p, k) === pos;
       return `<div class="cell">${here ? heroHTML(v, p, k, ctx) : `<span class="tag-row">${E.POS_NAME[pos]}</span>`}</div>`;
     }).join('')}</div>`;
-    const pts = (n) => `<span class="pts"><small>撃破</small>${[...Array(E.WIN_POINTS).keys()].map((i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
+    const pts = (p) => `<span class="pts"><small>タワー</small><b>${Math.max(0, v.players[p].tower)}</b></span>`;
+    // タワー：守られているか（計画中の自分側は、移動の予約を反映した見込み）
+    const towerHTML = (p) => {
+      const pl = v.players[p];
+      const defended = p === 0 && pv ? pv.heroes.some((h) => !h.ko && h.pos === 'front') : pl.defended;
+      const hits = ctx.hits.filter((x) => x.p === p && x.k === E.TOWER);
+      const tgt = ctx.targets.some((t) => t.p === p && t.k === E.TOWER);
+      const marks = ctx.marks ? ctx.marks[p][E.TOWER] : [];
+      const pct = Math.max(0, pl.tower / E.TOWER_HP * 100);
+      const isFocus = focus && focus.p === p && focus.k === E.TOWER;
+      return `<div class="tower${tgt ? ' target' : ''}${isFocus ? ' focus' : ''}${hits.some((x) => x.hit) ? ' shake' : ''}${defended ? '' : ' open'}" data-hero="${p}-${E.TOWER}" role="button" tabindex="0" aria-label="${p === 0 ? 'あなた' : '相手'}のタワー">
+        <b>${p === 0 ? 'あなた' : '相手'}のタワー</b>
+        <span class="hpbar"><i class="${pct <= 40 ? 'low' : ''}" style="width:${pct}%"></i></span>
+        <span class="tn">${Math.max(0, pl.tower)}<small>/${E.TOWER_HP}</small></span>
+        <span class="ts">${defended ? `守られている・殴ると反撃${E.TOWER_COUNTER}` : '無防備！'}</span>
+        ${marks.length ? `<span class="aim">${marks.map(esc).join('・')}</span>` : ''}${popsHTML(hits)}</div>`;
+    };
 
     let panel, buttons, topline;
     if (!planning) {
@@ -515,6 +547,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         const err = E.checkPlan(game, 0, plan.concat([{ type: 'card', uid: sel, target: t0 }]));
         d = `<b class="h">${esc(def.name)}</b>　<span class="muted">${H[def.hero].name}・${E.POS_NAME[def.pos]}【${def.cost}マナ】${def.kind === 'attack' ? '・攻撃' : def.kind === 'mana' ? '・マナ' : '・支援'}</span><br>${esc(def.text)}`
           + (err ? `<br><span style="color:var(--bad)">予約できない：${esc(err)}</span>` : def.target === 'none' ? '' : `<br><span class="muted">${def.target === 'ally' ? '緑に光っている味方' : '狙う相手'}をタップして予約</span>`);
+      } else if (focus && focus.k === E.TOWER) {
+        d = `<b class="h">${focus.p === 0 ? 'あなた' : '相手'}のタワー</b>　<span class="muted">HP ${Math.max(0, v.players[focus.p].tower)}/${E.TOWER_HP}</span><br>壊されたら負け。前衛向けの攻撃でも遠距離攻撃でも、いつでも狙える。前衛に誰かがいるあいだは守られていて、殴ったヒーローに${E.TOWER_COUNTER}ダメージの反撃が来る（攻撃1回ごと）。前衛が空なら無防備で、反撃はない。`;
       } else if (focus) {
         const h = v.players[focus.p].heroes[focus.k];
         const hidden = focus.p === 1 && !h.revealed;
@@ -553,15 +587,17 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const hand = me.hand;
     const manaTxt = planning ? manaGems(pv) : `ラウンド${v.round}・マナ${v.mana}`;
     app.innerHTML = `<section class="screen battle">
-      <div class="pbar"><span class="who">相手</span><span class="chip">手札 ${v.players[1].handCount}</span>${planning ? '<span class="chip">計画中</span>' : ''}${pts(v.players[1].points)}</div>
+      <div class="pbar"><span class="who">相手</span><span class="chip">手札 ${v.players[1].handCount}</span>${planning ? '<span class="chip">計画中</span>' : ''}${pts(1)}</div>
       ${topline}
       <div class="field">
         ${planning ? '' : bannerHTML(st ? st.ups : null)}
+        ${towerHTML(1)}
         ${rowHTML(1, 'back')}${rowHTML(1, 'front')}
         <div class="divider">R${v.round} / ${E.MAX_ROUND}</div>
         ${rowHTML(0, 'front')}${rowHTML(0, 'back')}
+        ${towerHTML(0)}
       </div>
-      <div class="pbar"><span class="who">あなた</span><span class="manatxt">${manaTxt}</span>${pts(v.players[0].points)}</div>
+      <div class="pbar"><span class="who">あなた</span><span class="manatxt">${manaTxt}</span>${pts(0)}</div>
       <div class="hand" style="grid-template-columns: repeat(${Math.max(5, hand.length)}, minmax(0, 1fr))">${[...Array(Math.max(5, hand.length)).keys()].map((i) => {
         const c = hand[i];
         if (!c) return '<div class="card empty" aria-hidden="true"></div>';

@@ -4,7 +4,12 @@
 (function (root) {
   'use strict';
 
-  const WIN_POINTS = 2;
+  // タワー：壊されたら負け。攻撃の対象としては番号 2 で表す
+  const TOWER = 2;
+  const TOWER_HP = 20;
+  const TOWER_COUNTER = 4; // 守られているタワーを殴ると、殴ったヒーローが受けるダメージ（攻撃1回ごと）
+  const TOWER_GUARD = 1; // 守られているタワーへのダメージの割り算（1 なら軽減なし、2 なら半分）
+  const REVIVE_WAIT = 0; // 倒されたヒーローが復活するまでに休むラウンド数
   const MAX_ROUND = 10;
   const HAND_MAX = 5;
   const MANA_MAX = 6;
@@ -88,7 +93,7 @@
     const state = {
       round: 0, mana: 0, over: false, winner: null, endReason: '', log: [], steps: [],
       players: teams.map((t, i) => ({
-        name: names[i], points: 0, hand: [],
+        name: names[i], tower: TOWER_HP, hand: [],
         heroes: t.heroes.map((id, k) => makeHero(id, (t.front ?? 0) === k ? 'front' : 'back')),
       })),
       nextUid() { return uid++; },
@@ -107,7 +112,7 @@
   function view(state) {
     return {
       round: state.round, mana: state.mana,
-      players: state.players.map((pl) => ({ points: pl.points, handCount: pl.hand.length, heroes: pl.heroes.map((h) => ({ ...h })) })),
+      players: state.players.map((pl, p) => ({ tower: pl.tower, defended: towerDefended(state, p), handCount: pl.hand.length, heroes: pl.heroes.map((h) => ({ ...h })) })),
     };
   }
 
@@ -145,7 +150,8 @@
     state.log.push(`ラウンド${state.round}（マナ${state.mana}）`);
     state.players.forEach((pl, p) => {
       pl.heroes.forEach((h, k) => {
-        if (h.ko) {
+        if (h.ko && h.wait > 0) { h.wait--; state.log.push(`${heroName(state, p, k)}は復活まであと${h.wait + 1}ラウンド`); }
+        else if (h.ko) {
           Object.assign(h, makeHero(h.id, 'back'), { revealed: h.revealed });
           mark(state, { p, k, label: '復活' });
           state.log.push(`${heroName(state, p, k)}が後衛で復活した（Lv1）`);
@@ -188,7 +194,7 @@
         if (h.pos !== 'front') return fail('前衛にいない');
         if (h.attacked) return fail('通常攻撃は1ラウンド1回');
         if (mana < 1) return fail('マナが足りない');
-        if (!(a.target === 0 || a.target === 1)) return fail('対象が不正');
+        if (![0, 1, TOWER].includes(a.target)) return fail('対象が不正');
         mana -= 1; h.attacked = true;
       } else if (a.type === 'card') {
         const c = pl.hand.find((x) => x.uid === a.uid);
@@ -199,7 +205,8 @@
         if (h.ko) return fail('倒れている');
         if (def.pos === 'front' && h.pos !== 'front') return fail(`${HERO[def.hero].name}が前衛にいない`);
         if (def.cost > mana) return fail('マナが足りない');
-        if (def.target === 'none' ? a.target != null : !(a.target === 0 || a.target === 1)) return fail('対象が不正');
+        const okT = def.target === 'ally' ? [0, 1] : [0, 1, TOWER];
+        if (def.target === 'none' ? a.target != null : !okT.includes(a.target)) return fail('対象が不正');
         used.add(a.uid);
         mana -= def.cost;
         mana += MANA_GAIN[def.id] || 0;
@@ -219,12 +226,12 @@
     for (let k = 0; k < 2; k++) {
       tryAdd({ type: 'move', k });
       tryAdd({ type: 'level', k });
-      for (const t of [0, 1]) tryAdd({ type: 'attack', k, target: t });
+      for (const t of [0, 1, TOWER]) tryAdd({ type: 'attack', k, target: t });
     }
     for (const c of pl.hand) {
       if (inPlan.has(c.uid)) continue;
       const def = CARD[c.id];
-      for (const t of def.target === 'none' ? [null] : [0, 1]) tryAdd({ type: 'card', uid: c.uid, target: t });
+      for (const t of def.target === 'none' ? [null] : def.target === 'ally' ? [0, 1] : [0, 1, TOWER]) tryAdd({ type: 'card', uid: c.uid, target: t });
     }
     return out;
   }
@@ -266,29 +273,56 @@
   function reap(state) {
     state.players.forEach((pl, p) => pl.heroes.forEach((h, k) => {
       if (h.ko || h.hp > 0) return;
-      h.ko = true; h.hp = 0; h.shield = 0; h.taunt = false;
+      h.ko = true; h.hp = 0; h.shield = 0; h.taunt = false; h.wait = REVIVE_WAIT;
       const lost = pl.hand.filter((c) => CARD[c.id].hero === h.id).length;
       pl.hand = pl.hand.filter((c) => CARD[c.id].hero !== h.id);
-      const o = 1 - p;
-      state.players[o].points++;
       mark(state, { p, k, label: '撃破' });
-      state.log.push(`${heroName(state, p, k)}は倒れた（${state.players[o].name}に1点）${lost ? `。手札の${HERO[h.id].name}のカード${lost}枚が消えた` : ''}`);
+      state.log.push(`${heroName(state, p, k)}は倒れた（次のラウンドにLv1で復活）${lost ? `。手札の${HERO[h.id].name}のカード${lost}枚が消えた` : ''}`);
     }));
-    if (state.players.some((pl) => pl.points >= WIN_POINTS)) finish(state, `${WIN_POINTS}点先取`);
+    if (state.players.some((pl) => pl.tower <= 0)) finish(state, 'タワー破壊');
+  }
+
+  // 前衛に立っているヒーローがいれば、タワーは守られている（殴られると反撃する）
+  function towerDefended(state, p) {
+    return state.players[p].heroes.some((h) => !h.ko && h.hp > 0 && h.pos === 'front');
+  }
+
+  // タワーを殴る。守られていれば、殴ったヒーロー（k）に反撃が来る
+  function hitTower(state, p, k, o, n, src) {
+    const pl = state.players[o];
+    const defended = towerDefended(state, o);
+    if (defended) n = Math.floor(n / TOWER_GUARD);
+    pl.tower -= n;
+    mark(state, { p: o, k: TOWER, n: -n, hit: true });
+    state.log.push(`${src} → ${pl.name}のタワーに${n}ダメージ${defended ? '' : '（無防備）'}`);
+    if (defended && k != null) {
+      state.log.push('タワーの反撃！');
+      damage(state, null, p, k, TOWER_COUNTER, 'タワーの反撃');
+    }
+    return TOWER;
   }
 
   // 攻撃が実際に当たる相手を決める。null なら空振り
-  // kind: front | any。挑発が最優先。front は相手が後衛にいたら空振り（敵の前衛が全員いなければ −1 で当たる）
+  // kind: front | any。挑発が最優先。タワーはいつでも狙える。
+  // front は相手が後衛にいたら空振り（後衛はタワーに守られている）。any（遠距離）は後衛にも当たる
   function resolveTarget(state, p, kind, k) {
     const o = 1 - p;
     const hs = state.players[o].heroes;
-    const taunt = [0, 1].find((x) => !hs[x].ko && hs[x].taunt);
-    if (taunt != null) return { k: taunt, mod: 0, why: '挑発に引きつけられた' };
+    const taunt = [0, 1].find((x) => !hs[x].ko && hs[x].hp > 0 && hs[x].taunt);
+    if (taunt != null) return { k: taunt, mod: 0, why: taunt !== k ? '挑発に引きつけられた' : null };
+    if (k === TOWER) return { k: TOWER, mod: 0 };
     const h = hs[k];
     if (h.ko || h.hp <= 0) return null;
     if (kind === 'any' || h.pos === 'front') return { k, mod: 0 };
-    const anyFront = [0, 1].some((x) => !hs[x].ko && hs[x].hp > 0 && hs[x].pos === 'front');
-    return anyFront ? null : { k, mod: -1 };
+    return null;
+  }
+
+  // 決まった相手（ヒーローかタワー）にダメージを与える。攻撃したヒーローは k
+  function strike(state, p, k, t, n, src) {
+    const o = 1 - p;
+    if (t.k === TOWER) return hitTower(state, p, k, o, n, src);
+    damage(state, p, o, t.k, n, src);
+    return t.k;
   }
 
   function canAct(state, p, k) { const h = state.players[p].heroes[k]; return !h.ko && h.hp > 0; }
@@ -302,11 +336,11 @@
       state.log.push(`${heroName(state, p, a.k)}の通常攻撃`);
       if (h.pos !== 'front') { state.log.push(`${nm}は前衛にいないので攻撃できなかった`); return; }
       const t = resolveTarget(state, p, 'front', a.target);
-      if (!t) { mark(state, { p: o, k: a.target, label: '空振り' }); state.log.push('空振り！（狙った相手がいない）'); return; }
+      if (!t) { mark(state, { p: o, k: a.target, label: '空振り' }); state.log.push('空振り！（狙った相手が前衛にいない）'); return; }
       if (t.why) state.log.push(t.why);
       const n = h.atk + h.focus + t.mod;
       h.focus = 0;
-      damage(state, p, o, t.k, Math.max(0, n), nm);
+      strike(state, p, a.k, t, Math.max(0, n), nm);
       return;
     }
     // カード
@@ -319,12 +353,11 @@
     const hit = (n, kind = 'attack') => {
       if (!canAct(state, p, k)) return;
       const t = resolveTarget(state, p, def.target, a.target);
-      if (!t) { mark(state, { p: o, k: a.target, label: '空振り' }); state.log.push('空振り！'); return null; }
+      if (!t) { mark(state, { p: o, k: a.target, label: '空振り' }); state.log.push('空振り！（狙った相手が前衛にいない）'); return null; }
       if (t.why) state.log.push(t.why);
       const bonus = kind === 'attack' ? h.focus : 0;
       if (kind === 'attack') h.focus = 0;
-      damage(state, p, o, t.k, Math.max(0, n + bonus + t.mod), def.name);
-      return t.k;
+      return strike(state, p, k, t, Math.max(0, n + bonus + t.mod), def.name);
     };
     const enemies = () => [0, 1].filter((x) => !state.players[o].heroes[x].ko && state.players[o].heroes[x].hp > 0);
     switch (def.id) {
@@ -369,7 +402,7 @@
       }
       case 'rg_backstab': {
         const t = resolveTarget(state, p, 'any', a.target);
-        const big = t && state.players[o].heroes[t.k].hp * 2 <= state.players[o].heroes[t.k].maxHp;
+        const big = t && t.k !== TOWER && state.players[o].heroes[t.k].hp * 2 <= state.players[o].heroes[t.k].maxHp;
         hit(big ? 6 : 3);
         break;
       }
@@ -469,15 +502,16 @@
     const P = state.players;
     state.over = true;
     const hp = (pl) => pl.heroes.reduce((s, h) => s + (h.ko ? 0 : Math.max(0, h.hp)), 0);
-    if (P[0].points !== P[1].points) {
-      state.winner = P[0].points > P[1].points ? 0 : 1;
-      state.endReason = `${reason}：${P[0].points}点 対 ${P[1].points}点`;
+    const tw = (pl) => Math.max(0, pl.tower);
+    if (P[0].tower !== P[1].tower) {
+      state.winner = P[0].tower > P[1].tower ? 0 : 1;
+      state.endReason = `${reason}：タワーの残りHP ${tw(P[0])} 対 ${tw(P[1])}`;
     } else if (hp(P[0]) !== hp(P[1])) {
       state.winner = hp(P[0]) > hp(P[1]) ? 0 : 1;
-      state.endReason = `${reason}：同点。残りHP ${hp(P[0])} 対 ${hp(P[1])}`;
+      state.endReason = `${reason}：タワーは同じ。ヒーローの残りHP ${hp(P[0])} 対 ${hp(P[1])}`;
     } else {
       state.winner = 'draw';
-      state.endReason = `${reason}：点数も残りHPも同じ`;
+      state.endReason = `${reason}：タワーもヒーローの残りHPも同じ`;
     }
   }
 
@@ -497,7 +531,9 @@
     const side = (q) => {
       const pl = s.players[q], opp = s.players[1 - q];
       const threat = opp.heroes.reduce((t, h) => t + (h.ko || h.pos !== 'front' ? 0 : h.atk + 3), 0) + 2;
-      let v = pl.points * 40 + Math.min(pl.hand.length, HAND_MAX - 2) * 0.4 - Math.max(0, pl.hand.length - (HAND_MAX - 2)) * 1.5;
+      let v = pl.tower * 3 + Math.min(pl.hand.length, HAND_MAX - 2) * 0.4 - Math.max(0, pl.hand.length - (HAND_MAX - 2)) * 1.5;
+      // タワーが無防備だと、次のラウンドに一方的に殴られる
+      if (!pl.heroes.some((h) => !h.ko && h.pos === 'front')) v -= threat * 1.5;
       pl.heroes.forEach((h) => {
         if (h.ko) { v -= 8; return; }
         v += h.hp + h.lv * 6;
@@ -514,9 +550,8 @@
     const plan = [];
     state.players[q].heroes.forEach((h, k) => {
       if (h.ko || h.pos !== 'front') return;
-      const ts = [0, 1].filter((t) => !state.players[1 - q].heroes[t].ko);
-      const front = ts.filter((t) => state.players[1 - q].heroes[t].pos === 'front');
-      plan.push({ type: 'attack', k, target: (front.length ? front : ts)[0] ?? 0 });
+      const front = [0, 1].filter((t) => !state.players[1 - q].heroes[t].ko && state.players[1 - q].heroes[t].pos === 'front');
+      plan.push({ type: 'attack', k, target: front.length ? front[0] : TOWER });
     });
     return plan;
   }
@@ -555,8 +590,8 @@
   ];
 
   const api = {
-    WIN_POINTS, MAX_ROUND, HAND_MAX, MANA_MAX, PLAN_SECONDS, HEROES, HERO, CARDS, CARD, POS_NAME, CPU_TEAMS, MANA_GAIN,
-    validateTeam, newGame, view, levelCost, previewPlan, checkPlan, candidates, resolveRound, cpuPlan, value,
+    TOWER, TOWER_HP, TOWER_COUNTER, MAX_ROUND, HAND_MAX, MANA_MAX, PLAN_SECONDS, HEROES, HERO, CARDS, CARD, POS_NAME, CPU_TEAMS, MANA_GAIN,
+    validateTeam, newGame, view, levelCost, towerDefended, previewPlan, checkPlan, candidates, resolveRound, cpuPlan, value,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Engine = api;
