@@ -164,6 +164,14 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .unit { cursor: pointer; }
 .unit.focus { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass) inset; }
 .unit .kw.ab { color: var(--brass); }
+.unit { position: relative; }
+.unit.tapped { opacity: .55; }
+.tags { position: absolute; top: -8px; right: 4px; display: flex; gap: 3px; }
+.tags i { font-style: normal; font-size: 10px; padding: 0 5px; border-radius: 4px; line-height: 16px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
+.tags i.t-atk { background: var(--red); border-color: var(--red); color: var(--bg); font-weight: 700; }
+.tags i.t-rest { color: var(--ink); }
+.pbar.turn-on { box-shadow: 0 0 0 1px var(--brass) inset; }
+.chip.trap { border-color: var(--blue); color: var(--blue); }
 .mini { border: 1px solid var(--brass); background: transparent; color: var(--brass); border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
 .mini.on { background: var(--brass); color: var(--bg); }
 .mini:disabled { border-color: var(--line); color: var(--muted); cursor: default; }
@@ -212,7 +220,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   const C = E.CARD;
   const app = document.getElementById('app');
   const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-  const KW = { flying: '飛行', trample: '貫通' };
+  const KW = { flying: '飛行', trample: '貫通', haste: '速攻' };
 
   const DEFAULT_DECK = { main: 'red', sub: null, cards: ['imp', 'fireball', 'berserker', 'colossus', 'dragon'], terrains: ['volcano', 'wall', 'altar'] };
   let deck = load() || structuredClone(DEFAULT_DECK);
@@ -244,12 +252,12 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       <div><h1>五枚決闘</h1><p class="tag muted">五枚のデッキで、盤面を制す。</p></div>
       <div class="rules">
         <ul>
-          <li>デッキは<b>5枚</b>。毎ターン<b>1枚まで</b>出せる。相手と<b>同時に</b>伏せて公開する</li>
-          <li>マナはターン数と同じ（1〜10）。副属性のカードはコスト+1</li>
-          <li>場のクリーチャーの<b>起動能力</b>にもマナを使える（1体1ターン1回）</li>
-          <li>クリーチャーは3つのレーンに置く。向かい合えば殴り合い、正面が空いていれば相手を直接殴る</li>
-          <li>飛行は飛行同士でしか止まらない。貫通は倒した余りが相手に届く</li>
-          <li>ライフ10。0にした方の勝ち。10ターンで決着しなければライフが多い方の勝ち</li>
+          <li>デッキは<b>5枚</b>。<b>交互に</b>ターンを行い、自分のターンにカードを<b>1枚まで</b>出せる</li>
+          <li>マナはラウンド数と同じ（1〜10）。副属性のカードはコスト+1。余ったマナは<b>起動能力</b>に使える</li>
+          <li>クリーチャーは3つのレーンに置き、出した次のターンから攻撃できる。正面に相手がいればブロックされ、いなければ相手に直接ダメージ</li>
+          <li><b>攻撃したクリーチャーは、相手の次のターンにブロックできない</b></li>
+          <li>飛行は飛行を持たないクリーチャーにはブロックされない。貫通は倒した余りが相手に届く</li>
+          <li>ライフ15。0にした方の勝ち。10ラウンドで決着しなければライフが多い方の勝ち</li>
         </ul>
       </div>
       <div class="actions">
@@ -317,34 +325,60 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   }
 
   // ── 対戦 ──
+  // play = { steps, i, after } のあいだは、記録された盤面を1段階ずつ見せる。終わったら after() を呼ぶ
+  let play = null;
+  // 自分のターンの入力：sel/lane = 出そうとしているカード、focus = 詳しく見ているクリーチャー、
+  // aiming = 対象を選んでいる起動能力のレーン、hold = 攻撃させないレーン
+  let focus = null, aiming = null, hold = new Set();
+
   function start() {
     if (E.validateDeck(deck).length) return build();
     cpuDeck = E.CPU_DECKS[Math.floor(Math.random() * E.CPU_DECKS.length)];
     game = E.newGame([structuredClone(deck), structuredClone(cpuDeck)], ['あなた', '相手']);
-    sel = null; lane = null; play = null; acts = []; focus = null; aiming = null;
+    resetInput();
+    const steps = game.steps.slice();
+    if (game.active === 1) steps.push(...cpuSide());
+    playback(steps, battle);
+  }
+
+  function resetInput() { sel = null; lane = null; focus = null; aiming = null; hold = new Set(); }
+
+  // CPU のターンを最後まで進め、そのあと自分のターン開始までの段階を返す
+  function cpuSide() {
+    const steps = E.cpuTurn(game, 1);
+    if (!game.over) { E.endTurn(game); steps.push(...game.steps); }
+    return steps;
+  }
+
+  function playback(steps, after) {
+    play = { steps, i: 0, after };
     battle();
   }
 
-  function needsLane(id) { const c = C[id]; return c.type === 'creature' || c.target === 'lane'; }
+  function advance() {
+    if (play.i < play.steps.length - 1) { play.i++; battle(); return; }
+    const after = play.after;
+    play = null;
+    if (game.over) { battle(); result(); } else after();
+  }
 
-  // play = { steps, i, moves, turn } のあいだは、記録された盤面を1段階ずつ見せる
-  let play = null;
-  // 入力中の状態：acts = 予約した起動、focus = タップして詳しく見ているクリーチャー、aiming = 対象を選んでいる起動
-  let acts = [], focus = null, aiming = null;
+  const needsLane = E.needsLane;
 
-  function unitHTML(u, p, l) {
+  function unitHTML(u, p, l, tags) {
     if (!u) return '';
     const c = C[u.id];
     const kws = (c.keywords || []).map((x) => KW[x]).join('・');
     const ab = c.ab ? `<span class="kw ab">【${c.ab.cost}】能力</span>` : '';
     const on = focus && focus.p === p && focus.l === l ? ' focus' : '';
-    return `<div class="unit c-${c.color}${on}" data-unit="${p}-${l}"><span class="n">${esc(c.name)}</span>${kws ? `<span class="kw">${kws}</span>` : ''}${ab}
+    const state = u.tapped ? ' tapped' : '';
+    return `<div class="unit c-${c.color}${on}${state}" data-unit="${p}-${l}">
+      ${tags.length ? `<span class="tags">${tags.map((t) => `<i class="t-${t[0]}">${t[1]}</i>`).join('')}</span>` : ''}
+      <span class="n">${esc(c.name)}</span>${kws ? `<span class="kw">${kws}</span>` : ''}${ab}
       <span class="s">${u.pw}/<span class="${u.hp < u.toughness ? 'hurt' : ''}">${u.hp}</span></span></div>`;
   }
-  function ghostHTML(id, tag) {
+  function ghostHTML(id) {
     const c = C[id];
-    const pt = c.type === 'creature' ? `${c.power}/${c.toughness}` : '';
-    return `<div class="unit ghost c-${c.color}"><span class="kw">${tag}</span><span class="n">${esc(c.name)}</span><span class="s">${pt}</span></div>`;
+    return `<div class="unit ghost c-${c.color}"><span class="kw">ここに出す</span><span class="n">${esc(c.name)}</span><span class="s">${c.power}/${c.toughness}</span></div>`;
   }
   function popHTML(h) {
     const txt = h.label || (h.n > 0 ? `+${h.n}` : `${h.n}`);
@@ -352,19 +386,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     return `<span class="pop ${cls}">${esc(txt)}</span>`;
   }
 
-  function myMove() { return { card: sel, lane: sel && needsLane(sel) ? lane : null, acts: acts.slice() }; }
-  function manaLeft() { return game.turn - E.moveCost(game, 0, { card: sel, acts }); }
-
-  // 起動の予約を盤面の札にする。札の位置：対象のあるものは対象のレーン、ないものは本人の上
-  function actMarks(marks, p, list, board) {
-    for (const a of list) {
-      const ab = C[a.id].ab;
-      const name = C[a.id].name;
-      if (ab.target === 'enemyLane') marks[1 - p][a.target].push(`${name}の狙い`);
-      else if (ab.target === 'adjacent') marks[p][a.target].push(`${name}の移動先`);
-      else marks[p][a.from].push('起動');
-    }
-  }
+  function myTurn() { return !play && !game.over && game.active === 0; }
+  function attackers() { return [0, 1, 2].filter((l) => E.canAttackWith(game, 0, l) && !hold.has(l)); }
 
   function battle() {
     const me = game.players[0], op = game.players[1];
@@ -374,63 +397,42 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const hitsAt = (p, l) => hits.filter((h) => h.p === p && h.l === l && !h.card).map(popHTML).join('');
     const lifeHits = (p) => hits.filter((h) => h.p === p && h.l == null && !h.card).map(popHTML).join('');
     const t = (p, l) => { const x = E.TERRAIN[game.players[p].terrains[l]]; return `<button class="terrain" data-tinfo="${l}" aria-label="${E.LANE_NAME[l]}レーンの地形：${x.name}">${x.icon} ${x.name}</button>`; };
-    const m = play ? play.turn : game.turn;
+    const mine = myTurn();
+    const atk = mine ? attackers() : [];
 
-    // まだ処理されていない「公開済み・予約済み」のものをレーンに重ねて見せる
-    const pend = [[null, null, null], [null, null, null]];
-    const marks = [[[], [], []], [[], [], []]];
-    let countered = [false, false];
-    if (play) {
-      const upto = play.steps.slice(0, play.i + 1);
-      const done = (title) => upto.some((s) => s.title.startsWith(title));
-      upto.forEach((s) => s.hits.forEach((h) => { if (h.label === '打ち消し') countered[h.p] = true; }));
-      play.moves.forEach((mv, p) => {
-        if (mv.card && !countered[p]) {
-          const c = C[mv.card];
-          if (c.type === 'creature' && !done('登場')) pend[p][mv.lane] = mv.card;
-          if (c.target === 'lane' && !done(`呪文：${c.name}`)) marks[1 - p][mv.lane].push(`${c.name}の狙い`);
-        }
-        actMarks(marks, p, mv.acts.filter((a) => !done(`起動：${C[a.id].name}`)));
-      });
-    } else {
-      if (sel && lane != null) {
-        if (C[sel].type === 'creature') pend[0][lane] = sel;
-        else marks[1][lane].push(`${C[sel].name}の狙い`);
-      }
-      actMarks(marks, 0, acts.map((a) => ({ ...a, id: me.board[a.from].id })));
-    }
+    // クリーチャーの状態札：出したばかり（攻撃できない）・休み（ブロックできない）・攻撃予定
+    const tagsFor = (u, p, l) => {
+      const out = [];
+      if (u.tapped) out.push(['rest', '休み']);
+      else if (u.sick && v.active === p) out.push(['sick', '出したて']);
+      if (mine && p === 0 && atk.includes(l)) out.push(['atk', '攻撃']);
+      return out;
+    };
+    const aims = [[[], [], []], [[], [], []]];
+    if (mine && sel && lane != null && C[sel].target === 'lane') aims[1][lane].push(`${C[sel].name}の狙い`);
     const slot = (p, l) => {
       const u = v.players[p].board[l];
-      let inner = u ? unitHTML(u, p, l) : '';
-      if (pend[p][l]) inner = u ? inner + `<span class="next">次：${esc(C[pend[p][l]].name)}</span>` : ghostHTML(pend[p][l], play ? '公開' : 'セット');
-      if (marks[p][l].length) inner += `<span class="aim">${esc(marks[p][l].join('・'))}</span>`;
+      let inner = u ? unitHTML(u, p, l, tagsFor(u, p, l)) : '';
+      if (mine && p === 0 && sel && lane === l && C[sel].type === 'creature') inner = u ? inner + `<span class="next">入れ替え：${esc(C[sel].name)}</span>` : ghostHTML(sel);
+      if (aims[p][l].length) inner += `<span class="aim">${esc(aims[p][l].join('・'))}</span>`;
       return `<div class="slot">${inner}${hitsAt(p, l)}</div>`;
     };
 
     const seen = me.seen.length ? `<div class="seen">見張り塔で見た手札：${me.seen.map((id) => esc(C[id].name)).join('、')}</div>` : '';
     const selCard = sel ? C[sel] : null;
-    const pickLane = !play && ((selCard && needsLane(sel) && lane == null) || aiming != null);
-    const hl = (l) => (st ? st.lanes.includes(l) : (aiming == null && selCard && needsLane(sel) && lane === l));
+    const pickLane = mine && ((selCard && needsLane(sel)) || aiming != null);
+    const hl = (l) => (st ? st.lanes.includes(l) : mine && sel && lane === l);
+    const trapChip = (p) => (v.players[p].trap ? '<span class="chip trap">罠：封じの言葉</span>' : '');
+    const whose = v.active === 0 ? 'あなたのターン' : '相手のターン';
 
-    let panel, buttons, manaTxt;
+    let panel, buttons;
     if (play) {
-      const chip = (p, who) => {
-        const mv = play.moves[p];
-        const parts = [];
-        if (mv.card) parts.push(`<span class="played c-${C[mv.card].color}${countered[p] ? ' void' : ''}">${who}：<b>${esc(C[mv.card].name)}</b>${mv.lane != null ? `→${E.LANE_NAME[mv.lane]}` : ''}</span>`);
-        for (const a of mv.acts) parts.push(`<span class="played c-${C[a.id].color}">${who}：起動 <b>${esc(C[a.id].name)}</b>${a.target != null ? `→${E.LANE_NAME[a.target]}` : ''}</span>`);
-        return parts.join('') || `<span class="played muted">${who}：何もしない</span>`;
-      };
       const last = play.i === play.steps.length - 1;
       panel = `<div class="detail step"><div class="row"><b>${esc(st.title)}</b><span class="muted" style="margin-left:auto">${play.i + 1} / ${play.steps.length}</span></div>
-        <div class="row">${chip(1, '相手')}${chip(0, 'あなた')}</div>
         ${st.lines.length ? `<ul class="log">${st.lines.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}</div>`;
       buttons = `<button class="btn ghost" id="skip" ${last ? 'disabled' : ''}>最後まで</button>
-        <button class="btn" id="next">${last ? (game.over ? '結果を見る' : `ターン${game.turn}へ`) : '次へ'}</button>`;
-      manaTxt = `マナ ${m}`;
+        <button class="btn" id="next">${last ? (game.over ? '結果を見る' : '続ける') : '次へ'}</button>`;
     } else {
-      const left = manaLeft();
-      manaTxt = `マナ 残り<b>${left}</b>/${m}`;
       let d;
       if (aiming != null) {
         const c = C[me.board[aiming].id];
@@ -439,39 +441,49 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       } else if (focus) {
         const u = v.players[focus.p].board[focus.l];
         const c = C[u.id];
-        d = `<b>${esc(c.name)}</b>　<span class="muted">${focus.p === 0 ? 'あなた' : '相手'}・${E.LANE_NAME[focus.l]}　${u.pw}/${u.hp}</span><br>${esc(c.text || 'バニラ（効果なし）')}`;
-        if (focus.p === 0 && c.ab) {
-          const queued = acts.find((a) => a.from === focus.l);
-          const replaced = sel && C[sel].type === 'creature' && lane === focus.l;
-          let btn;
-          if (queued) btn = `<button class="mini on" id="abtoggle">起動を取り消す</button>`;
-          else if (replaced) btn = `<button class="mini" disabled>新しいカードと入れ替わるので使えない</button>`;
-          else if (c.ab.cost > left) btn = `<button class="mini" disabled>マナが足りない（残り${left}）</button>`;
-          else btn = `<button class="mini" id="abtoggle">起動する【${c.ab.cost}マナ】</button>`;
-          d += `<div class="row" style="margin-top:6px">${btn}</div>`;
+        const status = [u.tapped ? '休み（攻撃・ブロックできない）' : '', u.sick && v.active === focus.p && !u.tapped ? '出したばかり（このターンは攻撃できない）' : ''].filter(Boolean).join('　');
+        d = `<b>${esc(c.name)}</b>　<span class="muted">${focus.p === 0 ? 'あなた' : '相手'}・${E.LANE_NAME[focus.l]}　${u.pw}/${u.hp}</span><br>${esc(c.text || 'バニラ（効果なし）')}${status ? `<br><span class="muted">${status}</span>` : ''}`;
+        if (focus.p === 0 && mine) {
+          const btns = [];
+          if (c.ab) {
+            const targets = E.abTargets(c.ab, focus.l);
+            const errs = targets.map((tg) => E.canActivate(game, 0, focus.l, tg));
+            const ok = errs.some((e) => !e);
+            btns.push(ok ? `<button class="mini" id="abgo">起動する【${c.ab.cost}マナ${c.ab.tap ? '・休む' : ''}】</button>`
+              : `<button class="mini" disabled>起動できない：${esc(errs.find(Boolean))}</button>`);
+          }
+          if (E.canAttackWith(game, 0, focus.l)) {
+            btns.push(hold.has(focus.l) ? `<button class="mini" id="atkt">攻撃させる</button>` : `<button class="mini on" id="atkt">攻撃する（タップで取りやめ）</button>`);
+          }
+          if (btns.length) d += `<div class="row" style="margin-top:6px">${btns.join('')}</div>`;
         }
       } else if (selCard) {
-        const where = selCard.type === 'creature' ? '自分のどのレーンに出すか' : '相手のどのレーンを狙うか';
+        const where = selCard.type === 'creature' ? 'どのレーンに出すか' : '相手のどのレーンを狙うか';
         d = `<b>${esc(selCard.name)}</b>　${esc(selCard.text || 'バニラ')}`
-          + (needsLane(sel) ? `<br>${lane == null ? `<span class="muted">${where}、戦場をタップ</span>` : `→ <b>${E.LANE_NAME[lane]}</b>レーンにセット中`}` : '');
+          + (needsLane(sel) ? `<br>${lane == null ? `<span class="muted">${where}、戦場をタップ</span>` : `→ <b>${E.LANE_NAME[lane]}</b>レーン`}` : '');
       } else {
-        d = '<span class="muted">手札をタップしてカードを選ぶ。場の自分のクリーチャーをタップすると起動能力を使える。</span>';
+        d = `<span class="muted">${game.cardPlayed ? 'カードはこのターン出した。' : '手札からカードを1枚まで出せる。'}クリーチャーをタップすると、起動能力や攻撃の取りやめができる。</span>`;
       }
       panel = `<div class="detail">${d}</div>`;
-      const ready = aiming == null && (!sel || !needsLane(sel) || lane != null);
-      const any = sel || acts.length;
-      buttons = `<button class="btn ghost" id="clear" ${any || focus ? '' : 'disabled'}>選び直す</button><button class="btn" id="ok" ${ready ? '' : 'disabled'}>${any ? '伏せて決定' : '何もせず決定'}</button>`;
+      if (sel) {
+        const ready = !needsLane(sel) || lane != null;
+        buttons = `<button class="btn ghost" id="cancel">やめる</button><button class="btn" id="playit" ${ready ? '' : 'disabled'}>${esc(selCard.name)}を出す</button>`;
+      } else {
+        buttons = `<button class="btn ghost" id="cancel" ${focus || aiming != null ? '' : 'disabled'}>選択を解除</button>
+          <button class="btn" id="end">${atk.length ? `${atk.length}体で攻撃して終了` : 'ターン終了'}</button>`;
+      }
     }
 
     app.innerHTML = `<section class="screen battle${play ? ' playing' : ''}">
-      <div class="pbar"><span class="who">相手</span><span class="chip ${op.deck.main}">主属性 ${E.COLOR_NAME[op.deck.main]}</span><span class="chip">手札 ${v.players[1].handCount}</span>
+      <div class="pbar${v.active === 1 ? ' turn-on' : ''}"><span class="who">相手</span><span class="chip ${op.deck.main}">主属性 ${E.COLOR_NAME[op.deck.main]}</span><span class="chip">手札 ${v.players[1].handCount}</span>${trapChip(1)}
         <span class="life"><small>ライフ</small>${v.players[1].life}${lifeHits(1)}</span></div>
       ${seen}
       <div class="field">${[0, 1, 2].map((l) => `<div class="lane${pickLane ? ' pick' : ''}${hl(l) ? ' target' : ''}" data-lane="${l}" role="button" tabindex="0" aria-label="${E.LANE_NAME[l]}レーン">
         ${t(1, l)}${slot(1, l)}<div class="mid">${E.LANE_NAME[l]}</div>${slot(0, l)}${t(0, l)}</div>`).join('')}</div>
-      <div class="pbar"><span class="who">あなた</span><span class="status"><span class="turn">ターン ${m}/${E.MAX_TURN}</span><span class="manatxt">${manaTxt}</span></span>
+      <div class="pbar${v.active === 0 ? ' turn-on' : ''}"><span class="who">あなた</span>${trapChip(0)}<span class="status"><span class="turn">R${v.round}/${E.MAX_ROUND}</span>
+        <span class="manatxt">${whose}${v.active === 0 ? `・マナ<b>${v.mana}</b>` : ''}</span></span>
         <span class="life"><small>ライフ</small>${v.players[0].life}${lifeHits(0)}</span></div>
-      ${play ? '' : `<div class="hand">${me.hand.map((id) => cardHTML(id, { cost: E.costFor(me.deck, id), pressed: sel === id, off: E.costFor(me.deck, id) > m, full: false, attrs: `data-hand="${id}"` })).join('') || '<span class="muted">手札なし</span>'}</div>`}
+      ${play ? '' : `<div class="hand">${me.hand.map((id) => cardHTML(id, { cost: E.costFor(me.deck, id), pressed: sel === id, off: !mine || !!E.canPlay(game, 0, id, needsLane(id) ? 0 : null), full: false, attrs: `data-hand="${id}"` })).join('') || '<span class="muted">手札なし</span>'}</div>`}
       ${panel}
       <div class="act">${buttons}</div>
     </section>`;
@@ -483,28 +495,24 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       document.getElementById('next').focus();
       return;
     }
+    if (!mine) return;
 
     const laneTap = (l) => {
       if (aiming != null) {
-        const ab = C[me.board[aiming].id].ab;
-        const ok = (ab.target === 'adjacent' ? [aiming - 1, aiming + 1] : [0, 1, 2]).includes(l);
-        if (!ok) return;
-        acts = acts.filter((a) => a.from !== aiming).concat({ from: aiming, target: l });
-        aiming = null;
-      } else if (sel && needsLane(sel)) {
-        lane = l;
-        if (C[sel].type === 'creature') acts = acts.filter((a) => a.from !== l); // 入れ替わるので予約は外す
-        focus = null;
-      } else return;
-      battle();
+        if (E.canActivate(game, 0, aiming, l)) return;
+        const from = aiming;
+        aiming = null; focus = null;
+        E.activate(game, 0, from, l);
+        playback(game.steps.slice(), battle);
+        return;
+      }
+      if (sel && needsLane(sel)) { lane = l; focus = null; battle(); }
     };
     app.querySelectorAll('[data-hand]').forEach((b) => b.onclick = () => {
       const id = b.dataset.hand;
-      if (E.costFor(me.deck, id) > game.turn) return;
+      if (E.canPlay(game, 0, id, needsLane(id) ? 0 : null)) return;
       aiming = null; focus = null;
-      if (sel === id) { sel = null; lane = null; }
-      else if (E.moveCost(game, 0, { card: id, acts }) > game.turn) { sel = id; lane = null; acts = []; } // マナが足りなければ起動の予約を外す
-      else { sel = id; lane = null; }
+      if (sel === id) { sel = null; lane = null; } else { sel = id; lane = null; }
       battle();
     });
     app.querySelectorAll('[data-lane]').forEach((el) => {
@@ -513,23 +521,41 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     });
     app.querySelectorAll('[data-unit]').forEach((el) => el.onclick = (e) => {
       const [p, l] = el.dataset.unit.split('-').map(Number);
-      if (aiming != null || (sel && needsLane(sel) && lane == null)) return; // レーン選択として扱う
+      if (aiming != null || (sel && needsLane(sel))) return; // レーン選択として扱う
       e.stopPropagation();
       focus = focus && focus.p === p && focus.l === l ? null : { p, l };
       battle();
     });
-    const tg = document.getElementById('abtoggle');
-    if (tg) tg.onclick = () => {
+    const on = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
+    on('abgo', () => {
       const l = focus.l;
-      if (acts.some((a) => a.from === l)) acts = acts.filter((a) => a.from !== l);
-      else if (C[me.board[l].id].ab.target === 'none') acts.push({ from: l, target: null });
-      else aiming = l;
-      battle();
-    };
-    const ac = document.getElementById('aimcancel');
-    if (ac) ac.onclick = () => { aiming = null; battle(); };
-    document.getElementById('clear').onclick = () => { sel = null; lane = null; acts = []; focus = null; aiming = null; battle(); };
-    document.getElementById('ok').onclick = () => commit(myMove());
+      const ab = C[me.board[l].id].ab;
+      if (ab.target === 'none') {
+        focus = null;
+        E.activate(game, 0, l, null);
+        playback(game.steps.slice(), battle);
+      } else { aiming = l; battle(); }
+    });
+    on('atkt', () => { hold.has(focus.l) ? hold.delete(focus.l) : hold.add(focus.l); battle(); });
+    on('aimcancel', () => { aiming = null; battle(); });
+    on('cancel', () => { sel = null; lane = null; focus = null; aiming = null; battle(); });
+    on('playit', () => {
+      const id = sel, l = needsLane(sel) ? lane : null;
+      sel = null; lane = null; focus = null;
+      E.playCard(game, 0, id, l);
+      playback(game.steps.slice(), battle);
+    });
+    on('end', () => {
+      E.attack(game, 0, attackers());
+      const steps = game.steps.slice();
+      resetInput();
+      if (!game.over) {
+        E.endTurn(game);
+        steps.push(...game.steps);
+        if (!game.over) steps.push(...cpuSide());
+      }
+      playback(steps, battle);
+    });
   }
 
   // 地形の説明シート。レーンの相手側・自分側を並べて見せる
@@ -553,21 +579,6 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     document.body.appendChild(o);
     o.querySelector('#tclose').onclick = close;
     o.querySelector('#tclose').focus();
-  }
-
-  function commit(myMove) {
-    const cpu = E.cpuMove(game, 1);
-    const turn = game.turn;
-    E.resolveTurn(game, [myMove, cpu]);
-    sel = null; lane = null; acts = []; focus = null; aiming = null;
-    play = { steps: game.steps, i: 0, moves: game.revealed, turn };
-    battle();
-  }
-
-  function advance() {
-    if (play.i < play.steps.length - 1) { play.i++; battle(); return; }
-    play = null;
-    if (game.over) { battle(); result(); } else battle();
   }
 
   function result() {
