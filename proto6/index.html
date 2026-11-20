@@ -88,7 +88,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .pts i.on { background: var(--brass); }
 .pts small { font-size: 11px; color: var(--muted); margin-right: 4px; }
 .pts b { font-family: var(--f-display); font-size: 16px; color: var(--ink); font-variant-numeric: tabular-nums; }
-.tower { position: relative; display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "nm bar num" "st st st"; align-items: center; column-gap: 8px; row-gap: 2px;
+.tower { position: relative; display: grid; grid-template-columns: auto 1fr auto auto; grid-template-areas: "nm bar num st"; align-items: center; column-gap: 8px;
   background: color-mix(in srgb, var(--brass) 8%, var(--panel)); border: 1px solid var(--line); border-radius: 10px; padding: 5px 10px; cursor: pointer; }
 .tower b { grid-area: nm; font-family: var(--f-display); font-size: 13px; }
 .tower .hpbar { grid-area: bar; height: 7px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
@@ -96,9 +96,9 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .tower .hpbar i.low { background: var(--bad); }
 .tower .tn { grid-area: num; font-family: var(--f-display); font-weight: 800; font-size: 16px; font-variant-numeric: tabular-nums; }
 .tower .tn small { font-size: 10px; color: var(--muted); }
-.tower .ts { grid-area: st; font-size: 10.5px; color: var(--muted); }
+.tower .ts { grid-area: st; font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; white-space: nowrap; }
 .tower.open { border-color: var(--bad); }
-.tower.open .ts { color: var(--bad); font-weight: 700; }
+.tower.open .ts { color: var(--bad); border-color: var(--bad); font-weight: 700; }
 .tower.target { box-shadow: 0 0 0 2px var(--bad) inset; }
 .tower.focus { box-shadow: 0 0 0 1px var(--brass) inset; }
 .chip { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
@@ -117,7 +117,14 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .pchip em.pc { font-style: normal; font-family: var(--f-display); font-weight: 800; color: var(--bg); background: var(--brass); border-radius: 99px; min-width: 16px; text-align: center; font-size: 11px; line-height: 16px; margin-left: -5px; }
 .pchip em.pc.gain { background: var(--good); }
 
-.field { flex: 1; min-height: 0; display: grid; grid-template-rows: auto 1fr 1fr auto 1fr 1fr auto; gap: 5px; }
+.field { flex: 1 0 auto; display: grid; grid-template-rows: auto minmax(56px, 1fr) minmax(56px, 1fr) auto minmax(56px, 1fr) minmax(56px, 1fr) auto; gap: 4px; }
+.screen.battle { gap: 6px; overflow-y: auto; }
+.screen.battle .detail:not(.playlog) { max-height: 6.5em; }
+.screen.battle .pbar { padding-block: 4px; }
+.screen.battle { gap: 4px; }
+.screen.battle .act .btn { padding-block: 10px; }
+.screen.battle .card { padding-block: 3px; }
+.timer .tl { display: flex; justify-content: space-between; gap: 8px; }
 .frow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; position: relative; min-height: 0; }
 .divider { text-align: center; font-size: 10px; letter-spacing: .4em; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 2px; }
 .cell { border: 1px dashed var(--line); border-radius: 10px; position: relative; min-height: 0; display: flex; }
@@ -182,7 +189,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .timer .bar i { display: block; height: 100%; background: var(--brass); transition: width .25s linear; }
 .timer.low .bar i { background: var(--bad); }
 .timer.low > span:first-child b { color: var(--bad); }
-.timer.idle { flex-direction: row; justify-content: space-between; color: var(--brass); font-weight: 700; min-height: 22px; align-items: center; }
+.timer.idle { flex-direction: row; justify-content: space-between; color: var(--brass); font-weight: 700; min-height: 22px; align-items: center; gap: 8px; }
+.timer.idle .muted { font-weight: 400; white-space: nowrap; }
 .pchips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 .pchip { font-size: 11px; border: 1px solid var(--brass); background: color-mix(in srgb, var(--brass) 14%, transparent); color: var(--ink); border-radius: 99px; padding: 2px 4px 2px 9px; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
 .pchip span { color: var(--brass); font-weight: 700; padding: 0 3px; }
@@ -542,7 +550,6 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       const here = posOf(p, k) === pos;
       return `<div class="cell">${here ? heroHTML(v, p, k, ctx) : `<span class="tag-row">${E.POS_NAME[pos]}</span>`}</div>`;
     }).join('')}</div>`;
-    const pts = (p) => `<span class="pts"><small>タワー</small><b>${Math.max(0, v.players[p].tower)}</b></span>`;
     // タワー：守られているか（計画中の自分側は、移動の予約を反映した見込み）
     const towerHTML = (p) => {
       const pl = v.players[p];
@@ -556,22 +563,22 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         <b>${p === 0 ? 'あなた' : '相手'}のタワー</b>
         <span class="hpbar"><i class="${pct <= 40 ? 'low' : ''}" style="width:${pct}%"></i></span>
         <span class="tn">${Math.max(0, pl.tower)}<small>/${E.TOWER_HP}</small></span>
-        <span class="ts">${defended ? `守られている・殴ると反撃${E.TOWER_COUNTER}` : '無防備！'}</span>
+        <span class="ts">${defended ? `守り・反撃${E.TOWER_COUNTER}` : '無防備！'}</span>
         ${marks.length ? `<span class="aim">${marks.map(esc).join('・')}</span>` : ''}${popsHTML(hits)}</div>`;
     };
 
     let panel, buttons, topline;
     if (!planning) {
       const lastStep = play && play.i === play.steps.length - 1;
-      topline = `<div class="timer idle"><span>${st ? esc(st.title) : ''}</span><span class="muted">${play ? `${play.i + 1} / ${play.steps.length}` : ''}</span></div>`;
+      topline = `<div class="timer idle"><span>${st ? esc(st.title) : ''}</span><span class="muted">${play ? `${play.i + 1} / ${play.steps.length}` : ''}　相手の手札${v.players[1].handCount}</span></div>`;
       panel = `<div class="detail playlog">${st && st.lines.length ? `<ul class="log" style="margin:0">${st.lines.map((s) => s.startsWith('※')
         ? `<li class="why"><span class="whytag">なぜ</span>${esc(s.slice(1))}</li>`
         : `<li>${esc(s)}</li>`).join('')}</ul>` : '<span class="muted">処理中…</span>'}</div>`;
       buttons = play ? `<button class="btn ghost" id="skip" ${lastStep ? 'disabled' : ''}>最後まで</button><button class="btn" id="next">${lastStep ? (game.over ? '結果を見る' : '計画へ') : '次へ'}</button>` : '';
     } else {
       topline = deadline
-        ? `<div class="timer" id="timer"><span>ラウンド${game.round}の計画　残り <b></b>秒</span><span class="bar"><i></i></span></div>`
-        : `<div class="timer idle"><span>ラウンド${game.round}の計画</span><span class="muted">時間制限なし</span></div>`;
+        ? `<div class="timer" id="timer"><span class="tl"><span>R${game.round}の計画　残り <b></b>秒</span><span class="muted">相手は計画中・手札${v.players[1].handCount}</span></span><span class="bar"><i></i></span></div>`
+        : `<div class="timer idle"><span>R${game.round}の計画（時間制限なし）</span><span class="muted">相手は計画中・手札${v.players[1].handCount}</span></div>`;
       const costs = planCosts();
       const chips = plan.map((a, i) => `<button class="pchip" data-rm="${i}" aria-label="${esc(actionLabel(a))}を取り消す"><em class="pc${costs[i] < 0 ? ' gain' : ''}">${costs[i] < 0 ? `+${-costs[i]}` : costs[i]}</em>${esc(actionLabel(a))}<span aria-hidden="true">×</span></button>`).join('');
       let d = '';
@@ -625,7 +632,6 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const hand = me.hand;
     const manaTxt = planning ? manaGems(pv) : `ラウンド${v.round}・マナ${v.mana}`;
     app.innerHTML = `<section class="screen battle">
-      <div class="pbar"><span class="who">相手</span><span class="chip">手札 ${v.players[1].handCount}</span>${planning ? '<span class="chip">計画中</span>' : ''}${pts(1)}</div>
       ${topline}
       <div class="field">
         ${planning ? '' : bannerHTML(st ? st.ups : null)}
@@ -635,7 +641,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         ${rowHTML(0, 'front')}${rowHTML(0, 'back')}
         ${towerHTML(0)}
       </div>
-      <div class="pbar"><span class="who">あなた</span><span class="manatxt">${manaTxt}</span>${pts(0)}</div>
+      <div class="pbar"><span class="who">あなた</span><span class="manatxt">${manaTxt}</span></div>
       <div class="hand" ${planning ? '' : 'hidden'} style="grid-template-columns: repeat(${Math.max(5, hand.length)}, minmax(0, 1fr))">${[...Array(Math.max(5, hand.length)).keys()].map((i) => {
         const c = hand[i];
         if (!c) return '<div class="card empty" aria-hidden="true"></div>';
