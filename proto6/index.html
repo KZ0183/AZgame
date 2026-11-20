@@ -24,6 +24,7 @@
   color-scheme: dark;
 }
 html, body { height: 100%; }
+[hidden] { display: none !important; }
 body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; -webkit-tap-highlight-color: transparent; }
 button { font: inherit; color: inherit; }
 button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
@@ -53,6 +54,13 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .rules { text-align: left; background: var(--panel); border-radius: 12px; padding: 12px 16px; line-height: 1.75; font-size: 13px; }
 .rules ul { margin: 0; padding-left: 1.2em; }
 .title .actions { display: grid; gap: 10px; }
+.settings { display: grid; gap: 8px; justify-items: start; background: var(--panel); border-radius: 12px; padding: 10px 14px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { background: transparent; border: 0; padding: 7px 12px; cursor: pointer; color: var(--muted); font-size: 12px; }
+.seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--brass); }
+.detail.playlog { max-height: 14em; min-height: 6.5em; }
+.log li.why { list-style: none; margin-left: -1.1em; padding: 4px 8px; margin-block: 3px; border-radius: 6px; background: color-mix(in srgb, var(--brass) 12%, transparent); color: var(--ink); }
+.whytag { display: inline-block; font-size: 10px; font-weight: 700; color: var(--bg); background: var(--brass); border-radius: 4px; padding: 0 5px; margin-right: 6px; letter-spacing: .1em; }
 
 /* 編成 */
 .pick-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
@@ -213,6 +221,13 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
   let team = load() || { heroes: ['sword', 'saint'], front: 0 };
+  // 設定：timer = 計画の秒数（0 は時間制限なし）、auto = 処理の再生を自動で進めるか
+  let settings = loadSettings();
+  function loadSettings() {
+    try { const v = JSON.parse(localStorage.getItem('futari-settings')); if (v && [0, 30, 60].includes(v.timer)) return { timer: v.timer, auto: v.auto !== false }; } catch {}
+    return { timer: 30, auto: true };
+  }
+  function saveSettings() { try { localStorage.setItem('futari-settings', JSON.stringify(settings)); } catch {} }
   let game = null, cpuTeam = null;
   // 入力中：sel = 選んだ手札の uid、focus = 詳しく見ているヒーロー {p,k}、mode = 'attack' のときは攻撃の対象選び
   let sel = null, focus = null, mode = null, last = null, play = null;
@@ -229,7 +244,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       <div><h1>ふたりの英雄</h1><p class="muted">二人を選び、前と後ろに立たせて戦う。</p></div>
       <div class="rules"><ul>
         <li>ヒーローを<b>2人</b>選ぶだけでデッキが決まる。各ヒーローは固有のカードを5枚持つ</li>
-        <li>毎ラウンド、お互いが<b>30秒で行動を予約</b>する。確定するか時間切れで、<b>同時に処理</b>される</li>
+        <li>毎ラウンド、お互いが<b>決められた時間で行動を予約</b>する（時間は下の設定で変えられる）。確定するか時間切れで、<b>同時に処理</b>される</li>
         <li>処理の順番：移動 → レベルアップ → 守り・支援 → 攻撃（<b>素早い順</b>）</li>
         <li>ヒーローは<b>前衛</b>か<b>後衛</b>に立つ。前衛向けの攻撃は、相手が後衛に下がっていたら<b>空振り</b>する。遠距離技は後衛にも届く</li>
         <li>毎ラウンド、各ヒーローが<b>今いる位置に合ったカード</b>を1枚生む。手札は最大5枚</li>
@@ -237,9 +252,15 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         <li>お互いの陣地に<b>タワー</b>（HP${E.TOWER_HP}）がある。<b>相手のタワーを壊したら勝ち</b>。タワーはいつでも狙えるが、相手の前衛に誰かいるあいだは、殴ると<b>${E.TOWER_COUNTER}ダメージの反撃</b>が来る</li>
         <li>倒されたヒーローは次のラウンドにLv1で復活する。前衛が空になると、タワーは無防備になる</li>
       </ul></div>
+      <div class="settings">
+        <div class="row"><span class="label">計画の時間</span><div class="seg">${[[30, '30秒'], [60, '60秒'], [0, 'なし']].map(([t, l]) => `<button data-timer="${t}" aria-pressed="${settings.timer === t}">${l}</button>`).join('')}</div></div>
+        <div class="row"><span class="label">処理の再生</span><div class="seg">${[[true, '自動で進む'], [false, '「次へ」で進む']].map(([a, l]) => `<button data-auto="${a}" aria-pressed="${settings.auto === a}">${l}</button>`).join('')}</div></div>
+      </div>
       <div class="actions"><button class="btn" id="go">いまの二人で対戦</button><button class="btn ghost" id="pick">ヒーローを選ぶ</button></div>
     </section>`;
     document.getElementById('go').onclick = start;
+    app.querySelectorAll('[data-timer]').forEach((b) => b.onclick = () => { settings.timer = +b.dataset.timer; saveSettings(); title(); });
+    app.querySelectorAll('[data-auto]').forEach((b) => b.onclick = () => { settings.auto = b.dataset.auto === 'true'; saveSettings(); title(); });
     document.getElementById('pick').onclick = pick;
   }
 
@@ -295,8 +316,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   function beginPlan() {
     stopTimers();
     phase = 'plan'; plan = []; sel = null; focus = null; mode = null;
-    deadline = Date.now() + E.PLAN_SECONDS * 1000;
-    tick = setInterval(() => {
+    deadline = settings.timer ? Date.now() + settings.timer * 1000 : 0;
+    if (deadline) tick = setInterval(() => {
       if (Date.now() >= deadline) { commit(); return; }
       const t = document.getElementById('timer');
       if (t) paintTimer(t);
@@ -308,7 +329,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const left = Math.max(0, deadline - Date.now());
     const sec = Math.ceil(left / 1000);
     el.querySelector('b').textContent = sec;
-    el.querySelector('i').style.width = `${left / (E.PLAN_SECONDS * 1000) * 100}%`;
+    el.querySelector('i').style.width = `${left / (settings.timer * 1000) * 100}%`;
     el.classList.toggle('low', sec <= 10);
   }
 
@@ -333,7 +354,9 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     for (const u of st.ups) if (u.p === 0 && u.uid != null) newUids.add(u.uid);
     battle();
     clearTimeout(autoTimer);
-    const wait = st.ups.length ? 2400 : st.title === '計画を公開' ? 2200 : st.title.startsWith('ラウンド') ? 1100 : 1300;
+    if (!settings.auto) return;
+    const whys = st.lines.filter((l) => l.startsWith('※')).length;
+    const wait = (st.ups.length ? 2400 : st.title === '計画を公開' ? 2200 : st.title.startsWith('ラウンド') ? 1100 : 1300) + whys * 1400;
     autoTimer = setTimeout(advance, wait);
   }
   function advance() {
@@ -348,7 +371,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     play.i = play.steps.length - 1;
     for (const s of play.steps) for (const u of s.ups) if (u.p === 0 && u.uid != null) newUids.add(u.uid);
     battle();
-    autoTimer = setTimeout(advance, 900);
+    if (settings.auto) autoTimer = setTimeout(advance, 900);
   }
 
   function popsHTML(list) {
@@ -531,10 +554,14 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     if (!planning) {
       const lastStep = play && play.i === play.steps.length - 1;
       topline = `<div class="timer idle"><span>${st ? esc(st.title) : ''}</span><span class="muted">${play ? `${play.i + 1} / ${play.steps.length}` : ''}</span></div>`;
-      panel = `<div class="detail">${st && st.lines.length ? `<ul class="log" style="margin:0">${st.lines.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>` : '<span class="muted">処理中…</span>'}</div>`;
+      panel = `<div class="detail playlog">${st && st.lines.length ? `<ul class="log" style="margin:0">${st.lines.map((s) => s.startsWith('※')
+        ? `<li class="why"><span class="whytag">なぜ</span>${esc(s.slice(1))}</li>`
+        : `<li>${esc(s)}</li>`).join('')}</ul>` : '<span class="muted">処理中…</span>'}</div>`;
       buttons = play ? `<button class="btn ghost" id="skip" ${lastStep ? 'disabled' : ''}>最後まで</button><button class="btn" id="next">${lastStep ? (game.over ? '結果を見る' : '計画へ') : '次へ'}</button>` : '';
     } else {
-      topline = `<div class="timer" id="timer"><span>ラウンド${game.round}の計画　残り <b></b>秒</span><span class="bar"><i></i></span></div>`;
+      topline = deadline
+        ? `<div class="timer" id="timer"><span>ラウンド${game.round}の計画　残り <b></b>秒</span><span class="bar"><i></i></span></div>`
+        : `<div class="timer idle"><span>ラウンド${game.round}の計画</span><span class="muted">時間制限なし</span></div>`;
       const costs = planCosts();
       const chips = plan.map((a, i) => `<button class="pchip" data-rm="${i}" aria-label="${esc(actionLabel(a))}を取り消す"><em class="pc${costs[i] < 0 ? ' gain' : ''}">${costs[i] < 0 ? `+${-costs[i]}` : costs[i]}</em>${esc(actionLabel(a))}<span aria-hidden="true">×</span></button>`).join('');
       let d = '';
@@ -598,7 +625,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         ${towerHTML(0)}
       </div>
       <div class="pbar"><span class="who">あなた</span><span class="manatxt">${manaTxt}</span>${pts(0)}</div>
-      <div class="hand" style="grid-template-columns: repeat(${Math.max(5, hand.length)}, minmax(0, 1fr))">${[...Array(Math.max(5, hand.length)).keys()].map((i) => {
+      <div class="hand" ${planning ? '' : 'hidden'} style="grid-template-columns: repeat(${Math.max(5, hand.length)}, minmax(0, 1fr))">${[...Array(Math.max(5, hand.length)).keys()].map((i) => {
         const c = hand[i];
         if (!c) return '<div class="card empty" aria-hidden="true"></div>';
         const def = C[c.id];

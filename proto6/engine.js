@@ -156,7 +156,7 @@
           mark(state, { p, k, label: '復活' });
           state.log.push(`${heroName(state, p, k)}が後衛で復活した（Lv1）`);
         }
-        h.shield = 0; h.taunt = false; h.undying = false; h.focus = 0;
+        h.shield = 0; h.taunt = false; h.undying = false; h.focus = 0; h.note = null;
       });
       for (let k = 0; k < 2; k++) generate(state, p, k);
     });
@@ -294,7 +294,11 @@
     if (defended) n = Math.floor(n / TOWER_GUARD);
     pl.tower -= n;
     mark(state, { p: o, k: TOWER, n: -n, hit: true });
-    state.log.push(`${src} → ${pl.name}のタワーに${n}ダメージ${defended ? '' : '（無防備）'}`);
+    const guards = pl.heroes.filter((h) => !h.ko && h.hp > 0 && h.pos === 'front').map((h) => HERO[h.id].name).join('と');
+    state.log.push(defended
+      ? `※${pl.name}の前衛に${guards}がいるので、タワーは守られている（殴ると反撃${TOWER_COUNTER}）`
+      : `※${pl.name}の前衛が空なので、タワーは無防備（反撃なし）`);
+    state.log.push(`${src} → ${pl.name}のタワーに${n}ダメージ`);
     if (defended && k != null) {
       state.log.push('タワーの反撃！');
       damage(state, null, p, k, TOWER_COUNTER, 'タワーの反撃');
@@ -309,12 +313,20 @@
     const o = 1 - p;
     const hs = state.players[o].heroes;
     const taunt = [0, 1].find((x) => !hs[x].ko && hs[x].hp > 0 && hs[x].taunt);
-    if (taunt != null) return { k: taunt, mod: 0, why: taunt !== k ? '挑発に引きつけられた' : null };
+    if (taunt != null) return { k: taunt, mod: 0, why: taunt !== k ? `※${HERO[hs[taunt].id].name}の挑発で、攻撃が引きつけられた` : null };
     if (k === TOWER) return { k: TOWER, mod: 0 };
     const h = hs[k];
     if (h.ko || h.hp <= 0) return null;
     if (kind === 'any' || h.pos === 'front') return { k, mod: 0 };
     return null;
+  }
+
+  // 空振りの理由
+  function whyMiss(state, p, k) {
+    const h = state.players[1 - p].heroes[k];
+    const nm = `${state.players[1 - p].name}の${HERO[h.id].name}`;
+    if (h.ko || h.hp <= 0) return `※狙った${nm}は、先に倒れていた`;
+    return `※狙った${nm}は後衛にいた${h.note ? `（${h.note}）` : ''}。後衛はタワーに守られていて、前衛向けの攻撃は届かない`;
   }
 
   // 決まった相手（ヒーローかタワー）にダメージを与える。攻撃したヒーローは k
@@ -334,9 +346,9 @@
       const h = pl.heroes[a.k];
       const nm = HERO[h.id].name;
       state.log.push(`${heroName(state, p, a.k)}の通常攻撃`);
-      if (h.pos !== 'front') { state.log.push(`${nm}は前衛にいないので攻撃できなかった`); return; }
+      if (h.pos !== 'front') { state.log.push(`${nm}は攻撃できなかった`, `※${nm}は前衛にいなかった${h.note ? `（${h.note}）` : ''}。通常攻撃は前衛からしかできない`); return; }
       const t = resolveTarget(state, p, 'front', a.target);
-      if (!t) { mark(state, { p: o, k: a.target, label: '空振り' }); state.log.push('空振り！（狙った相手が前衛にいない）'); return; }
+      if (!t) { mark(state, { p: o, k: a.target, label: '空振り' }); state.log.push('空振り！', whyMiss(state, p, a.target)); return; }
       if (t.why) state.log.push(t.why);
       const n = h.atk + h.focus + t.mod;
       h.focus = 0;
@@ -349,11 +361,11 @@
     const h = pl.heroes[k];
     h.revealed = true;
     state.log.push(`${heroName(state, p, k)}の「${def.name}」`);
-    if (def.pos === 'front' && h.pos !== 'front') { state.log.push('前衛にいないので使えなかった'); return; }
+    if (def.pos === 'front' && h.pos !== 'front') { state.log.push('使えなかった', `※${HERO[h.id].name}は前衛にいなかった${h.note ? `（${h.note}）` : ''}。「${def.name}」は前衛用のカード`); return; }
     const hit = (n, kind = 'attack') => {
       if (!canAct(state, p, k)) return;
       const t = resolveTarget(state, p, def.target, a.target);
-      if (!t) { mark(state, { p: o, k: a.target, label: '空振り' }); state.log.push('空振り！（狙った相手が前衛にいない）'); return null; }
+      if (!t) { mark(state, { p: o, k: a.target, label: '空振り' }); state.log.push('空振り！', whyMiss(state, p, a.target)); return null; }
       if (t.why) state.log.push(t.why);
       const bonus = kind === 'attack' ? h.focus : 0;
       if (kind === 'attack') h.focus = 0;
@@ -378,7 +390,7 @@
       case 'mg_bolt': hit(2, 'spell'); break;
       case 'mg_flame': {
         const fr = enemies().filter((x) => state.players[o].heroes[x].pos === 'front');
-        if (!fr.length) state.log.push('前衛に敵がいなかった');
+        if (!fr.length) state.log.push('誰にも当たらなかった', '※火炎は、その時点で前衛にいる敵にだけ当たる。前衛に敵がいなかった');
         for (const x of fr) damage(state, p, o, x, 3, def.name);
         break;
       }
@@ -388,7 +400,7 @@
       case 'rg_trip': {
         const tk = hit(1);
         const t = tk != null && state.players[o].heroes[tk];
-        if (t && !t.ko && t.pos === 'front') { t.pos = 'back'; mark(state, { p: o, k: tk, label: '後衛へ' }); state.log.push(`${heroName(state, o, tk)}は後衛に下げられた`); }
+        if (t && !t.ko && t.pos === 'front') { t.pos = 'back'; t.note = '足払いで下げられた'; mark(state, { p: o, k: tk, label: '後衛へ' }); state.log.push(`${heroName(state, o, tk)}は後衛に下げられた`); }
         break;
       }
       case 'rg_steal': {
@@ -445,6 +457,7 @@
     for (const a of both(acts).filter((x) => x.type === 'move')) {
       const h = P[a.p].heroes[a.k];
       h.pos = h.pos === 'front' ? 'back' : 'front';
+      h.note = `このラウンドに${POS_NAME[h.pos]}へ移った`;
       if (h.pos === 'front') h.revealed = true;
       mark(state, { p: a.p, k: a.k, label: POS_NAME[h.pos] + 'へ' });
       state.log.push(`${heroName(state, a.p, a.k)}が${POS_NAME[h.pos]}へ移った`);
@@ -474,14 +487,31 @@
     // 4. 攻撃（素早い順。同じ素早さのヒーローはまとめて処理し、倒れる判定はまとまりの最後に行う）
     const attacks = both(acts).filter((x) => x.type === 'attack' || (x.type === 'card' && CARD[x.id].kind === 'attack'));
     const speeds = [...new Set(attacks.map((a) => P[a.p].heroes[a.k].spd))].sort((x, y) => y - x);
+    if (attacks.length) {
+      const seen = new Set();
+      const order = [];
+      for (const spd of speeds) for (const a of attacks.filter((x) => P[x.p].heroes[x.k].spd === spd)) {
+        const key = `${a.p}-${a.k}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        order.push(`${P[a.p].name}の${HERO[P[a.p].heroes[a.k].id].name}(${spd})`);
+      }
+      state.log.push(`※攻撃は素早い順に処理する：${order.join(' → ')}`);
+      step(state, '攻撃の段階', true);
+    }
     for (const spd of speeds) {
       if (state.over) break;
-      for (const a of attacks.filter((x) => P[x.p].heroes[x.k].spd === spd)) {
+      const batch = attacks.filter((x) => P[x.p].heroes[x.k].spd === spd);
+      if (new Set(batch.map((a) => a.p)).size === 2) {
+        const names = [...new Set(batch.map((a) => `${P[a.p].name}の${HERO[P[a.p].heroes[a.k].id].name}`))].join('と');
+        state.log.push(`※${names}は素早さが同じ(${spd})なので同時に動く。倒れる判定は両方の行動のあとにまとめて行う`);
+      }
+      for (const a of batch) {
         if (state.over) break;
         const nm = HERO[P[a.p].heroes[a.k].id].name;
         const title = a.type === 'attack' ? `攻撃：${nm}` : `${nm}：${CARD[a.id].name}`;
         if (!canAct(state, a.p, a.k)) {
-          state.log.push(`${heroName(state, a.p, a.k)}は先に倒されていて、${a.type === 'attack' ? '攻撃' : `「${CARD[a.id].name}」`}できなかった`);
+          state.log.push(`${heroName(state, a.p, a.k)}は${a.type === 'attack' ? '攻撃' : `「${CARD[a.id].name}」`}できなかった`, `※より素早い攻撃で、先に倒れていた（素早さ${spd}）`);
           step(state, title, true);
           continue;
         }
