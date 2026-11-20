@@ -1,0 +1,740 @@
+<title>ふたりの英雄 対応版</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@700;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+/* 縦一画面。上から 相手の後衛・相手の前衛・境界・自分の前衛・自分の後衛。2列は2人のヒーロー */
+:root {
+  --bg: #1b2230;
+  --panel: #252f40;
+  --panel-2: #2f3a4e;
+  --line: #3d4a61;
+  --ink: #ede7d9;
+  --muted: #9ba5b6;
+  --brass: #d8b26a;
+  --bad: #e2694f;
+  --good: #7cc18a;
+  --h-red: #e2694f;
+  --h-gold: #e6c56f;
+  --h-grey: #b9b3a6;
+  --h-blue: #5ea3e8;
+  --h-green: #73c08d;
+  --f-display: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --f-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: inherit; }
+button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+#app {
+  height: 100%; max-width: 480px; margin: 0 auto; box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 10px;
+  display: flex; flex-direction: column;
+}
+.screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: balance; letter-spacing: .04em; }
+.btn { border: 1px solid var(--brass); background: var(--brass); color: var(--bg); font-weight: 700; border-radius: 10px; padding: 12px 16px; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--brass); }
+.btn:disabled { opacity: .4; cursor: default; }
+.mini { border: 1px solid var(--brass); background: transparent; color: var(--brass); border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+.mini.on { background: var(--brass); color: var(--bg); }
+.mini:disabled { border-color: var(--line); color: var(--muted); cursor: default; }
+.muted { color: var(--muted); }
+.label { font-size: 11px; letter-spacing: .12em; color: var(--muted); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.c-red { --hc: var(--h-red); } .c-gold { --hc: var(--h-gold); } .c-grey { --hc: var(--h-grey); } .c-blue { --hc: var(--h-blue); } .c-green { --hc: var(--h-green); }
+
+/* タイトル */
+.title { justify-content: center; text-align: center; gap: 18px; }
+.title h1 { font-size: 44px; color: var(--brass); }
+.rules { text-align: left; background: var(--panel); border-radius: 12px; padding: 12px 16px; line-height: 1.75; font-size: 13px; }
+.rules ul { margin: 0; padding-left: 1.2em; }
+.title .actions { display: grid; gap: 10px; }
+.settings { display: grid; gap: 8px; justify-items: start; background: var(--panel); border-radius: 12px; padding: 10px 14px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { background: transparent; border: 0; padding: 7px 12px; cursor: pointer; color: var(--muted); font-size: 12px; }
+.seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--brass); }
+.clists { display: grid; gap: 4px; margin-top: 6px; }
+.clist { font-size: 11.5px; line-height: 1.55; border-left: 2px solid var(--line); padding-left: 8px; }
+.clist .label { display: block; }
+.clist b { color: var(--brass); }
+.detail.playlog { max-height: 14em; min-height: 6.5em; }
+.rtag { display: inline-block; font-size: 9.5px; font-weight: 700; color: var(--bg); background: var(--h-blue); border-radius: 4px; padding: 0 4px; margin: 0 4px; vertical-align: 1px; }
+.card .new.resp { background: var(--h-blue); }
+.hero .nums { flex-wrap: nowrap; align-items: center; overflow: hidden; }
+.hero .nums > span { white-space: nowrap; }
+.hero .nums .flags { flex-wrap: nowrap; overflow: hidden; }
+.cell { min-height: 0; }
+.screen.battle .hero { padding: 4px 8px; gap: 2px; }
+.screen.battle .hero .nm b { font-size: 14px; line-height: 1.2; }
+/* 盤面は残りの高さを使う。ただしタワー2本・区切り・ヒーロー4段の最低限は確保する */
+.screen.battle .field { flex: 1 1 0; min-height: calc(36px * 2 + 18px + 56px * 4 + 4px * 6); }
+.responding .detail { max-height: 5.2em; }
+.screen.battle .detail.playlog { max-height: 9em; min-height: 5em; }
+.timer .tl > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .src { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.card .row { flex-wrap: nowrap; }
+.timer.respond > .tl > span:first-child { color: var(--bad); font-weight: 700; }
+.timer.respond .bar i { background: var(--bad); }
+.responding .card:not(.off):not(.empty) { box-shadow: 0 0 0 2px var(--h-blue); }
+.log li.why { list-style: none; margin-left: -1.1em; padding: 4px 8px; margin-block: 3px; border-radius: 6px; background: color-mix(in srgb, var(--brass) 12%, transparent); color: var(--ink); }
+.whytag { display: inline-block; font-size: 10px; font-weight: 700; color: var(--bg); background: var(--brass); border-radius: 4px; padding: 0 5px; margin-right: 6px; letter-spacing: .1em; }
+
+/* 編成 */
+.pick-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.hero-pick { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--hc); border-radius: 10px; padding: 10px 12px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.hero-pick[aria-pressed="true"] { border-color: var(--brass); border-left-color: var(--hc); box-shadow: 0 0 0 1px var(--brass) inset; background: var(--panel-2); }
+.hero-pick .hd { display: flex; align-items: baseline; gap: 8px; }
+.hero-pick .hd b { font-family: var(--f-display); font-size: 18px; }
+.hero-pick .st { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hero-pick .grow { font-size: 12px; }
+.hero-pick ul { margin: 0; padding-left: 1.1em; font-size: 11.5px; line-height: 1.6; color: var(--muted); }
+.hero-pick .order { margin-left: auto; font-size: 11px; color: var(--brass); }
+.foot { display: flex; gap: 8px; }
+.foot .btn { flex: 1; }
+
+/* 対戦 */
+.pbar { display: flex; align-items: center; gap: 8px; background: var(--panel); border-radius: 10px; padding: 7px 12px; }
+.pbar.turn-on { box-shadow: 0 0 0 1px var(--brass) inset; }
+.pbar .who { font-weight: 700; }
+.pts { display: inline-flex; gap: 3px; margin-left: auto; align-items: center; }
+.pts i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--brass); }
+.pts i.on { background: var(--brass); }
+.pts small { font-size: 11px; color: var(--muted); margin-right: 4px; }
+.pts b { font-family: var(--f-display); font-size: 16px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.tower { position: relative; display: grid; grid-template-columns: auto 1fr auto auto; grid-template-areas: "nm bar num st"; align-items: center; column-gap: 8px;
+  background: color-mix(in srgb, var(--brass) 8%, var(--panel)); border: 1px solid var(--line); border-radius: 10px; padding: 5px 10px; cursor: pointer; }
+.tower b { grid-area: nm; font-family: var(--f-display); font-size: 13px; }
+.tower .hpbar { grid-area: bar; height: 7px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+.tower .hpbar i { display: block; height: 100%; background: var(--good); }
+.tower .hpbar i.low { background: var(--bad); }
+.tower .tn { grid-area: num; font-family: var(--f-display); font-weight: 800; font-size: 16px; font-variant-numeric: tabular-nums; }
+.tower .tn small { font-size: 10px; color: var(--muted); }
+.tower .ts { grid-area: st; font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; white-space: nowrap; }
+.tower.open { border-color: var(--bad); }
+.tower.open .ts { color: var(--bad); border-color: var(--bad); font-weight: 700; }
+.tower.target { box-shadow: 0 0 0 2px var(--bad) inset; }
+.tower.focus { box-shadow: 0 0 0 1px var(--brass) inset; }
+.chip { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.manatxt b { color: var(--brass); font-family: var(--f-display); font-size: 16px; }
+.mana { display: inline-flex; align-items: center; gap: 8px; }
+.gems { display: inline-flex; gap: 5px; align-items: center; }
+.gem { width: 12px; height: 12px; transform: rotate(45deg); border: 1.5px solid var(--brass); border-radius: 2px; box-sizing: border-box; }
+.gem.on { background: var(--brass); box-shadow: 0 0 6px color-mix(in srgb, var(--brass) 60%, transparent); }
+.gem.pend { background: var(--bad); border-color: var(--bad); box-shadow: 0 0 6px color-mix(in srgb, var(--bad) 70%, transparent); animation: blink .8s ease-in-out infinite alternate; }
+.gem.used { border-color: var(--line); background: transparent; }
+.gem.bonus { border-style: dashed; }
+@keyframes blink { from { opacity: .45; } to { opacity: 1; } }
+.mnum { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mnum b { font-size: 18px; }
+.mnum small { color: var(--brass); margin-left: 2px; }
+.pchip em.pc { font-style: normal; font-family: var(--f-display); font-weight: 800; color: var(--bg); background: var(--brass); border-radius: 99px; min-width: 16px; text-align: center; font-size: 11px; line-height: 16px; margin-left: -5px; }
+.pchip em.pc.gain { background: var(--good); }
+
+.field { flex: 1 0 auto; display: grid; grid-template-rows: auto minmax(56px, 1fr) minmax(56px, 1fr) auto minmax(56px, 1fr) minmax(56px, 1fr) auto; gap: 4px; }
+.screen.battle { gap: 6px; overflow-y: auto; }
+.screen.battle .detail:not(.playlog) { max-height: 6.5em; }
+.screen.battle .pbar { padding-block: 4px; }
+.screen.battle { gap: 4px; }
+.screen.battle .act .btn { padding-block: 10px; }
+.screen.battle .card { padding-block: 3px; }
+.timer .tl { display: flex; justify-content: space-between; gap: 8px; }
+.frow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; position: relative; min-height: 0; }
+.divider { text-align: center; font-size: 10px; letter-spacing: .4em; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 2px; }
+.cell { border: 1px dashed var(--line); border-radius: 10px; position: relative; min-height: 0; display: flex; }
+.cell .tag-row { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--line); letter-spacing: .2em; }
+.hero {
+  flex: 1; min-width: 0; border-radius: 10px; border: 1px solid var(--line); border-top: 3px solid var(--hc);
+  background: var(--panel); padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; position: relative; box-sizing: border-box;
+}
+.hero.focus { border-color: var(--brass); border-top-color: var(--hc); box-shadow: 0 0 0 1px var(--brass) inset; }
+.hero.target { box-shadow: 0 0 0 2px var(--bad) inset; }
+.hero.target.ally { box-shadow: 0 0 0 2px var(--good) inset; }
+.hero.ko { opacity: .45; border-style: dashed; }
+.hero .nm { display: flex; align-items: baseline; gap: 6px; }
+.hero .nm b { font-family: var(--f-display); font-size: 15px; }
+.hero .nm .lv { font-size: 11px; color: var(--brass); }
+.hero .hpbar { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+.hero .hpbar i { display: block; height: 100%; background: var(--good); }
+.hero .hpbar i.low { background: var(--bad); }
+.hero .nums { display: flex; gap: 8px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.hero .nums b { color: var(--ink); font-size: 13px; }
+.hero .exp { font-size: 10px; color: var(--muted); }
+.hero .exp.awake { color: var(--brass); font-weight: 700; letter-spacing: .1em; }
+.hero .lv .stars { letter-spacing: 1px; }
+.lvcost { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lvcost b { color: var(--ink); font-size: 12px; }
+.lvcost.ready { color: var(--brass); font-weight: 700; animation: glow-t 1.2s ease-in-out infinite alternate; }
+.lvcost.ready b { color: var(--brass); }
+@keyframes glow-t { from { opacity: .75; } to { opacity: 1; text-shadow: 0 0 6px var(--brass); } }
+.mini.lvbtn:not(:disabled) { background: var(--brass); color: var(--bg); font-weight: 700; }
+.field { position: relative; }
+.lvups { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: color-mix(in srgb, var(--bg) 55%, transparent); border-radius: 12px; cursor: pointer; }
+.lvup { width: 86%; box-sizing: border-box; background: var(--panel); border: 2px solid var(--hc); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; animation: rise .45s cubic-bezier(.2, .9, .3, 1.3) both; box-shadow: 0 0 24px color-mix(in srgb, var(--hc) 45%, transparent); }
+.lvup .who { font-size: 12px; color: var(--muted); }
+.lvup .big { font-family: var(--f-display); font-weight: 800; font-size: 34px; color: var(--hc); line-height: 1.1; }
+.lvup .stars { color: var(--brass); letter-spacing: 3px; }
+.lvup .nc { font-size: 12px; line-height: 1.5; margin-top: 4px; }
+.lvup .nc b { color: var(--brass); }
+@keyframes rise { from { opacity: 0; transform: translateY(12px) scale(.9); } to { opacity: 1; transform: none; } }
+.card { position: relative; }
+.card .new { position: absolute; top: -7px; right: 3px; font-size: 9px; font-weight: 700; letter-spacing: .08em; background: var(--brass); color: var(--bg); border-radius: 4px; padding: 0 4px; line-height: 14px; }
+.hero .flags { display: flex; gap: 3px; flex-wrap: wrap; }
+.hero .flags i { font-style: normal; font-size: 10px; padding: 0 5px; border-radius: 4px; line-height: 15px; border: 1px solid var(--line); color: var(--muted); }
+.hero .flags i.hot { border-color: var(--brass); color: var(--brass); }
+.hero.hidden { border-top-color: var(--line); }
+.hero.hidden .q { font-family: var(--f-display); font-size: 22px; color: var(--muted); margin: auto; }
+
+.hand { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--hc); border-radius: 8px; padding: 5px 6px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.card[aria-pressed="true"] { border-color: var(--brass); border-top-color: var(--hc); background: var(--panel-2); box-shadow: 0 0 0 1px var(--brass) inset; }
+.card.off { opacity: .4; }
+.card .cost { font-family: var(--f-display); font-weight: 800; color: var(--brass); }
+.card b { font-size: 12px; line-height: 1.25; overflow-wrap: anywhere; }
+.card .src { font-size: 10px; color: var(--muted); }
+.card.empty { border-style: dashed; border-top: 1px dashed var(--line); cursor: default; background: transparent; }
+.detail { background: var(--panel); border-radius: 10px; padding: 8px 12px; font-size: 12px; line-height: 1.6; min-height: 3.4em; max-height: 9.5em; overflow-y: auto; }
+.detail b.h { color: var(--brass); }
+.detail .log { margin: 4px 0 0; padding-left: 1.1em; }
+.act { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+.timer { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.timer > span:first-child b { font-family: var(--f-display); font-size: 16px; color: var(--brass); }
+.timer .bar { height: 5px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+.timer .bar i { display: block; height: 100%; background: var(--brass); transition: width .25s linear; }
+.timer.low .bar i { background: var(--bad); }
+.timer.low > span:first-child b { color: var(--bad); }
+.timer.idle { flex-direction: row; justify-content: space-between; color: var(--brass); font-weight: 700; min-height: 22px; align-items: center; gap: 8px; }
+.timer.idle .muted { font-weight: 400; white-space: nowrap; }
+.pchips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.pchip { font-size: 11px; border: 1px solid var(--brass); background: color-mix(in srgb, var(--brass) 14%, transparent); color: var(--ink); border-radius: 99px; padding: 2px 4px 2px 9px; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+.pchip span { color: var(--brass); font-weight: 700; padding: 0 3px; }
+.card.booked { border-color: var(--brass); background: color-mix(in srgb, var(--brass) 10%, var(--panel)); }
+.hero .flags i.plan { border-color: var(--brass); color: var(--bg); background: var(--brass); }
+.hero .spd { margin-left: auto; font-size: 10px; color: var(--muted); }
+.aim { position: absolute; right: 4px; bottom: 4px; max-width: 70%; font-size: 10px; border-radius: 5px; padding: 1px 5px; background: var(--bad); color: var(--bg); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 1; }
+.shake { animation: shake .45s ease-in-out; }
+@keyframes shake { 0%, 100% { transform: none; } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
+.lunge-up { animation: lunge-up .5s ease-out; z-index: 3; }
+.lunge-down { animation: lunge-down .5s ease-out; z-index: 3; }
+@keyframes lunge-up { 0% { transform: none; } 35% { transform: translateY(-14px) scale(1.04); } 100% { transform: none; } }
+@keyframes lunge-down { 0% { transform: none; } 35% { transform: translateY(14px) scale(1.04); } 100% { transform: none; } }
+
+.pop { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-family: var(--f-display); font-weight: 800; font-size: 26px; pointer-events: none; text-shadow: 0 0 6px var(--bg), 0 0 2px var(--bg); animation: pop .4s ease-out both; white-space: nowrap; z-index: 2; }
+.pop.dmg { color: var(--bad); }
+.pop.heal { color: var(--good); }
+.pop.tag { font-family: var(--f-body); font-size: 12px; color: var(--bg); background: var(--brass); border-radius: 6px; padding: 2px 8px; text-shadow: none; }
+.pops { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; pointer-events: none; }
+.pops .pop { position: static; transform: none; }
+@keyframes pop { from { opacity: 0; scale: .5; } to { opacity: 1; scale: 1; } }
+
+.overlay { position: fixed; inset: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 82%, transparent); display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.sheet { width: 100%; max-width: 440px; max-height: 100%; overflow-y: auto; background: var(--panel); border: 1px solid var(--brass); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
+.result h2 { font-size: 36px; text-align: center; }
+.result h2.win { color: var(--brass); }
+.result h2.lose { color: var(--bad); }
+@media (prefers-reduced-motion: reduce) { .pop, .lvup, .lvcost.ready, .shake, .lunge-up, .lunge-down, .gem.pend { animation: none; } }
+</style>
+
+<div id="app"></div>
+
+<script src="engine.js"></script>
+<script>
+(() => {
+  const E = window.Engine;
+  const H = E.HERO, C = E.CARD;
+  const app = document.getElementById('app');
+  const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+  let team = load() || { heroes: ['sword', 'saint'], front: 0 };
+  // 設定：timer = 計画の秒数（0 は時間制限なし）、auto = 処理の再生を自動で進めるか
+  let settings = loadSettings();
+  function loadSettings() {
+    try { const v = JSON.parse(localStorage.getItem('futari-settings')); if (v && [0, 30, 60].includes(v.timer)) return { timer: v.timer, auto: v.auto !== false }; } catch {}
+    return { timer: 30, auto: true };
+  }
+  function saveSettings() { try { localStorage.setItem('futari-settings', JSON.stringify(settings)); } catch {} }
+  let game = null, cpuTeam = null;
+  // 入力中：sel = 選んだ手札の uid、focus = 詳しく見ているヒーロー {p,k}、mode = 'attack' のときは攻撃の対象選び
+  let sel = null, focus = null, mode = null, last = null, play = null;
+  // banner = 今見せているレベルアップ、newUids = レベルアップで得た手札（NEW 印）
+  let banner = null, bannerTimer = null;
+  const newUids = new Set();
+
+  function load() { try { const t = JSON.parse(localStorage.getItem('futari-team')); return t && !E.validateTeam(t).length ? t : null; } catch { return null; } }
+  function save() { try { localStorage.setItem('futari-team', JSON.stringify(team)); } catch {} }
+
+  // ── タイトル ──
+  function title() {
+    app.innerHTML = `<section class="screen title">
+      <div><h1>ふたりの英雄</h1><p class="muted">二人を選び、前と後ろに立たせて戦う。</p></div>
+      <div class="rules"><ul>
+        <li>ヒーローを<b>2人</b>選ぶだけでデッキが決まる。各ヒーローは固有のカードを3枚持つ</li>
+        <li><b>交互にターン</b>を行う。自分のターンには、カード・通常攻撃（1マナ）・移動（1マナ）を<b>1つずつ</b>行う</li>
+        <li>攻撃すると、相手は<b>「対応」カード</b>で割り込める（盾・回復・挑発・足払い）。対応への対応はない</li>
+        <li>マナは自分のターンの始めに回復する（ラウンド数+1、最大6）。<b>使わずに残したマナは、相手のターンの対応に使える</b></li>
+        <li>ヒーローは<b>前衛</b>か<b>後衛</b>に立つ。前衛向けの攻撃は後衛に届かない。遠距離技は後衛にも届く</li>
+        <li>自分のターンの始めに、各ヒーローが<b>今いる位置に合ったカード</b>を1枚生む。手札は最大5枚</li>
+        <li>お互いの陣地に<b>タワー</b>（HP${E.TOWER_HP}）がある。<b>相手のタワーを壊したら勝ち</b>。前衛に誰かいるあいだにタワーを殴ると、<b>${E.TOWER_COUNTER}ダメージの反撃</b>が来る</li>
+        <li>倒されたヒーローは、次の自分のターンに後衛で復活する</li>
+      </ul></div>
+      <div class="settings">
+        <div class="row"><span class="label">計画の時間</span><div class="seg">${[[30, '30秒'], [60, '60秒'], [0, 'なし']].map(([t, l]) => `<button data-timer="${t}" aria-pressed="${settings.timer === t}">${l}</button>`).join('')}</div></div>
+        <div class="row"><span class="label">処理の再生</span><div class="seg">${[[true, '自動で進む'], [false, '「次へ」で進む']].map(([a, l]) => `<button data-auto="${a}" aria-pressed="${settings.auto === a}">${l}</button>`).join('')}</div></div>
+      </div>
+      <div class="actions"><button class="btn" id="go">いまの二人で対戦</button><button class="btn ghost" id="pick">ヒーローを選ぶ</button></div>
+    </section>`;
+    document.getElementById('go').onclick = start;
+    app.querySelectorAll('[data-timer]').forEach((b) => b.onclick = () => { settings.timer = +b.dataset.timer; saveSettings(); title(); });
+    app.querySelectorAll('[data-auto]').forEach((b) => b.onclick = () => { settings.auto = b.dataset.auto === 'true'; saveSettings(); title(); });
+    document.getElementById('pick').onclick = pick;
+  }
+
+  // ── 編成 ──
+  const heroCards = (id) => H[id].cards;
+  // ヒーローのカード一覧（前衛用・後衛用に分けて）
+  const cardListHTML = (id) => ['front', 'back'].map((pos) => {
+    const cs = heroCards(id).filter((cid) => C[cid].pos === pos);
+    return cs.length ? `<div class="clist"><span class="label">${E.POS_NAME[pos]}で生まれる</span>${cs.map((cid) => { const c = C[cid]; return `<div><b>${esc(c.name)}</b>【${c.cost}】${c.resp ? '<span class="rtag">対応</span>' : ''}${esc(c.text)}</div>`; }).join('')}</div>` : '';
+  }).join('');
+  function heroInfo(id) {
+    const h = H[id];
+    const cards = heroCards(id).map((cid) => { const c = C[cid]; return `<li>${E.POS_NAME[c.pos]}【${c.cost}】<b>${esc(c.name)}</b>${c.resp ? '<span class="rtag">対応</span>' : ''}：${esc(c.text)}</li>`; }).join('');
+    return { h, cards };
+  }
+  function pick() {
+    const errs = E.validateTeam(team);
+    app.innerHTML = `<section class="screen">
+      <div class="row"><h2 style="font-size:24px">ヒーローを選ぶ</h2><span class="muted" style="margin-left:auto">${team.heroes.length} / 2</span></div>
+      <div class="pick-scroll">${E.HEROES.map((h) => {
+        const i = team.heroes.indexOf(h.id);
+        const { cards } = heroInfo(h.id);
+        return `<button class="hero-pick c-${h.color}" aria-pressed="${i >= 0}" data-hero="${h.id}">
+          <span class="hd"><b>${h.name}</b><span class="st">HP ${h.hp}・攻撃 ${h.atk}</span>${i >= 0 ? `<span class="order">${team.front === i ? '最初は前衛' : '最初は後衛'}</span>` : ''}</span>
+          <ul>${cards}</ul></button>`;
+      }).join('')}</div>
+      ${team.heroes.length === 2 ? `<div class="row"><span class="label">最初に前衛に立つ</span>${team.heroes.map((id, i) => `<button class="mini${team.front === i ? ' on' : ''}" data-front="${i}">${H[id].name}</button>`).join('')}</div>` : ''}
+      <div class="foot"><button class="btn ghost" id="back">戻る</button><button class="btn" id="go" ${errs.length ? 'disabled' : ''}>この二人で対戦</button></div>
+    </section>`;
+    app.querySelectorAll('[data-hero]').forEach((b) => b.onclick = () => {
+      const id = b.dataset.hero;
+      const y = app.querySelector('.pick-scroll').scrollTop;
+      if (team.heroes.includes(id)) team.heroes = team.heroes.filter((x) => x !== id);
+      else if (team.heroes.length < 2) team.heroes.push(id);
+      else team.heroes = [team.heroes[1], id];
+      if (team.front >= team.heroes.length) team.front = 0;
+      pick();
+      app.querySelector('.pick-scroll').scrollTop = y;
+    });
+    app.querySelectorAll('[data-front]').forEach((b) => b.onclick = () => { team.front = +b.dataset.front; pick(); });
+    document.getElementById('back').onclick = () => { if (!E.validateTeam(team).length) save(); title(); };
+    document.getElementById('go').onclick = () => { save(); start(); };
+  }
+
+  // ── 対戦 ──
+  // phase: 'mine' = 自分のターンの入力 / 'respond' = 相手の攻撃への対応を選んでいる / 'play' = 処理の再生 / 'wait' = 相手が考えている
+  let phase = 'play', deadline = 0, tick = null, autoTimer = null, waitTimer = null, myRemain = 0;
+  let rsel = null, rtarget = null; // 対応で選んだカードと対象
+  const RESPOND_SECONDS = 5;
+
+  function start() {
+    if (E.validateTeam(team).length) return pick();
+    cpuTeam = E.CPU_TEAMS[Math.floor(Math.random() * E.CPU_TEAMS.length)];
+    game = E.newGame([structuredClone(team), structuredClone(cpuTeam)], ['あなた', '相手']);
+    playback(game.steps.slice(), afterTurnStart);
+  }
+
+  function stopTimers() { clearInterval(tick); clearTimeout(autoTimer); clearTimeout(waitTimer); tick = null; autoTimer = null; waitTimer = null; }
+
+  // ターンが始まったあと：自分なら入力へ、相手なら CPU が動く
+  function afterTurnStart() {
+    if (game.over) { battle(); result(); return; }
+    if (game.active === 0) beginMine(); else cpuNext();
+  }
+
+  // ── 自分のターン ──
+  function beginMine() {
+    stopTimers();
+    phase = 'mine'; sel = null; focus = null; mode = null;
+    startClock(settings.timer, endMyTurn);
+    battle();
+  }
+  function startClock(sec, onEnd) {
+    clearInterval(tick);
+    deadline = sec ? Date.now() + sec * 1000 : 0;
+    if (!deadline) return;
+    const total = (phase === 'respond' ? RESPOND_SECONDS : settings.timer) * 1000;
+    tick = setInterval(() => {
+      if (Date.now() >= deadline) { clearInterval(tick); tick = null; deadline = 0; onEnd(); return; }
+      const t = document.getElementById('timer');
+      if (t) paintTimer(t, total);
+    }, 200);
+  }
+  function paintTimer(el, total) {
+    const left = Math.max(0, deadline - Date.now());
+    el.querySelector('b').textContent = Math.ceil(left / 1000);
+    el.querySelector('i').style.width = `${left / total * 100}%`;
+    el.classList.toggle('low', left <= (total > 6000 ? 10000 : 2000));
+  }
+
+  // 自分の行動。攻撃なら相手の対応（CPU は約1秒考えるふり）を待ってから処理する
+  function doMine(a) {
+    const r = E.act(game, 0, a);
+    if (r.error) return;
+    sel = null; mode = null; focus = null;
+    const steps = game.steps.slice();
+    myRemain = deadline ? deadline - Date.now() : 0; // 処理を見ているあいだはタイマーを止める
+    if (!r.waiting) { playback(steps, resumeMine); return; }
+    phase = 'wait';
+    playback(steps, () => {
+      phase = 'wait'; battle();
+      waitTimer = setTimeout(() => {
+        const resp = E.cpuResponse(game, 1);
+        E.respond(game, 1, resp);
+        playback(game.steps.slice(), resumeMine);
+      }, 900 + Math.random() * 500);
+    });
+  }
+  // 自分のターンに戻る（攻撃の処理で止めていたタイマーを再開）
+  function resumeMine() {
+    if (game.over) { battle(); result(); return; }
+    stopTimers();
+    phase = 'mine';
+    if (settings.timer) startClock(Math.max(1, myRemain / 1000), endMyTurn); else deadline = 0;
+    battle();
+  }
+  function endMyTurn() {
+    if (phase !== 'mine') return;
+    stopTimers(); deadline = 0;
+    const steps = E.endTurn(game).slice();
+    playback(steps, afterTurnStart);
+  }
+
+  // ── 相手のターン ──
+  function cpuNext() {
+    if (game.over) { battle(); result(); return; }
+    const a = E.cpuAction(game, 1);
+    if (!a) { playback(E.endTurn(game).slice(), afterTurnStart); return; }
+    const r = E.act(game, 1, a);
+    if (r.waiting) playback(game.steps.slice(), beginRespond);
+    else playback(game.steps.slice(), cpuNext);
+  }
+
+  // 相手の攻撃への対応：対応できるかどうかに関係なく、決まった時間だけ待つ
+  function beginRespond() {
+    stopTimers();
+    phase = 'respond'; rsel = null; rtarget = null; focus = null;
+    startClock(RESPOND_SECONDS, () => sendResponse(null));
+    battle();
+  }
+  function sendResponse(resp) {
+    if (phase !== 'respond') return;
+    stopTimers(); deadline = 0;
+    E.respond(game, 0, resp);
+    phase = 'play';
+    playback(game.steps.slice(), cpuNext);
+  }
+
+  // ── 再生 ──
+  function playback(steps, after) {
+    stopTimers();
+    if (phase !== 'wait') phase = 'play';
+    play = { steps, i: 0, after };
+    if (!steps.length) { play = null; after(); return; }
+    showStep();
+  }
+  function showStep() {
+    const st = play.steps[play.i];
+    battle();
+    clearTimeout(autoTimer);
+    if (!settings.auto) return;
+    const whys = st.lines.filter((l) => l.startsWith('※')).length;
+    const wait = (st.title.startsWith('攻撃の宣言') ? 1500 : st.title.endsWith('のターン') ? 1100 : 1300) + whys * 1400;
+    autoTimer = setTimeout(advance, wait);
+  }
+  function advance() {
+    clearTimeout(autoTimer);
+    if (!play) return;
+    if (play.i < play.steps.length - 1) { play.i++; showStep(); return; }
+    const after = play.after;
+    play = null;
+    if (game.over) { phase = 'play'; battle(); result(); return; }
+    after();
+  }
+  function skipAll() {
+    clearTimeout(autoTimer);
+    play.i = play.steps.length - 1;
+    battle();
+    if (settings.auto) autoTimer = setTimeout(advance, 700);
+  }
+
+  function popsHTML(list) {
+    if (!list.length) return '';
+    return `<span class="pops">${list.map((h) => {
+      const parts = [];
+      if (h.n != null && (h.n !== 0 || !h.label)) parts.push(`<span class="pop ${h.heal ? 'heal' : 'dmg'}">${h.heal ? '+' : ''}${h.n}</span>`);
+      if (h.label) parts.push(`<span class="pop tag">${esc(h.label)}</span>`);
+      return parts.join('');
+    }).join('')}</span>`;
+  }
+
+  function heroHTML(v, p, k, ctx) {
+    const h = v.players[p].heroes[k];
+    const def = H[h.id];
+    const hidden = p === 1 && !h.revealed && !game.over;
+    const hits = ctx.hits.filter((x) => x.p === p && x.k === k);
+    const shake = hits.some((x) => x.hit) ? ' shake' : '';
+    const acting = ctx.actor && ctx.actor.p === p && ctx.actor.k === k ? (p === 0 ? ' lunge-up' : ' lunge-down') : '';
+    const isFocus = focus && focus.p === p && focus.k === k;
+    const tgt = ctx.targets.some((t) => t.p === p && t.k === k);
+    const marks = ctx.marks[p][k];
+    const cls = `hero c-${def.color}${isFocus ? ' focus' : ''}${tgt ? ' target' + (p === 0 ? ' ally' : '') : ''}${h.ko ? ' ko' : ''}${hidden ? ' hidden' : ''}${shake}${acting}`;
+    const markHTML = marks.length ? `<span class="aim">${marks.map(esc).join('・')}</span>` : '';
+    if (hidden) return `<div class="${cls}" data-hero="${p}-${k}" role="button" tabindex="0" aria-label="正体不明の後衛"><span class="q">？？？</span>${markHTML}${popsHTML(hits)}</div>`;
+    const flags = [];
+    if (h.ko) flags.push(['', '倒れている']);
+    if (h.taunt) flags.push(['hot', '挑発']);
+    if (h.focus) flags.push(['hot', `次の攻撃+${h.focus}`]);
+    if (p === v.active && !h.ko) { if (h.attacked) flags.push(['', '攻撃済み']); if (h.moved) flags.push(['', '移動済み']); }
+    const pct = Math.max(0, h.hp / h.maxHp * 100);
+    return `<div class="${cls}" data-hero="${p}-${k}" role="button" tabindex="0" aria-label="${def.name}">
+      <span class="nm"><b>${def.name}</b><span class="spd">攻撃${h.atk}</span></span>
+      <span class="hpbar"><i class="${pct <= 50 ? 'low' : ''}" style="width:${pct}%"></i></span>
+      <span class="nums"><span>HP <b>${h.hp}</b>/${h.maxHp}</span>${h.shield ? `<span>盾 <b>${h.shield}</b></span>` : ''}${flags.length ? `<span class="flags">${flags.map((f) => `<i class="${f[0]}">${f[1]}</i>`).join('')}</span>` : ''}</span>
+      ${markHTML}${popsHTML(hits)}</div>`;
+  }
+
+  // 今選んでいるもので狙える相手
+  function currentTargets() {
+    const foes = () => [0, 1].filter((k) => !game.players[1].heroes[k].ko).map((k) => ({ p: 1, k })).concat([{ p: 1, k: E.TOWER }]);
+    const allies = () => [0, 1].filter((k) => !game.players[0].heroes[k].ko).map((k) => ({ p: 0, k }));
+    if (phase === 'respond' && rsel) {
+      const def = C[game.players[0].hand.find((x) => x.uid === rsel).id];
+      return def.target === 'ally' ? allies() : [];
+    }
+    if (phase !== 'mine') return [];
+    if (mode === 'attack' && focus) return foes();
+    if (sel) {
+      const def = C[game.players[0].hand.find((x) => x.uid === sel).id];
+      if (def.id === 'rg_trip') return [0, 1].filter((k) => !game.players[1].heroes[k].ko && game.players[1].heroes[k].pos === 'front').map((k) => ({ p: 1, k }));
+      if (def.target === 'front' || def.target === 'any') return foes();
+      if (def.target === 'ally') return allies();
+    }
+    return [];
+  }
+
+  // 保留中の攻撃（相手の宣言）を盤面の札にする
+  function pendingMarks() {
+    const marks = [[[], [], []], [[], [], []]];
+    const pd = game.pending;
+    if (!pd) return marks;
+    const nm = H[game.players[pd.p].heroes[pd.k].id].name;
+    const label = pd.type === 'card' ? `${nm}の${C[pd.id].name}` : `${nm}の攻撃`;
+    if (pd.target != null) marks[1 - pd.p][pd.target].push(label);
+    else if (pd.type === 'card' && pd.id === 'mg_flame') [0, 1].forEach((k) => { if (game.players[1 - pd.p].heroes[k].pos === 'front') marks[1 - pd.p][k].push(label); });
+    return marks;
+  }
+
+  function manaGems(n, label) {
+    return `<span class="mana" aria-label="${label} ${n}"><span class="gems">${[...Array(Math.max(n, 0)).keys()].map(() => '<i class="gem on"></i>').join('') || '<i class="gem used"></i>'}</span><span class="mnum"><b>${n}</b>${label ? `<small>${label}</small>` : ''}</span></span>`;
+  }
+
+  function battle() {
+    const st = play ? play.steps[play.i] : null;
+    const v = st ? st.view : E.view(game);
+    const me = game.players[0];
+    const ctx = { hits: st ? st.hits : [], actor: st ? st.actor : null, targets: currentTargets(), marks: phase === 'respond' || phase === 'wait' ? pendingMarks() : [[[], [], []], [[], [], []]] };
+
+    const rowHTML = (p, pos) => `<div class="frow">${[0, 1].map((k) => {
+      const here = v.players[p].heroes[k].pos === pos;
+      return `<div class="cell">${here ? heroHTML(v, p, k, ctx) : `<span class="tag-row">${E.POS_NAME[pos]}</span>`}</div>`;
+    }).join('')}</div>`;
+    const towerHTML = (p) => {
+      const pl = v.players[p];
+      const hits = ctx.hits.filter((x) => x.p === p && x.k === E.TOWER);
+      const tgt = ctx.targets.some((t) => t.p === p && t.k === E.TOWER);
+      const marks = ctx.marks[p][E.TOWER];
+      const pct = Math.max(0, pl.tower / E.TOWER_HP * 100);
+      const isFocus = focus && focus.p === p && focus.k === E.TOWER;
+      return `<div class="tower${tgt ? ' target' : ''}${isFocus ? ' focus' : ''}${hits.some((x) => x.hit) ? ' shake' : ''}${pl.defended ? '' : ' open'}" data-hero="${p}-${E.TOWER}" role="button" tabindex="0" aria-label="${p === 0 ? 'あなた' : '相手'}のタワー">
+        <b>${p === 0 ? 'あなた' : '相手'}のタワー</b>
+        <span class="hpbar"><i class="${pct <= 40 ? 'low' : ''}" style="width:${pct}%"></i></span>
+        <span class="tn">${Math.max(0, pl.tower)}<small>/${E.TOWER_HP}</small></span>
+        <span class="ts">${pl.defended ? `守り・反撃${E.TOWER_COUNTER}` : '無防備！'}</span>
+        ${marks.length ? `<span class="aim">${marks.map(esc).join('・')}</span>` : ''}${popsHTML(hits)}</div>`;
+    };
+
+    let topline, panel, buttons;
+    const oppMana = `相手のマナ${v.players[1].mana}・手札${v.players[1].handCount}`;
+    if (phase === 'respond') {
+      topline = `<div class="timer respond" id="timer"><span class="tl"><span>相手の攻撃！ 対応する？ 残り <b></b>秒</span></span><span class="bar"><i></i></span></div>`;
+      const pd = game.pending;
+      const atk = game.players[1].heroes[pd.k];
+      const what = pd.type === 'card' ? `「${C[pd.id].name}」：${C[pd.id].text}` : `通常攻撃（${atk.atk + atk.focus}ダメージ）`;
+      const toName = pd.target == null ? '' : pd.target === E.TOWER ? 'あなたのタワー' : `あなたの${H[me.heroes[pd.target].id].name}`;
+      let d = `<b class="h">相手の${H[atk.id].name}</b>${toName ? ` → <b>${toName}</b>` : ''}<br>${esc(what)}`;
+      const opts = E.responses(game, 0);
+      if (rsel) {
+        const def = C[me.hand.find((x) => x.uid === rsel).id];
+        d += `<br><b class="h">${esc(def.name)}</b>【${def.cost}】${esc(def.text)}${def.target === 'ally' ? `<br><span class="muted">対象：${rtarget != null ? H[me.heroes[rtarget].id].name : '緑に光っている味方をタップ'}</span>` : ''}`;
+      } else {
+        d += `<br><span class="muted">${opts.length ? '光っている手札で対応できる。' : '対応できるカードがない（マナか、カードか、位置が足りない）。'}</span>`;
+      }
+      panel = `<div class="detail">${d}</div>`;
+      const ready = rsel && (C[me.hand.find((x) => x.uid === rsel).id].target !== 'ally' || rtarget != null);
+      buttons = `<button class="btn ghost" id="pass">対応しない</button><button class="btn" id="resp" ${ready ? '' : 'disabled'}>${rsel ? `「${esc(C[me.hand.find((x) => x.uid === rsel).id].name)}」で対応` : 'カードを選ぶ'}</button>`;
+    } else if (phase === 'mine') {
+      topline = deadline
+        ? `<div class="timer" id="timer"><span class="tl"><span>あなたのターン　残り <b></b>秒</span><span class="muted">${oppMana}</span></span><span class="bar"><i></i></span></div>`
+        : `<div class="timer idle"><span>あなたのターン</span><span class="muted">${oppMana}</span></div>`;
+      let d = '';
+      const selCard = sel && me.hand.find((x) => x.uid === sel);
+      if (mode === 'attack' && focus) {
+        const h = me.heroes[focus.k];
+        d = `<b class="h">${H[h.id].name}の通常攻撃</b>（1マナ・${h.atk + h.focus}ダメージ）<br><span class="muted">狙う相手をタップ。相手は対応してくるかもしれない。</span>`;
+      } else if (selCard) {
+        const def = C[selCard.id];
+        const err = def.target === 'none' ? E.checkCard(game, 0, def, null) : currentTargets().length ? null : E.checkCard(game, 0, def, 0);
+        d = `<b class="h">${esc(def.name)}</b>　<span class="muted">${H[def.hero].name}・${E.POS_NAME[def.pos]}【${def.cost}マナ】${def.attack ? '・攻撃' : ''}${def.resp ? '・対応' : ''}</span><br>${esc(def.text)}`
+          + (err ? `<br><span style="color:var(--bad)">使えない：${esc(err)}</span>` : def.target === 'none' ? '' : `<br><span class="muted">${def.target === 'ally' ? '緑に光っている味方' : '狙う相手'}をタップ</span>`);
+      } else if (focus) d = focusHTML(v);
+      else d = '<span class="muted">手札やヒーローをタップして行動する。攻撃すると、相手は対応してくるかもしれない。使わずに残したマナは、相手のターンの対応に使える。</span>';
+      panel = `<div class="detail">${d}</div>`;
+      const useBtn = (() => {
+        if (!selCard || C[selCard.id].target !== 'none') return null;
+        const err = E.checkCard(game, 0, C[selCard.id], null);
+        return `<button class="btn" id="use" ${err ? 'disabled' : ''}>「${esc(C[selCard.id].name)}」を使う</button>`;
+      })();
+      buttons = `<button class="btn ghost" id="cancel" ${sel || focus || mode ? '' : 'disabled'}>選択を解除</button>${useBtn || '<button class="btn" id="endturn">ターン終了</button>'}`;
+    } else {
+      const lastStep = play && play.i === play.steps.length - 1;
+      const title = phase === 'wait' && !play ? '相手が対応を考えている…' : st ? st.title : '';
+      topline = `<div class="timer idle"><span>${esc(title)}</span><span class="muted">${play ? `${play.i + 1}/${play.steps.length}　` : ''}${oppMana}</span></div>`;
+      panel = `<div class="detail playlog">${st && st.lines.length ? `<ul class="log" style="margin:0">${st.lines.map((s) => s.startsWith('※')
+        ? `<li class="why"><span class="whytag">なぜ</span>${esc(s.slice(1))}</li>`
+        : `<li>${esc(s)}</li>`).join('')}</ul>` : '<span class="muted">…</span>'}</div>`;
+      buttons = play ? `<button class="btn ghost" id="skip" ${lastStep ? 'disabled' : ''}>最後まで</button><button class="btn" id="next">${lastStep ? (game.over ? '結果を見る' : '続ける') : '次へ'}</button>` : '<button class="btn ghost" disabled>…</button><button class="btn" disabled>相手を待っている</button>';
+    }
+
+    const showHand = phase === 'mine' || phase === 'respond';
+    const respOK = new Set(phase === 'respond' ? E.responses(game, 0).map((r) => r.uid) : []);
+    const hand = me.hand;
+    const manaLabel = v.active === 0 ? '' : '対応用';
+    app.innerHTML = `<section class="screen battle${phase === 'respond' ? ' responding' : ''}">
+      ${topline}
+      <div class="field">
+        ${towerHTML(1)}
+        ${rowHTML(1, 'back')}${rowHTML(1, 'front')}
+        <div class="divider">R${v.round} / ${E.MAX_ROUND}　${v.active === 0 ? 'あなたのターン' : '相手のターン'}</div>
+        ${rowHTML(0, 'front')}${rowHTML(0, 'back')}
+        ${towerHTML(0)}
+      </div>
+      <div class="pbar${v.active === 0 ? ' turn-on' : ''}"><span class="who">あなた</span><span class="manatxt">${manaGems(v.players[0].mana, manaLabel)}</span></div>
+      <div class="hand" ${showHand ? '' : 'hidden'} style="grid-template-columns: repeat(${Math.max(5, hand.length)}, minmax(0, 1fr))">${[...Array(Math.max(5, hand.length)).keys()].map((i) => {
+        const c = hand[i];
+        if (!c) return '<div class="card empty" aria-hidden="true"></div>';
+        const def = C[c.id];
+        const usable = phase === 'mine' ? (def.target === 'none' ? !E.checkCard(game, 0, def, null) : [0, 1, E.TOWER].some((t) => !E.checkCard(game, 0, def, t))) : respOK.has(c.uid);
+        const pressed = phase === 'respond' ? rsel === c.uid : sel === c.uid;
+        return `<button class="card c-${H[def.hero].color}${usable ? '' : ' off'}" aria-pressed="${pressed}" data-card="${c.uid}">
+          <span class="row" style="gap:4px"><span class="cost">${def.cost}</span><span class="src">${H[def.hero].name}・${def.pos === 'front' ? '前' : '後'}</span></span><b>${esc(def.name)}</b>${def.resp ? '<span class="new resp">対応</span>' : ''}</button>`;
+      }).join('')}</div>
+      ${panel}
+      <div class="act">${buttons}</div>
+    </section>`;
+    const t = document.getElementById('timer');
+    if (t && deadline) paintTimer(t, (phase === 'respond' ? RESPOND_SECONDS : settings.timer) * 1000);
+    bind();
+  }
+
+  function focusHTML(v) {
+    if (focus.k === E.TOWER) return `<b class="h">${focus.p === 0 ? 'あなた' : '相手'}のタワー</b>　<span class="muted">HP ${Math.max(0, v.players[focus.p].tower)}/${E.TOWER_HP}</span><br>壊されたら負け。いつでも狙える。前衛に誰かがいるあいだは守られていて、殴ったヒーローに${E.TOWER_COUNTER}ダメージの反撃が来る。前衛が空なら無防備。`;
+    const h = v.players[focus.p].heroes[focus.k];
+    if (focus.p === 1 && !h.revealed) return '<b class="h">正体不明の後衛</b><br><span class="muted">前衛に出るか、行動するか、ダメージを受けると正体が分かる。</span>';
+    const def = H[h.id];
+    let d = `<b class="h">${def.name}</b>　<span class="muted">${focus.p === 0 ? 'あなた' : '相手'}・${E.POS_NAME[h.pos]}・攻撃${h.atk}</span>`;
+    if (focus.p === 0 && phase === 'mine' && !h.ko) {
+      const atkErr = h.pos === 'front' ? E.check(game, 0, { type: 'attack', k: focus.k, target: E.TOWER }) : '前衛にいない';
+      const mvErr = E.check(game, 0, { type: 'move', k: focus.k });
+      d += `<div class="row" style="margin:4px 0 2px">
+        ${h.pos === 'front' ? `<button class="mini" id="atk" ${atkErr ? 'disabled' : ''}>${atkErr ? `攻撃：${esc(atkErr)}` : '通常攻撃【1】'}</button>` : ''}
+        <button class="mini" id="mv" ${mvErr ? 'disabled' : ''}>${mvErr ? `移動：${esc(mvErr)}` : `${h.pos === 'front' ? '後衛' : '前衛'}へ移動【1】`}</button></div>`;
+    }
+    return d + `<div class="clists">${cardListHTML(h.id)}</div>`;
+  }
+
+  function bind() {
+    const on = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
+    on('next', advance);
+    on('skip', skipAll);
+    app.querySelectorAll('[data-hero]').forEach((el) => {
+      const tap = () => {
+        const [p, k] = el.dataset.hero.split('-').map(Number);
+        if (phase === 'respond') {
+          if (rsel && currentTargets().some((t) => t.p === p && t.k === k)) { rtarget = k; battle(); return; }
+          focus = focus && focus.p === p && focus.k === k ? null : { p, k };
+          battle();
+          return;
+        }
+        if (phase !== 'mine') return;
+        if (currentTargets().some((t) => t.p === p && t.k === k)) {
+          if (mode === 'attack') return doMine({ type: 'attack', k: focus.k, target: k });
+          if (sel) return doMine({ type: 'card', uid: sel, target: k });
+        }
+        sel = null; mode = null;
+        focus = focus && focus.p === p && focus.k === k ? null : { p, k };
+        battle();
+      };
+      el.onclick = tap;
+      el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tap(); } };
+    });
+    app.querySelectorAll('[data-card]').forEach((b) => b.onclick = () => {
+      const uid = +b.dataset.card;
+      if (phase === 'respond') {
+        if (!E.responses(game, 0).some((r) => r.uid === uid)) return;
+        rsel = rsel === uid ? null : uid;
+        // 盾や回復は、狙われた味方を初期の対象にする
+        const def = rsel && C[game.players[0].hand.find((x) => x.uid === rsel).id];
+        const pd = game.pending;
+        rtarget = def && def.target === 'ally' && (pd.target === 0 || pd.target === 1) && !game.players[0].heroes[pd.target].ko ? pd.target : null;
+        battle();
+        return;
+      }
+      if (phase !== 'mine') return;
+      mode = null; focus = null;
+      sel = sel === uid ? null : uid;
+      battle();
+    });
+    on('atk', () => { mode = 'attack'; battle(); });
+    on('mv', () => doMine({ type: 'move', k: focus.k }));
+    on('use', () => doMine({ type: 'card', uid: sel, target: null }));
+    on('cancel', () => { sel = null; focus = null; mode = null; battle(); });
+    on('endturn', endMyTurn);
+    on('pass', () => sendResponse(null));
+    on('resp', () => { if (rsel) sendResponse({ uid: rsel, target: rtarget }); });
+  }
+
+  function result() {
+    stopTimers();
+    const w = game.winner;
+    const head = w === 0 ? ['勝利', 'win'] : w === 1 ? ['敗北', 'lose'] : ['引き分け', ''];
+    const o = document.createElement('div');
+    o.className = 'overlay';
+    o.innerHTML = `<div class="sheet result" role="dialog" aria-modal="true">
+      <h2 class="${head[1]}">${head[0]}</h2>
+      <p class="muted" style="text-align:center;margin:0">${esc(game.endReason)}</p>
+      <p style="margin:0;text-align:center">相手の二人：<b>${esc(cpuTeam.label)}</b></p>
+      <div class="foot"><button class="btn ghost" id="repick">ヒーローを選ぶ</button><button class="btn" id="again">もう一度</button></div></div>`;
+    document.body.appendChild(o);
+    o.querySelector('#again').focus();
+    o.querySelector('#again').onclick = () => { o.remove(); start(); };
+    o.querySelector('#repick').onclick = () => { o.remove(); pick(); };
+  }
+
+  title();
+})();
+</script>
