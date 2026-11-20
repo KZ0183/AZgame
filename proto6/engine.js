@@ -14,6 +14,8 @@
   const HAND_MAX = 5;
   const MANA_MAX = 6;
   const PLAN_SECONDS = 30;
+  // レベルアップを使うか。false のあいだは、各ヒーローは Lv1 の 3 枚だけで戦う（ルールを減らす実験）
+  const LEVEL_UP = false;
 
   // lvCost: Lv2・Lv3 に上げるのに払うマナ。spd: 素早さ（攻撃の順番。大きいほど先）
   const HEROES = [
@@ -182,6 +184,7 @@
         if (mana < 1) return fail('マナが足りない');
         mana -= 1; h.moved = true; h.pos = h.pos === 'front' ? 'back' : 'front';
       } else if (a.type === 'level') {
+        if (!LEVEL_UP) return fail('レベルアップはなし');
         const h = heroes[a.k];
         if (!h || h.ko) return fail('倒れている');
         if (h.lv >= 3) return fail('もう覚醒している');
@@ -225,7 +228,7 @@
     const tryAdd = (a) => { if (!checkPlan(state, p, plan.concat([a]))) out.push(a); };
     for (let k = 0; k < 2; k++) {
       tryAdd({ type: 'move', k });
-      tryAdd({ type: 'level', k });
+      if (LEVEL_UP) tryAdd({ type: 'level', k });
       for (const t of [0, 1, TOWER]) tryAdd({ type: 'attack', k, target: t });
     }
     for (const c of pl.hand) {
@@ -621,7 +624,7 @@
 
   const api = {
     TOWER, TOWER_HP, TOWER_COUNTER, MAX_ROUND, HAND_MAX, MANA_MAX, PLAN_SECONDS, HEROES, HERO, CARDS, CARD, POS_NAME, CPU_TEAMS, MANA_GAIN,
-    validateTeam, newGame, view, levelCost, towerDefended, previewPlan, checkPlan, candidates, resolveRound, cpuPlan, value,
+    validateTeam, newGame, view, levelCost, towerDefended, LEVEL_UP, previewPlan, checkPlan, candidates, resolveRound, cpuPlan, value,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Engine = api;

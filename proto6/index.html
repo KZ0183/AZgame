@@ -58,6 +58,10 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .seg button { background: transparent; border: 0; padding: 7px 12px; cursor: pointer; color: var(--muted); font-size: 12px; }
 .seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--brass); }
+.clists { display: grid; gap: 4px; margin-top: 6px; }
+.clist { font-size: 11.5px; line-height: 1.55; border-left: 2px solid var(--line); padding-left: 8px; }
+.clist .label { display: block; }
+.clist b { color: var(--brass); }
 .detail.playlog { max-height: 14em; min-height: 6.5em; }
 .log li.why { list-style: none; margin-left: -1.1em; padding: 4px 8px; margin-block: 3px; border-radius: 6px; background: color-mix(in srgb, var(--brass) 12%, transparent); color: var(--ink); }
 .whytag { display: inline-block; font-size: 10px; font-weight: 700; color: var(--bg); background: var(--brass); border-radius: 4px; padding: 0 5px; margin-right: 6px; letter-spacing: .1em; }
@@ -243,12 +247,12 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     app.innerHTML = `<section class="screen title">
       <div><h1>ふたりの英雄</h1><p class="muted">二人を選び、前と後ろに立たせて戦う。</p></div>
       <div class="rules"><ul>
-        <li>ヒーローを<b>2人</b>選ぶだけでデッキが決まる。各ヒーローは固有のカードを5枚持つ</li>
+        <li>ヒーローを<b>2人</b>選ぶだけでデッキが決まる。各ヒーローは固有のカードを${E.LEVEL_UP ? '5' : '3'}枚持つ</li>
         <li>毎ラウンド、お互いが<b>決められた時間で行動を予約</b>する（時間は下の設定で変えられる）。確定するか時間切れで、<b>同時に処理</b>される</li>
-        <li>処理の順番：移動 → レベルアップ → 守り・支援 → 攻撃（<b>素早い順</b>）</li>
+        <li>処理の順番：移動 → ${E.LEVEL_UP ? 'レベルアップ → ' : ''}守り・支援 → 攻撃（<b>素早い順</b>）</li>
         <li>ヒーローは<b>前衛</b>か<b>後衛</b>に立つ。前衛向けの攻撃は、相手が後衛に下がっていたら<b>空振り</b>する。遠距離技は後衛にも届く</li>
         <li>毎ラウンド、各ヒーローが<b>今いる位置に合ったカード</b>を1枚生む。手札は最大5枚</li>
-        <li>マナはラウンド数+2（最大6）。カード・通常攻撃（1）・移動（1）・<b>レベルアップ</b>（ヒーローごとに違う）に使う</li>
+        <li>マナはラウンド数+2（最大6）。カード・通常攻撃（1）・移動（1）${E.LEVEL_UP ? '・<b>レベルアップ</b>（ヒーローごとに違う）' : ''}に使う</li>
         <li>お互いの陣地に<b>タワー</b>（HP${E.TOWER_HP}）がある。<b>相手のタワーを壊したら勝ち</b>。タワーはいつでも狙えるが、相手の前衛に誰かいるあいだは、殴ると<b>${E.TOWER_COUNTER}ダメージの反撃</b>が来る</li>
         <li>倒されたヒーローは次のラウンドにLv1で復活する。前衛が空になると、タワーは無防備になる</li>
       </ul></div>
@@ -265,9 +269,15 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   }
 
   // ── 編成 ──
+  const heroCards = (id) => H[id].cards.filter((cid) => E.LEVEL_UP || C[cid].lv === 1);
+  // ヒーローのカード一覧（前衛用・後衛用に分けて）
+  const cardListHTML = (id) => ['front', 'back'].map((pos) => {
+    const cs = heroCards(id).filter((cid) => C[cid].pos === pos);
+    return cs.length ? `<div class="clist"><span class="label">${E.POS_NAME[pos]}で生まれる</span>${cs.map((cid) => { const c = C[cid]; return `<div><b>${esc(c.name)}</b>【${c.cost}】${esc(c.text)}</div>`; }).join('')}</div>` : '';
+  }).join('');
   function heroInfo(id) {
     const h = H[id];
-    const cards = h.cards.map((cid) => { const c = C[cid]; return `<li>Lv${c.lv}・${E.POS_NAME[c.pos]}【${c.cost}】<b>${esc(c.name)}</b>：${esc(c.text)}</li>`; }).join('');
+    const cards = heroCards(id).map((cid) => { const c = C[cid]; return `<li>${E.LEVEL_UP ? `Lv${c.lv}・` : ''}${E.POS_NAME[c.pos]}【${c.cost}】<b>${esc(c.name)}</b>：${esc(c.text)}</li>`; }).join('');
     return { h, cards };
   }
   function pick() {
@@ -279,7 +289,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         const { cards } = heroInfo(h.id);
         return `<button class="hero-pick c-${h.color}" aria-pressed="${i >= 0}" data-hero="${h.id}">
           <span class="hd"><b>${h.name}</b><span class="st">HP ${h.hp}・攻撃 ${h.atk}・素早さ ${h.spd}</span>${i >= 0 ? `<span class="order">${team.front === i ? '最初は前衛' : '最初は後衛'}</span>` : ''}</span>
-          <span class="grow">育ち方：${esc(h.grow)}　<span class="muted">Lv2【${h.lvCost[0]}マナ】→ Lv3【${h.lvCost[1]}マナ】</span></span><ul>${cards}</ul></button>`;
+          ${E.LEVEL_UP ? `<span class="grow">育ち方：${esc(h.grow)}　<span class="muted">Lv2【${h.lvCost[0]}マナ】→ Lv3【${h.lvCost[1]}マナ】</span></span>` : ''}<ul>${cards}</ul></button>`;
       }).join('')}</div>
       ${team.heroes.length === 2 ? `<div class="row"><span class="label">最初に前衛に立つ</span>${team.heroes.map((id, i) => `<button class="mini${team.front === i ? ' on' : ''}" data-front="${i}">${H[id].name}</button>`).join('')}</div>` : ''}
       <div class="foot"><button class="btn ghost" id="back">戻る</button><button class="btn" id="go" ${errs.length ? 'disabled' : ''}>この二人で対戦</button></div>
@@ -480,10 +490,10 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const cost = E.levelCost({ ...h, lv });
     const pct = Math.max(0, h.hp / h.maxHp * 100);
     return `<div class="${cls}" data-hero="${p}-${k}" role="button" tabindex="0" aria-label="${def.name}">
-      <span class="nm"><b>${def.name}</b><span class="lv">Lv${lv} <span class="stars" aria-hidden="true">${'★'.repeat(lv)}${'☆'.repeat(3 - lv)}</span></span><span class="spd" title="素早さ">速${def.spd}</span></span>
+      <span class="nm"><b>${def.name}</b>${E.LEVEL_UP ? `<span class="lv">Lv${lv} <span class="stars" aria-hidden="true">${'★'.repeat(lv)}${'☆'.repeat(3 - lv)}</span></span>` : ''}<span class="spd" title="素早さ">速${def.spd}</span></span>
       <span class="hpbar"><i class="${pct <= 50 ? 'low' : ''}" style="width:${pct}%"></i></span>
       <span class="nums"><span>HP <b>${h.hp}</b>/${h.maxHp}</span><span>攻撃 <b>${h.atk}</b></span>${h.shield ? `<span>盾 <b>${h.shield}</b></span>` : ''}</span>
-      ${lv < 3 ? `<span class="lvcost">Lv${lv + 1}へ <b>${cost}</b>マナ</span>` : '<span class="exp awake">覚醒済み</span>'}
+      ${!E.LEVEL_UP ? '' : lv < 3 ? `<span class="lvcost">Lv${lv + 1}へ <b>${cost}</b>マナ</span>` : '<span class="exp awake">覚醒済み</span>'}
       ${flags.length ? `<span class="flags">${flags.map((f) => `<i class="${f[0]}">${f[1]}</i>`).join('')}</span>` : ''}
       ${markHTML}${popsHTML(hits)}</div>`;
   }
@@ -583,7 +593,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         else {
           const def = H[h.id];
           const ph = focus.p === 0 ? pv.heroes[focus.k] : h;
-          d = `<b class="h">${def.name}</b>　<span class="muted">${focus.p === 0 ? 'あなた' : '相手'}・${E.POS_NAME[ph.pos]}・Lv${ph.lv}・素早さ${def.spd}</span>`;
+          d = `<b class="h">${def.name}</b>　<span class="muted">${focus.p === 0 ? 'あなた' : '相手'}・${E.POS_NAME[ph.pos]}${E.LEVEL_UP ? `・Lv${ph.lv}` : ''}・素早さ${def.spd}・攻撃${h.atk}</span>`;
           if (focus.p === 0 && !h.ko) {
             const e = (a) => E.checkPlan(game, 0, plan.concat([a]));
             const lvErr = e({ type: 'level', k: focus.k });
@@ -591,12 +601,13 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
             const atkErr = ph.pos === 'front' ? e({ type: 'attack', k: focus.k, target: 0 }) && e({ type: 'attack', k: focus.k, target: 1 }) : '前衛にいない';
             const cost = E.levelCost({ id: h.id, lv: ph.lv });
             d += `<div class="row" style="margin:4px 0 2px">
-              ${ph.lv < 3 ? `<button class="mini lvbtn" id="lvup" ${lvErr ? 'disabled' : ''}>${lvErr ? `Lv${ph.lv + 1}：${esc(lvErr)}` : `Lv${ph.lv + 1}に上げる【${cost}】`}</button>` : ''}
+              ${E.LEVEL_UP && ph.lv < 3 ? `<button class="mini lvbtn" id="lvup" ${lvErr ? 'disabled' : ''}>${lvErr ? `Lv${ph.lv + 1}：${esc(lvErr)}` : `Lv${ph.lv + 1}に上げる【${cost}】`}</button>` : ''}
               ${ph.pos === 'front' ? `<button class="mini" id="atk" ${atkErr ? 'disabled' : ''}>${atkErr ? `攻撃：${esc(atkErr)}` : '通常攻撃【1】'}</button>` : ''}
               <button class="mini" id="mv" ${mvErr ? 'disabled' : ''}>${mvErr ? `移動：${esc(mvErr)}` : `${ph.pos === 'front' ? '後衛' : '前衛'}へ移動【1】`}</button></div>`;
-            const nextCard = ph.lv < 3 && C[def.cards.find((id) => C[id].lv === ph.lv + 1)];
-            d += `<span class="muted">育ち方：${esc(def.grow)}</span>` + (nextCard ? `<br><span class="muted">Lv${ph.lv + 1}で得るカード：<b>${esc(nextCard.name)}</b>【${nextCard.cost}】${esc(nextCard.text)}（使えるのは次のラウンドから）</span>` : '');
+            const nextCard = E.LEVEL_UP && ph.lv < 3 && C[def.cards.find((id) => C[id].lv === ph.lv + 1)];
+            if (E.LEVEL_UP) d += `<span class="muted">育ち方：${esc(def.grow)}</span>` + (nextCard ? `<br><span class="muted">Lv${ph.lv + 1}で得るカード：<b>${esc(nextCard.name)}</b>【${nextCard.cost}】${esc(nextCard.text)}（使えるのは次のラウンドから）</span>` : '');
           }
+          d += `<div class="clists">${cardListHTML(h.id)}</div>`;
         }
       } else {
         d = '<span class="muted">手札やヒーローをタップして行動を予約する。予約は上の一覧から取り消せる。確定するか時間切れで、相手と同時に処理される。</span>';
