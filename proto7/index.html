@@ -80,7 +80,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .screen.battle .hero { padding: 4px 8px; gap: 2px; }
 .screen.battle .hero .nm b { font-size: 14px; line-height: 1.2; }
 /* 盤面は残りの高さを使う。ただしタワー2本・区切り・ヒーロー4段の最低限は確保する */
-.screen.battle .field { flex: 1 1 0; min-height: calc(36px * 2 + 18px + 56px * 4 + 4px * 6); }
+.screen.battle .field { flex: 1 1 0; min-height: calc(36px * 2 + 26px + 56px * 4 + 4px * 6); }
 .responding .detail { max-height: 5.2em; }
 .screen.battle .detail.playlog { max-height: 9em; min-height: 5em; }
 .timer .tl > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -153,6 +153,27 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .timer .tl { display: flex; justify-content: space-between; gap: 8px; }
 .frow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; position: relative; min-height: 0; }
 .divider { text-align: center; font-size: 10px; letter-spacing: .4em; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 2px; }
+/* 真ん中の帯 */
+.turnline { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; height: 26px; padding: 0 8px; border-radius: 99px; font-size: 11px; position: relative; z-index: 3;
+  border: 1px solid var(--tc); background: color-mix(in srgb, var(--tc) 16%, var(--bg)); }
+.turnline.me { --tc: var(--brass); }
+.turnline.opp { --tc: var(--bad); }
+.turnline .tl-round { color: var(--muted); font-variant-numeric: tabular-nums; }
+.turnline .tl-who { text-align: center; font-family: var(--f-display); font-weight: 800; font-size: 14px; color: var(--tc); letter-spacing: .08em; }
+.turnline .tl-phase { font-size: 10.5px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--tc); color: var(--ink); white-space: nowrap; }
+.turnline .tl-phase.hot { background: var(--tc); color: var(--bg); font-weight: 700; }
+/* 手番の側の半分をうっすら色付け */
+.field.act-me { background: linear-gradient(to bottom, transparent 50%, color-mix(in srgb, var(--brass) 7%, transparent) 50%); border-radius: 12px; }
+.field.act-opp { background: linear-gradient(to bottom, color-mix(in srgb, var(--bad) 7%, transparent) 50%, transparent 50%); border-radius: 12px; }
+/* ターン交代の表示 */
+.turnban { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px 0; pointer-events: none;
+  background: color-mix(in srgb, var(--bg) 78%, transparent); border-block: 2px solid var(--tc); animation: ban .5s ease-out both; }
+.turnban.me { --tc: var(--brass); }
+.turnban.opp { --tc: var(--bad); }
+.turnban span { font-family: var(--f-display); font-weight: 800; font-size: 30px; color: var(--tc); letter-spacing: .12em; }
+.turnban small { color: var(--muted); }
+@keyframes ban { from { opacity: 0; transform: translateY(-50%) scaleY(.4); } to { opacity: 1; transform: translateY(-50%); } }
+@media (prefers-reduced-motion: reduce) { .turnban { animation: none; } }
 .cell { border: 1px dashed var(--line); border-radius: 10px; position: relative; min-height: 0; display: flex; }
 .cell .tag-row { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--line); letter-spacing: .2em; }
 .hero {
@@ -612,6 +633,35 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     field.appendChild(svg);
   }
 
+  // 今のフェーズ。再生中は、その段階の題から決める
+  function phaseName(st) {
+    if (phase === 'mine') return '行動';
+    if (phase === 'respond') return 'あなたの対応';
+    if (phase === 'wait' && !st) return '相手の対応待ち';
+    const t = st ? st.title : '';
+    if (t.endsWith('のターン')) return 'ターン開始';
+    if (t.startsWith('攻撃の宣言')) return '攻撃の宣言';
+    if (t.startsWith('対応')) return '対応';
+    if (t === '終了') return '試合終了';
+    return '処理';
+  }
+  // 真ん中の帯：ラウンド・どちらのターンか・今のフェーズ
+  function turnLine(v, st) {
+    const me = v.active === 0;
+    const ph = phaseName(st);
+    const hot = ph === 'あなたの対応' || ph === '攻撃の宣言' || ph === '相手の対応待ち';
+    return `<div class="turnline ${me ? 'me' : 'opp'}" role="status" aria-live="polite">
+      <span class="tl-round">R${v.round}/${E.MAX_ROUND}</span>
+      <span class="tl-who">${me ? '▲ あなたのターン' : '▼ 相手のターン'}</span>
+      <span class="tl-phase${hot ? ' hot' : ''}">${ph}</span></div>`;
+  }
+  // ターンが替わった瞬間の大きな表示
+  function turnBanner(st) {
+    if (!st || !st.title.endsWith('のターン')) return '';
+    const me = st.view.active === 0;
+    return `<div class="turnban ${me ? 'me' : 'opp'}"><span>${me ? 'あなたのターン' : '相手のターン'}</span><small>ラウンド${st.view.round}</small></div>`;
+  }
+
   function manaGems(n, label) {
     return `<span class="mana" aria-label="${label} ${n}"><span class="gems">${[...Array(Math.max(n, 0)).keys()].map(() => '<i class="gem on"></i>').join('') || '<i class="gem used"></i>'}</span><span class="mnum"><b>${n}</b>${label ? `<small>${label}</small>` : ''}</span></span>`;
   }
@@ -723,10 +773,11 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     }).join('');
     app.innerHTML = `<section class="screen battle${phase === 'respond' ? ' responding' : ''}">
       ${topline}
-      <div class="field">
+      <div class="field ${v.active === 0 ? 'act-me' : 'act-opp'}">
+        ${turnBanner(st)}
         ${towerHTML(1)}
         ${rowHTML(1, 'back')}${rowHTML(1, 'front')}
-        <div class="divider">R${v.round} / ${E.MAX_ROUND}　${v.active === 0 ? 'あなたのターン' : '相手のターン'}</div>
+        ${turnLine(v, st)}
         ${rowHTML(0, 'front')}${rowHTML(0, 'back')}
         ${towerHTML(0)}
       </div>
