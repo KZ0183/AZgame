@@ -13,6 +13,9 @@
   const FRONT_CARDS = 2; // 前衛のヒーローが毎ターン生むカードの枚数（後衛は1枚）
   const ATTACK_COST = 1; // 通常攻撃のマナ
   const REVIVE_WAIT = 1; // 倒されたヒーローが、復活するまでに休む自分のターンの数
+  const MOVE_COST = 0; // 移動のマナ
+  const KO_TOWER = 4; // ヒーローを倒すと、そのヒーローの持ち主のタワーが受けるダメージ
+  const COUNTER_ONCE = true; // true なら、タワーの反撃は1ターンに1回だけ
 
   const HEROES = [
     { id: 'sword', name: '剣士', color: 'red', hp: 12, atk: 3, cards: ['sw_slash', 'sw_focus', 'sw_lunge'] },
@@ -92,7 +95,7 @@
   function towerDefended(state, p) { return state.players[p].heroes.some((h) => !h.ko && h.hp > 0 && h.pos === 'front'); }
   function view(state) {
     return {
-      round: state.round, active: state.active,
+      round: state.round, active: state.active, countered: !!state.countered,
       players: state.players.map((pl, p) => ({ tower: pl.tower, mana: pl.mana, defended: towerDefended(state, p), handCount: pl.hand.length, heroes: pl.heroes.map((h) => ({ ...h })) })),
     };
   }
@@ -120,6 +123,7 @@
 
   function startTurn(state) {
     const p = state.active, pl = state.players[p];
+    state.countered = false;
     pl.mana = manaFor(state, p);
     state.log.push(`${pl.name}のターン（ラウンド${state.round}・マナ${pl.mana}）`);
     pl.heroes.forEach((h, k) => {
@@ -161,7 +165,7 @@
       const h = pl.heroes[a.k];
       if (!h || h.ko) return '倒れている';
       if (h.moved) return '移動は1ターン1回';
-      if (pl.mana < 1) return 'マナが足りない';
+      if (pl.mana < MOVE_COST) return 'マナが足りない';
       return null;
     }
     if (a.type === 'attack') {
@@ -237,7 +241,13 @@
       const lost = pl.hand.filter((c) => CARD[c.id].hero === h.id).length;
       pl.hand = pl.hand.filter((c) => CARD[c.id].hero !== h.id);
       mark(state, { p, k, label: '撃破' });
-      state.log.push(`${heroName(state, p, k)}は倒れた（次の自分のターンに復活）${lost ? `。手札の${HERO[h.id].name}のカード${lost}枚が消えた` : ''}`);
+      state.log.push(`${heroName(state, p, k)}は倒れた（${REVIVE_WAIT ? `自分のターンを${REVIVE_WAIT}回休んでから` : '次の自分のターンに'}復活）${lost ? `。手札の${HERO[h.id].name}のカード${lost}枚が消えた` : ''}`);
+      if (KO_TOWER > 0) {
+        pl.tower -= KO_TOWER;
+        mark(state, { p, k: TOWER, n: -KO_TOWER, hit: true });
+        state.log.push(`${pl.name}のタワーに${KO_TOWER}ダメージ（ヒーローが倒れたため）`);
+        if (pl.tower <= 0) finish(state, 'タワー破壊');
+      }
     }
   }
   function heal(state, p, k, n, src) {
@@ -263,9 +273,12 @@
     pl.tower -= n;
     mark(state, { p: o, k: TOWER, n: -n, hit: true });
     const guards = pl.heroes.filter((h) => !h.ko && h.hp > 0 && h.pos === 'front').map((h) => HERO[h.id].name).join('と');
-    state.log.push(defended ? `※${pl.name}の前衛に${guards}がいるので、タワーは守られている（殴ると反撃${TOWER_COUNTER}）` : `※${pl.name}の前衛が空なので、タワーは無防備（反撃なし）`);
+    const spent = COUNTER_ONCE && state.countered;
+    state.log.push(!defended ? `※${pl.name}の前衛が空なので、タワーは無防備（反撃なし）`
+      : spent ? `※${pl.name}の前衛に${guards}がいてタワーは守られているが、反撃はこのターンもう使った（反撃は1ターンに1回）`
+      : `※${pl.name}の前衛に${guards}がいるので、タワーは守られている（殴ると反撃${TOWER_COUNTER}。反撃は1ターンに1回）`);
     state.log.push(`${src} → ${pl.name}のタワーに${n}ダメージ`);
-    if (defended && k != null) { state.log.push('タワーの反撃！'); damage(state, p, k, TOWER_COUNTER, 'タワーの反撃'); }
+    if (defended && k != null && !spent) { state.countered = true; state.log.push('タワーの反撃！'); damage(state, p, k, TOWER_COUNTER, 'タワーの反撃'); }
     if (pl.tower <= 0) finish(state, 'タワー破壊');
   }
 
@@ -353,7 +366,7 @@
     if (err) return { error: err };
     const pl = state.players[p];
     if (a.type === 'move') {
-      pl.mana -= 1;
+      pl.mana -= MOVE_COST;
       const h = pl.heroes[a.k];
       h.moved = true;
       h.pos = h.pos === 'front' ? 'back' : 'front';
@@ -566,7 +579,7 @@
 
   const api = {
     MAX_ROUND, HAND_MAX, MANA_MAX, TOWER, TOWER_HP, TOWER_COUNTER, HEROES, HERO, CARDS, CARD, POS_NAME, CPU_TEAMS,
-    FRONT_CARDS, REVIVE_WAIT, validateTeam, newGame, view, towerDefended, check, checkCard, checkResponse, act, respond, endTurn, actions, responses,
+    FRONT_CARDS, REVIVE_WAIT, MOVE_COST, KO_TOWER, COUNTER_ONCE, validateTeam, newGame, view, towerDefended, check, checkCard, checkResponse, act, respond, endTurn, actions, responses,
     cpuAction, cpuResponse, cardHero,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
