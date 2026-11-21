@@ -5,12 +5,11 @@
   'use strict';
 
   const MAX_ROUND = 10;
-  const HAND_MAX = 5;
+  const HAND_SIZE = 2; // 各ヒーローの手札の枚数。カードは決まった順番で巡回する（使うと列の最後へ回り、先頭が手札に入る）
   const MANA_MAX = 6;
   const TOWER = 2; // 攻撃の対象としてのタワーの番号
-  const TOWER_HP = 20;
+  const TOWER_HP = 25;
   const TOWER_COUNTER = 4;
-  const FRONT_CARDS = 2; // 前衛のヒーローが毎ターン生むカードの枚数（後衛は1枚）
   const ATTACK_COST = 1; // 通常攻撃のマナ
   const REVIVE_WAIT = 1; // 倒されたヒーローが、復活するまでに休む自分のターンの数
   const MOVE_COST = 0; // 移動のマナ
@@ -18,37 +17,42 @@
   const COUNTER_ONCE = true; // true なら、タワーの反撃は1ターンに1回だけ
 
   const HEROES = [
-    { id: 'sword', name: '剣士', color: 'red', hp: 12, atk: 3, cards: ['sw_slash', 'sw_focus', 'sw_lunge'] },
-    { id: 'saint', name: '聖女', color: 'gold', hp: 10, atk: 1, cards: ['st_heal', 'st_mace', 'st_bless'] },
-    { id: 'knight', name: '守護騎士', color: 'grey', hp: 15, atk: 2, cards: ['kn_bash', 'kn_taunt', 'kn_guard'] },
-    { id: 'mage', name: '魔術師', color: 'blue', hp: 8, atk: 1, cards: ['mg_bolt', 'mg_flame', 'mg_meditate'] },
-    { id: 'rogue', name: '盗賊', color: 'green', hp: 10, atk: 3, cards: ['rg_dagger', 'rg_trip', 'rg_steal'] },
+    { id: 'sword', name: '剣士', color: 'red', hp: 12, atk: 3, cards: ['sw_slash', 'sw_focus', 'sw_lunge', 'sw_double'] },
+    { id: 'saint', name: '聖女', color: 'gold', hp: 10, atk: 1, cards: ['st_heal', 'st_mace', 'st_bless', 'st_prayer'] },
+    { id: 'knight', name: '守護騎士', color: 'grey', hp: 15, atk: 2, cards: ['kn_bash', 'kn_taunt', 'kn_guard', 'kn_wall'] },
+    { id: 'mage', name: '魔術師', color: 'blue', hp: 8, atk: 1, cards: ['mg_bolt', 'mg_flame', 'mg_meditate', 'mg_thunder'] },
+    { id: 'rogue', name: '盗賊', color: 'green', hp: 10, atk: 3, cards: ['rg_dagger', 'rg_trip', 'rg_steal', 'rg_backstab'] },
   ];
   const HERO = Object.fromEntries(HEROES.map((h) => [h.id, h]));
 
-  // pos: front = 前衛で生まれ、そのヒーローが前衛にいるときだけ使える / back = 後衛で生まれ、どこからでも使える
+  // pos: front = そのヒーローが前衛にいるときだけ使える / back = どこからでも使える
   // target: front = 敵の前衛かタワー / any = 敵の誰でもかタワー（遠距離）/ ally = 味方 / none
   // attack: 攻撃（相手が対応できる）。resp: 対応カード（相手の攻撃に合わせて使える。自分のターンにも使える）
   const CARDS = [
     { id: 'sw_slash', hero: 'sword', name: '斬撃', cost: 1, pos: 'front', target: 'front', attack: true, text: '3ダメージ。' },
     { id: 'sw_focus', hero: 'sword', name: '気合い', cost: 1, pos: 'back', target: 'none', text: 'このターン、このヒーローの次の攻撃のダメージ+2。' },
     { id: 'sw_lunge', hero: 'sword', name: '踏み込み', cost: 2, pos: 'front', target: 'front', attack: true, text: '5ダメージ。自分も1ダメージを受ける。' },
+    { id: 'sw_double', hero: 'sword', name: '連撃', cost: 2, pos: 'front', target: 'front', attack: true, text: '3ダメージを2回。' },
 
     { id: 'st_heal', hero: 'saint', name: '癒しの光', cost: 1, pos: 'back', target: 'ally', resp: true, text: '味方1人のHPを3回復。' },
     { id: 'st_mace', hero: 'saint', name: '光の槌', cost: 1, pos: 'front', target: 'front', attack: true, text: '2ダメージ。当たれば味方全員のHPを1回復。' },
     { id: 'st_bless', hero: 'saint', name: '加護', cost: 1, pos: 'back', target: 'ally', resp: true, text: '味方1人に盾3（次の自分のターンまで）。' },
+    { id: 'st_prayer', hero: 'saint', name: '祈り', cost: 0, pos: 'back', target: 'none', text: 'このターン、マナ+2。' },
 
     { id: 'kn_bash', hero: 'knight', name: '盾打ち', cost: 1, pos: 'front', target: 'front', attack: true, text: '2ダメージ。当たれば自分に盾2。' },
     { id: 'kn_taunt', hero: 'knight', name: '挑発', cost: 1, pos: 'front', target: 'none', resp: true, text: '次の自分のターンまで、相手の攻撃はこのヒーローに向く。対応で使うと、その攻撃を引きつける。' },
     { id: 'kn_guard', hero: 'knight', name: '守りの構え', cost: 1, pos: 'back', target: 'ally', resp: true, text: '味方1人に盾4（次の自分のターンまで）。' },
+    { id: 'kn_wall', hero: 'knight', name: '鉄壁', cost: 2, pos: 'front', target: 'none', text: '味方全員に盾3（次の自分のターンまで）。' },
 
     { id: 'mg_bolt', hero: 'mage', name: '魔力の矢', cost: 1, pos: 'back', target: 'any', attack: true, text: '遠距離。2ダメージ。' },
     { id: 'mg_flame', hero: 'mage', name: '火炎', cost: 2, pos: 'front', target: 'none', attack: true, text: '前衛にいる敵全員に3ダメージ。' },
     { id: 'mg_meditate', hero: 'mage', name: '瞑想', cost: 0, pos: 'back', target: 'none', text: 'このターン、マナ+1。' },
+    { id: 'mg_thunder', hero: 'mage', name: '雷', cost: 3, pos: 'back', target: 'any', attack: true, text: '遠距離。5ダメージ。' },
 
     { id: 'rg_dagger', hero: 'rogue', name: '投げナイフ', cost: 1, pos: 'front', target: 'any', attack: true, text: '遠距離。2ダメージ。' },
     { id: 'rg_trip', hero: 'rogue', name: '足払い', cost: 1, pos: 'front', target: 'front', resp: true, text: '1ダメージ。相手を後衛に下げる。対応で使うと、攻撃してきた前衛を下げて、その攻撃を空振りさせる。' },
-    { id: 'rg_steal', hero: 'rogue', name: '盗み', cost: 1, pos: 'back', target: 'none', text: '相手の手札を1枚ランダムに捨てさせる。' },
+    { id: 'rg_steal', hero: 'rogue', name: '盗み', cost: 1, pos: 'back', target: 'none', text: '相手のヒーローの手札を1枚ランダムに、巡回の最後へ送る。' },
+    { id: 'rg_backstab', hero: 'rogue', name: '急所突き', cost: 2, pos: 'front', target: 'any', attack: true, text: '遠距離。3ダメージ。相手のHPが半分以下なら6ダメージ。' },
   ];
   const CARD = Object.fromEntries(CARDS.map((c) => [c.id, c]));
   const POS_NAME = { front: '前衛', back: '後衛' };
@@ -75,15 +79,21 @@
       round: 1, first: first ?? (rng() < 0.5 ? 0 : 1), active: 0, over: false, winner: null, endReason: '',
       pending: null, log: [], steps: [],
       players: teams.map((t, i) => ({
-        name: names[i], tower: TOWER_HP, mana: 0, hand: [],
+        name: names[i], tower: TOWER_HP, mana: 0,
         heroes: t.heroes.map((id, k) => makeHero(id, (t.front ?? 0) === k ? 'front' : 'back')),
+        decks: [], // ヒーローごとの { hand: [{ uid, id }], queue: [id] }（倒されても続く）
       })),
       nextUid() { return uid++; },
       rng,
     };
     state.active = state.first;
     begin(state);
-    for (let p = 0; p < 2; p++) for (let k = 0; k < 2; k++) generate(state, p, k);
+    // 巡回の順番は試合の最初にシャッフルして決まる
+    for (const pl of state.players) pl.decks = pl.heroes.map((h) => {
+      const order = HERO[h.id].cards.slice();
+      for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+      return { hand: order.slice(0, HAND_SIZE).map((id) => ({ uid: state.nextUid(), id })), queue: order.slice(HAND_SIZE) };
+    });
     startTurn(state);
     return state;
   }
@@ -96,7 +106,7 @@
   function view(state) {
     return {
       round: state.round, active: state.active, countered: !!state.countered,
-      players: state.players.map((pl, p) => ({ tower: pl.tower, mana: pl.mana, defended: towerDefended(state, p), handCount: pl.hand.length, heroes: pl.heroes.map((h) => ({ ...h })) })),
+      players: state.players.map((pl, p) => ({ tower: pl.tower, mana: pl.mana, defended: towerDefended(state, p), heroes: pl.heroes.map((h) => ({ ...h })) })),
     };
   }
   // aim：その段階で攻撃が向かった先（矢印の表示用）。{ p, k } の配列
@@ -111,15 +121,25 @@
   function aimAt(state, p, k) { (state._aim = state._aim || []).push({ p, k }); }
   function heroName(state, p, k) { return `${state.players[p].name}の${HERO[state.players[p].heroes[k].id].name}`; }
 
-  function generate(state, p, k) {
-    const pl = state.players[p], h = pl.heroes[k];
-    if (h.ko || pl.hand.length >= HAND_MAX) return;
-    const pool = HERO[h.id].cards.filter((id) => CARD[id].pos === h.pos);
-    if (pool.length) pl.hand.push({ uid: state.nextUid(), id: pool[Math.floor(state.rng() * pool.length)] });
+  // 手札のカードを探す。{ k: ヒーロー, c: { uid, id } } か null
+  function findCard(state, p, uid) {
+    const ds = state.players[p].decks;
+    for (let k = 0; k < ds.length; k++) { const c = ds[k].hand.find((x) => x.uid === uid); if (c) return { k, c }; }
+    return null;
+  }
+  // 使った（または送られた）カードを列の最後へ回し、列の先頭を手札に入れる
+  function cycle(state, p, k, uid) {
+    const d = state.players[p].decks[k];
+    const i = d.hand.findIndex((x) => x.uid === uid);
+    if (i < 0) return;
+    const [c] = d.hand.splice(i, 1);
+    d.queue.push(c.id);
+    d.hand.push({ uid: state.nextUid(), id: d.queue.shift() });
   }
 
   // ── ターン ──
-  function manaFor(state, p) { return p === state.first && state.round === 1 ? 1 : Math.min(state.round + 1, MANA_MAX); }
+  // 最初のラウンドだけ、先攻は1、後攻は3（先攻の有利を減らす）
+  function manaFor(state, p) { if (state.round === 1) return p === state.first ? 1 : 3; return Math.min(state.round + 1, MANA_MAX); }
 
   function startTurn(state) {
     const p = state.active, pl = state.players[p];
@@ -137,7 +157,6 @@
       }
       h.shield = 0; h.taunt = false; h.focus = 0; h.attacked = false; h.moved = false; h.note = null;
     });
-    for (let k = 0; k < 2; k++) for (let n = pl.heroes[k].pos === 'front' ? FRONT_CARDS : 1; n > 0; n--) generate(state, p, k);
     step(state, `${pl.name}のターン`, true);
   }
 
@@ -178,9 +197,9 @@
       return null;
     }
     if (a.type === 'card') {
-      const c = pl.hand.find((x) => x.uid === a.uid);
-      if (!c) return '手札にない';
-      return checkCard(state, p, CARD[c.id], a.target);
+      const f = findCard(state, p, a.uid);
+      if (!f) return '手札にない';
+      return checkCard(state, p, CARD[f.c.id], a.target);
     }
     return '不明な行動';
   }
@@ -208,9 +227,9 @@
   function checkResponse(state, q, resp) {
     const pd = state.pending;
     if (!pd || pd.p === q) return '対応できる攻撃がない';
-    const c = state.players[q].hand.find((x) => x.uid === resp.uid);
-    if (!c) return '手札にない';
-    const def = CARD[c.id];
+    const f = findCard(state, q, resp.uid);
+    if (!f) return '手札にない';
+    const def = CARD[f.c.id];
     if (!def.resp) return '対応カードではない';
     const k = cardHero(state, q, def.id);
     const h = state.players[q].heroes[k];
@@ -238,10 +257,8 @@
     if (h.hp <= 0) {
       const pl = state.players[p];
       h.ko = true; h.hp = 0; h.shield = 0; h.taunt = false; h.wait = REVIVE_WAIT;
-      const lost = pl.hand.filter((c) => CARD[c.id].hero === h.id).length;
-      pl.hand = pl.hand.filter((c) => CARD[c.id].hero !== h.id);
       mark(state, { p, k, label: '撃破' });
-      state.log.push(`${heroName(state, p, k)}は倒れた（${REVIVE_WAIT ? `自分のターンを${REVIVE_WAIT}回休んでから` : '次の自分のターンに'}復活）${lost ? `。手札の${HERO[h.id].name}のカード${lost}枚が消えた` : ''}`);
+      state.log.push(`${heroName(state, p, k)}は倒れた（${REVIVE_WAIT ? `自分のターンを${REVIVE_WAIT}回休んでから` : '次の自分のターンに'}復活）`);
       if (KO_TOWER > 0) {
         pl.tower -= KO_TOWER;
         mark(state, { p, k: TOWER, n: -KO_TOWER, hit: true });
@@ -347,12 +364,23 @@
         break;
       }
       case 'rg_steal': {
-        const oh = state.players[o].hand;
-        if (oh.length) {
-          const lost = oh.splice(Math.floor(state.rng() * oh.length), 1)[0];
-          mark(state, { p: o, k: null, label: '手札−1' });
-          state.log.push(`${state.players[o].name}は「${CARD[lost.id].name}」を失った`);
-        } else state.log.push('相手の手札がなかった');
+        const ks = [0, 1].filter((x) => !state.players[o].heroes[x].ko);
+        if (!ks.length) { state.log.push('手札を持つ相手がいなかった'); break; }
+        const tk = ks[Math.floor(state.rng() * ks.length)];
+        const hand = state.players[o].decks[tk].hand;
+        const c = hand[Math.floor(state.rng() * hand.length)];
+        cycle(state, o, tk, c.uid);
+        mark(state, { p: o, k: tk, label: '手札を送った' });
+        state.log.push(`${heroName(state, o, tk)}の「${CARD[c.id].name}」を巡回の最後へ送った`);
+        break;
+      }
+      case 'sw_double': hit(3); hit(3); break;
+      case 'st_prayer': pl.mana += 2; mark(state, { p, k, label: 'マナ+2' }); state.log.push('このターン、マナ+2'); break;
+      case 'kn_wall': for (let x = 0; x < 2; x++) shield(state, p, x, 3, def.name); break;
+      case 'mg_thunder': hit(5); break;
+      case 'rg_backstab': {
+        const e = target === TOWER ? null : state.players[o].heroes[target];
+        hit(e && e.hp * 2 <= e.maxHp ? 6 : 3);
         break;
       }
     }
@@ -388,10 +416,9 @@
       return { waiting: true };
     }
     // カード
-    const c = pl.hand.find((x) => x.uid === a.uid);
+    const { k, c } = findCard(state, p, a.uid);
     const def = CARD[c.id];
-    const k = cardHero(state, p, def.id);
-    pl.hand = pl.hand.filter((x) => x.uid !== a.uid);
+    cycle(state, p, k, a.uid);
     pl.mana -= def.cost;
     pl.heroes[k].revealed = true;
     if (def.attack) {
@@ -423,10 +450,9 @@
     if (resp) {
       const err = checkResponse(state, q, resp);
       if (err) return { error: err };
-      const c = P[q].hand.find((x) => x.uid === resp.uid);
+      const { k, c } = findCard(state, q, resp.uid);
       const def = CARD[c.id];
-      const k = cardHero(state, q, def.id);
-      P[q].hand = P[q].hand.filter((x) => x.uid !== resp.uid);
+      cycle(state, q, k, resp.uid);
       P[q].mana -= def.cost;
       P[q].heroes[k].revealed = true;
       state.log.push(`${heroName(state, q, k)}が対応：「${def.name}」`);
@@ -482,7 +508,7 @@
     const pl = state.players[p], out = [];
     const tryA = (a) => { if (!check(state, p, a)) out.push(a); };
     for (let k = 0; k < 2; k++) { tryA({ type: 'move', k }); for (const t of [0, 1, TOWER]) tryA({ type: 'attack', k, target: t }); }
-    for (const c of pl.hand) {
+    for (const c of pl.decks.flatMap((d) => d.hand)) {
       const def = CARD[c.id];
       const ts = def.target === 'none' ? [null] : def.target === 'ally' ? [0, 1] : def.id === 'rg_trip' ? [0, 1] : [0, 1, TOWER];
       for (const t of ts) tryA({ type: 'card', uid: c.uid, target: t });
@@ -493,7 +519,7 @@
   // 今の攻撃に対してできる対応を全部挙げる
   function responses(state, q) {
     const out = [];
-    for (const c of state.players[q].hand) {
+    for (const c of state.players[q].decks.flatMap((d) => d.hand)) {
       const def = CARD[c.id];
       if (!def.resp) continue;
       for (const t of def.target === 'ally' ? [0, 1] : [null]) { const r = { uid: c.uid, target: t }; if (!checkResponse(state, q, r)) out.push(r); }
@@ -517,7 +543,7 @@
     const side = (q) => {
       const pl = s.players[q], opp = s.players[1 - q];
       const threat = opp.heroes.reduce((t, h) => t + (h.ko || h.pos !== 'front' ? 0 : h.atk + 3), 0) + 2;
-      let v = pl.tower * 3 + Math.min(pl.hand.length, HAND_MAX - 2) * 0.4;
+      let v = pl.tower * 3;
       if (!pl.heroes.some((h) => !h.ko && h.pos === 'front')) v -= threat * 1.5;
       pl.heroes.forEach((h) => {
         if (h.ko) { v -= 10; return; }
@@ -540,7 +566,7 @@
   // 対応カードを持っているなら、そのコストぶんのマナを相手のターンに残す価値
   function reserve(s, p) {
     const pl = s.players[p];
-    const need = pl.hand.filter((c) => CARD[c.id].resp).map((c) => CARD[c.id].cost).sort((a, b) => a - b)[0];
+    const need = pl.decks.flatMap((d) => d.hand).filter((c) => CARD[c.id].resp).map((c) => CARD[c.id].cost).sort((a, b) => a - b)[0];
     return need != null && pl.mana >= need ? 2.5 : 0;
   }
 
@@ -578,9 +604,9 @@
   ];
 
   const api = {
-    MAX_ROUND, HAND_MAX, MANA_MAX, TOWER, TOWER_HP, TOWER_COUNTER, HEROES, HERO, CARDS, CARD, POS_NAME, CPU_TEAMS,
-    FRONT_CARDS, REVIVE_WAIT, MOVE_COST, KO_TOWER, COUNTER_ONCE, validateTeam, newGame, view, towerDefended, check, checkCard, checkResponse, act, respond, endTurn, actions, responses,
-    cpuAction, cpuResponse, cardHero,
+    MAX_ROUND, HAND_SIZE, MANA_MAX, TOWER, TOWER_HP, TOWER_COUNTER, HEROES, HERO, CARDS, CARD, POS_NAME, CPU_TEAMS,
+    REVIVE_WAIT, MOVE_COST, KO_TOWER, COUNTER_ONCE, validateTeam, newGame, view, towerDefended, check, checkCard, checkResponse, act, respond, endTurn, actions, responses,
+    cpuAction, cpuResponse, cardHero, findCard,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Engine = api;

@@ -195,7 +195,14 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .hero.hidden { border-top-color: var(--line); }
 .hero.hidden .q { font-family: var(--f-display); font-size: 22px; color: var(--muted); margin: auto; }
 
-.hand { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+.hand { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.hgroup { border-top: 3px solid var(--hc); border-radius: 8px; background: color-mix(in srgb, var(--panel) 60%, var(--bg)); padding: 3px 4px 4px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hgroup.focus { box-shadow: 0 0 0 1px var(--brass) inset; }
+.hgroup.ko { opacity: .5; }
+.hg-head { display: flex; align-items: baseline; gap: 6px; font-size: 11px; min-width: 0; }
+.hg-head b { font-family: var(--f-display); font-size: 12px; }
+.hg-next { margin-left: auto; color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hg-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--hc); border-radius: 8px; padding: 5px 6px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .card[aria-pressed="true"] { border-color: var(--brass); border-top-color: var(--hc); background: var(--panel-2); box-shadow: 0 0 0 1px var(--brass) inset; }
 .card.off { opacity: .4; }
@@ -279,12 +286,13 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     app.innerHTML = `<section class="screen title">
       <div><h1>ふたりの英雄</h1><p class="muted">二人を選び、前と後ろに立たせて戦う。</p></div>
       <div class="rules"><ul>
-        <li>ヒーローを<b>2人</b>選ぶだけでデッキが決まる。各ヒーローは固有のカードを3枚持つ</li>
+        <li>ヒーローを<b>2人</b>選ぶだけでデッキが決まる。各ヒーローは固有のカードを4枚持つ</li>
         <li><b>交互にターン</b>を行う。自分のターンには、カード・通常攻撃（1マナ）・移動（<b>無料</b>、1人1ターン1回）を<b>1つずつ</b>行う</li>
         <li>攻撃すると、相手は<b>「対応」カード</b>で割り込める（盾・回復・挑発・足払い）。対応への対応はない</li>
         <li>マナは自分のターンの始めに回復する（ラウンド数+1、最大6）。<b>使わずに残したマナは、相手のターンの対応に使える</b></li>
         <li>ヒーローは<b>前衛</b>か<b>後衛</b>に立つ。前衛向けの攻撃は後衛に届かない。遠距離技は後衛にも届く</li>
-        <li>自分のターンの始めに、各ヒーローが<b>今いる位置に合ったカード</b>を生む（<b>前衛は2枚</b>、後衛は1枚）。手札は最大5枚</li>
+        <li>各ヒーローは4枚のカードを<b>決まった順番で巡回</b>させる。手札は各ヒーロー<b>2枚</b>で、使ったカードは列の最後へ回り、次のカードがすぐ手札に入る。巡回の順番は最初にシャッフルされ、相手には見えない。<b>相手が使ったカードを覚えれば、相手の手札が読める</b></li>
+        <li>前衛用のカードは、そのヒーローが前衛にいるときだけ使える</li>
         <li>お互いの陣地に<b>タワー</b>（HP${E.TOWER_HP}）がある。<b>相手のタワーを壊したら勝ち</b>。前衛に誰かいるあいだにタワーを殴ると、<b>${E.TOWER_COUNTER}ダメージの反撃</b>が来る（反撃は<b>1ターンに1回</b>だけ）</li>
         <li>相手のヒーローを倒すと、相手のタワーにも<b>${E.KO_TOWER}ダメージ</b></li>
         <li>倒されたヒーローは、<b>自分のターンを1回休んでから</b>後衛で復活する。そのあいだに前衛が空けば、タワーは無防備になる</li>
@@ -346,6 +354,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   // phase: 'mine' = 自分のターンの入力 / 'respond' = 相手の攻撃への対応を選んでいる / 'play' = 処理の再生 / 'wait' = 相手が考えている
   let phase = 'play', deadline = 0, tick = null, autoTimer = null, waitTimer = null, myRemain = 0;
   let rsel = null, rtarget = null; // 対応で選んだカードと対象
+  const myCard = (uid) => { const f = uid != null && E.findCard(game, 0, uid); return f ? f.c : null; };
   let ptarget = null; // 自分のターンに選んだ対象（「使う」で確定するまでは何も起きない）
   const targetName = (p, k) => k === E.TOWER ? `${p === 0 ? 'あなた' : '相手'}のタワー`
     : p === 1 && !game.players[1].heroes[k].revealed ? '？？？' : `${p === 0 ? 'あなた' : '相手'}の${H[game.players[p].heroes[k].id].name}`;
@@ -523,13 +532,13 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const foes = () => [0, 1].filter((k) => !game.players[1].heroes[k].ko).map((k) => ({ p: 1, k })).concat([{ p: 1, k: E.TOWER }]);
     const allies = () => [0, 1].filter((k) => !game.players[0].heroes[k].ko).map((k) => ({ p: 0, k }));
     if (phase === 'respond' && rsel) {
-      const def = C[game.players[0].hand.find((x) => x.uid === rsel).id];
+      const def = C[myCard(rsel).id];
       return def.target === 'ally' ? allies() : [];
     }
     if (phase !== 'mine') return [];
     if (mode === 'attack' && focus) return foes();
     if (sel) {
-      const def = C[game.players[0].hand.find((x) => x.uid === sel).id];
+      const def = C[myCard(sel).id];
       if (def.id === 'rg_trip') return [0, 1].filter((k) => !game.players[1].heroes[k].ko && game.players[1].heroes[k].pos === 'front').map((k) => ({ p: 1, k }));
       if (def.target === 'front' || def.target === 'any') return foes();
       if (def.target === 'ally') return allies();
@@ -564,7 +573,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     if (phase === 'mine' && ptarget) {
       let k = null;
       if (mode === 'attack' && focus) k = focus.k;
-      else if (sel) k = E.cardHero(game, 0, game.players[0].hand.find((x) => x.uid === sel).id);
+      else if (sel) k = E.cardHero(game, 0, myCard(sel).id);
       if (k == null || (ptarget.p === 0 && ptarget.k === k)) return [];
       return [{ from: { p: 0, k }, to: ptarget, kind: ptarget.p === 0 ? 'ally' : 'mine' }];
     }
@@ -631,7 +640,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     };
 
     let topline, panel, buttons;
-    const oppMana = `相手のマナ${v.players[1].mana}・手札${v.players[1].handCount}`;
+    const oppMana = `相手のマナ${v.players[1].mana}`;
     if (phase === 'respond') {
       topline = `<div class="timer respond" id="timer"><span class="tl"><span>相手の攻撃！ 対応する？ 残り <b></b>秒</span></span><span class="bar"><i></i></span></div>`;
       const pd = game.pending;
@@ -641,20 +650,20 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       let d = `<b class="h">相手の${H[atk.id].name}</b>${toName ? ` → <b>${toName}</b>` : ''}<br>${esc(what)}`;
       const opts = E.responses(game, 0);
       if (rsel) {
-        const def = C[me.hand.find((x) => x.uid === rsel).id];
+        const def = C[myCard(rsel).id];
         d += `<br><b class="h">${esc(def.name)}</b>【${def.cost}】${esc(def.text)}${def.target === 'ally' ? `<br><span class="muted">対象：${rtarget != null ? H[me.heroes[rtarget].id].name : '緑に光っている味方をタップ'}</span>` : ''}`;
       } else {
-        d += `<br><span class="muted">${opts.length ? '光っている手札で対応できる。' : '対応できるカードがない（マナか、カードか、位置が足りない）。'}</span>`;
+        d += `<br><span class="muted">${opts.length ? '光っているカードで対応できる。' : '対応できるカードがない（マナか、カードか、位置が足りない）。'}</span>`;
       }
       panel = `<div class="detail">${d}</div>`;
-      const ready = rsel && (C[me.hand.find((x) => x.uid === rsel).id].target !== 'ally' || rtarget != null);
-      buttons = `<button class="btn ghost" id="pass">対応しない</button><button class="btn" id="resp" ${ready ? '' : 'disabled'}>${rsel ? `「${esc(C[me.hand.find((x) => x.uid === rsel).id].name)}」で対応` : 'カードを選ぶ'}</button>`;
+      const ready = rsel && (C[myCard(rsel).id].target !== 'ally' || rtarget != null);
+      buttons = `<button class="btn ghost" id="pass">対応しない</button><button class="btn" id="resp" ${ready ? '' : 'disabled'}>${rsel ? `「${esc(C[myCard(rsel).id].name)}」で対応` : 'カードを選ぶ'}</button>`;
     } else if (phase === 'mine') {
       topline = deadline
         ? `<div class="timer" id="timer"><span class="tl"><span>あなたのターン　残り <b></b>秒</span><span class="muted">${oppMana}</span></span><span class="bar"><i></i></span></div>`
         : `<div class="timer idle"><span>あなたのターン</span><span class="muted">${oppMana}</span></div>`;
       let d = '';
-      const selCard = sel && me.hand.find((x) => x.uid === sel);
+      const selCard = sel && myCard(sel);
       if (mode === 'attack' && focus) {
         const h = me.heroes[focus.k];
         d = `<b class="h">${H[h.id].name}の通常攻撃</b>（1マナ・${h.atk + h.focus}ダメージ）<br>${ptarget ? `→ <b>${targetName(ptarget.p, ptarget.k)}</b>　<span class="muted">「攻撃する」で確定。相手は対応してくるかもしれない。</span>` : '<span class="muted">狙う相手をタップ</span>'}`;
@@ -694,8 +703,22 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 
     const showHand = phase === 'mine' || phase === 'respond';
     const respOK = new Set(phase === 'respond' ? E.responses(game, 0).map((r) => r.uid) : []);
-    const hand = me.hand;
     const manaLabel = v.active === 0 ? '' : '対応用';
+    const cardBtn = (c) => {
+      const def = C[c.id];
+      const usable = phase === 'mine' ? (def.target === 'none' ? !E.checkCard(game, 0, def, null) : [0, 1, E.TOWER].some((t) => !E.checkCard(game, 0, def, t))) : respOK.has(c.uid);
+      const pressed = phase === 'respond' ? rsel === c.uid : sel === c.uid;
+      return `<button class="card c-${H[def.hero].color}${usable ? '' : ' off'}" aria-pressed="${pressed}" data-card="${c.uid}">
+        <span class="row" style="gap:4px"><span class="cost">${def.cost}</span><span class="src">${def.pos === 'front' ? '前衛用' : 'どこでも'}</span></span><b>${esc(def.name)}</b>${def.resp ? '<span class="new resp">対応</span>' : ''}</button>`;
+    };
+    // ヒーローごとの手札（2枚ずつ）と、次に来るカード
+    const handHTML = [0, 1].map((k) => {
+      const h = me.heroes[k], d = me.decks[k];
+      const on = focus && focus.p === 0 && focus.k === k;
+      return `<div class="hgroup c-${H[h.id].color}${on ? ' focus' : ''}${h.ko ? ' ko' : ''}">
+        <span class="hg-head"><b>${H[h.id].name}</b>${h.ko ? '<span class="muted">倒れている</span>' : ''}<span class="hg-next">次：${esc(C[d.queue[0]].name)}</span></span>
+        <div class="hg-cards">${d.hand.map(cardBtn).join('')}</div></div>`;
+    }).join('');
     app.innerHTML = `<section class="screen battle${phase === 'respond' ? ' responding' : ''}">
       ${topline}
       <div class="field">
@@ -706,15 +729,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         ${towerHTML(0)}
       </div>
       <div class="pbar${v.active === 0 ? ' turn-on' : ''}"><span class="who">あなた</span><span class="manatxt">${manaGems(v.players[0].mana, manaLabel)}</span></div>
-      <div class="hand" ${showHand ? '' : 'hidden'} style="grid-template-columns: repeat(${Math.max(5, hand.length)}, minmax(0, 1fr))">${[...Array(Math.max(5, hand.length)).keys()].map((i) => {
-        const c = hand[i];
-        if (!c) return '<div class="card empty" aria-hidden="true"></div>';
-        const def = C[c.id];
-        const usable = phase === 'mine' ? (def.target === 'none' ? !E.checkCard(game, 0, def, null) : [0, 1, E.TOWER].some((t) => !E.checkCard(game, 0, def, t))) : respOK.has(c.uid);
-        const pressed = phase === 'respond' ? rsel === c.uid : sel === c.uid;
-        return `<button class="card c-${H[def.hero].color}${usable ? '' : ' off'}" aria-pressed="${pressed}" data-card="${c.uid}">
-          <span class="row" style="gap:4px"><span class="cost">${def.cost}</span><span class="src">${H[def.hero].name}・${def.pos === 'front' ? '前' : '後'}</span></span><b>${esc(def.name)}</b>${def.resp ? '<span class="new resp">対応</span>' : ''}</button>`;
-      }).join('')}</div>
+      <div class="hand" ${showHand ? '' : 'hidden'}>${handHTML}</div>
       ${panel}
       <div class="act">${buttons}</div>
     </section>`;
@@ -770,7 +785,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         if (!E.responses(game, 0).some((r) => r.uid === uid)) return;
         rsel = rsel === uid ? null : uid;
         // 盾や回復は、狙われた味方を初期の対象にする
-        const def = rsel && C[game.players[0].hand.find((x) => x.uid === rsel).id];
+        const def = rsel && C[myCard(rsel).id];
         const pd = game.pending;
         rtarget = def && def.target === 'ally' && (pd.target === 0 || pd.target === 1) && !game.players[0].heroes[pd.target].ko ? pd.target : null;
         battle();
@@ -786,7 +801,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     on('mv', () => doMine({ type: 'move', k: focus.k }));
     on('use', () => {
       if (mode === 'attack' && focus) { if (ptarget) doMine({ type: 'attack', k: focus.k, target: ptarget.k }); return; }
-      const def = C[game.players[0].hand.find((x) => x.uid === sel).id];
+      const def = C[myCard(sel).id];
       if (def.target === 'none') doMine({ type: 'card', uid: sel, target: null });
       else if (ptarget) doMine({ type: 'card', uid: sel, target: ptarget.k });
     });
