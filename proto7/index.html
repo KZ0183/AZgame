@@ -65,6 +65,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .detail.playlog { max-height: 14em; min-height: 6.5em; }
 .rtag { display: inline-block; font-size: 9.5px; font-weight: 700; color: var(--bg); background: var(--h-blue); border-radius: 4px; padding: 0 4px; margin: 0 4px; vertical-align: 1px; }
 .card .new.resp { background: var(--h-blue); }
+.card .new.fresh { left: 3px; right: auto; background: var(--brass); }
+.card .new.resp + .new.fresh { left: 3px; }
 .hero .nums { flex-wrap: nowrap; align-items: center; overflow: hidden; }
 .hero .nums > span { white-space: nowrap; }
 .hero .nums .flags { flex-wrap: nowrap; overflow: hidden; }
@@ -709,7 +711,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       const usable = phase === 'mine' ? (def.target === 'none' ? !E.checkCard(game, 0, def, null) : [0, 1, E.TOWER].some((t) => !E.checkCard(game, 0, def, t))) : respOK.has(c.uid);
       const pressed = phase === 'respond' ? rsel === c.uid : sel === c.uid;
       return `<button class="card c-${H[def.hero].color}${usable ? '' : ' off'}" aria-pressed="${pressed}" data-card="${c.uid}">
-        <span class="row" style="gap:4px"><span class="cost">${def.cost}</span><span class="src">${def.pos === 'front' ? '前衛用' : 'どこでも'}</span></span><b>${esc(def.name)}</b>${def.resp ? '<span class="new resp">対応</span>' : ''}</button>`;
+        <span class="row" style="gap:4px"><span class="cost">${def.cost}</span><span class="src">${def.pos === 'front' ? '前衛用' : 'どこでも'}</span></span><b>${esc(def.name)}</b>${def.resp ? '<span class="new resp">対応</span>' : ''}${c.fresh ? '<span class="new fresh">NEW</span>' : ''}</button>`;
     };
     // ヒーローごとの手札（2枚ずつ）と、次に来るカード
     const handHTML = [0, 1].map((k) => {

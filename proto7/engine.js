@@ -132,9 +132,10 @@
     const d = state.players[p].decks[k];
     const i = d.hand.findIndex((x) => x.uid === uid);
     if (i < 0) return;
-    const [c] = d.hand.splice(i, 1);
+    // 使ったカードと同じ場所に、次のカードを入れる（残ったカードの位置は動かさない）
+    const c = d.hand[i];
     d.queue.push(c.id);
-    d.hand.push({ uid: state.nextUid(), id: d.queue.shift() });
+    d.hand[i] = { uid: state.nextUid(), id: d.queue.shift(), fresh: true };
   }
 
   // ── ターン ──
@@ -165,6 +166,7 @@
     if (state.over) return state.steps;
     const p = state.active;
     state.players[p].heroes.forEach((h) => { h.focus = 0; });
+    state.players[p].decks.forEach((d) => d.hand.forEach((c) => { c.fresh = false; })); // NEW 印は自分のターンの終わりに外す
     state.active = 1 - p;
     if (state.active === state.first) state.round++;
     if (state.round > MAX_ROUND) { finish(state, `${MAX_ROUND}ラウンド終了`); step(state, '終了', true); return state.steps; }
