@@ -69,6 +69,11 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .hero .nums > span { white-space: nowrap; }
 .hero .nums .flags { flex-wrap: nowrap; overflow: hidden; }
 .cell { min-height: 0; }
+.arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; overflow: visible; }
+.arrows .arrow { stroke-width: 5; stroke-linecap: round; filter: drop-shadow(0 0 3px var(--bg)); }
+.arrows .arrow.live { stroke-dasharray: 10 6; animation: march .6s linear infinite; }
+@keyframes march { to { stroke-dashoffset: -16; } }
+@media (prefers-reduced-motion: reduce) { .arrows .arrow.live { animation: none; } }
 .tower .aim { bottom: auto; top: -9px; right: 10px; }
 .screen.battle .hero { padding: 4px 8px; gap: 2px; }
 .screen.battle .hero .nm b { font-size: 14px; line-height: 1.2; }
@@ -279,9 +284,9 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         <li>攻撃すると、相手は<b>「対応」カード</b>で割り込める（盾・回復・挑発・足払い）。対応への対応はない</li>
         <li>マナは自分のターンの始めに回復する（ラウンド数+1、最大6）。<b>使わずに残したマナは、相手のターンの対応に使える</b></li>
         <li>ヒーローは<b>前衛</b>か<b>後衛</b>に立つ。前衛向けの攻撃は後衛に届かない。遠距離技は後衛にも届く</li>
-        <li>自分のターンの始めに、各ヒーローが<b>今いる位置に合ったカード</b>を1枚生む。手札は最大5枚</li>
+        <li>自分のターンの始めに、各ヒーローが<b>今いる位置に合ったカード</b>を生む（<b>前衛は2枚</b>、後衛は1枚）。手札は最大5枚</li>
         <li>お互いの陣地に<b>タワー</b>（HP${E.TOWER_HP}）がある。<b>相手のタワーを壊したら勝ち</b>。前衛に誰かいるあいだにタワーを殴ると、<b>${E.TOWER_COUNTER}ダメージの反撃</b>が来る</li>
-        <li>倒されたヒーローは、次の自分のターンに後衛で復活する</li>
+        <li>倒されたヒーローは、<b>自分のターンを1回休んでから</b>後衛で復活する。そのあいだに前衛が空けば、タワーは無防備になる</li>
       </ul></div>
       <div class="settings">
         <div class="row"><span class="label">1ターンの時間</span><div class="seg">${[[30, '30秒'], [60, '60秒'], [0, 'なし']].map(([t, l]) => `<button data-timer="${t}" aria-pressed="${settings.timer === t}">${l}</button>`).join('')}</div></div>
@@ -500,7 +505,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const markHTML = marks.length ? `<span class="aim">${marks.map(esc).join('・')}</span>` : '';
     if (hidden) return `<div class="${cls}" data-hero="${p}-${k}" role="button" tabindex="0" aria-label="正体不明の後衛"><span class="q">？？？</span>${markHTML}${popsHTML(hits)}</div>`;
     const flags = [];
-    if (h.ko) flags.push(['', '倒れている']);
+    if (h.ko) flags.push(['', `倒れている・あと${(h.wait || 0) + 1}ターンで復活`]);
     if (h.taunt) flags.push(['hot', '挑発']);
     if (h.focus) flags.push(['hot', `次の攻撃+${h.focus}`]);
     if (p === v.active && !h.ko) { if (h.attacked) flags.push(['', '攻撃済み']); if (h.moved) flags.push(['', '移動済み']); }
@@ -541,6 +546,58 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     if (pd.target != null) marks[1 - pd.p][pd.target].push(label);
     else if (pd.type === 'card' && pd.id === 'mg_flame') [0, 1].forEach((k) => { if (game.players[1 - pd.p].heroes[k].pos === 'front') marks[1 - pd.p][k].push(label); });
     return marks;
+  }
+
+  // 矢印：{ from: {p,k}, to: {p,k}, kind: 'foe' | 'mine' | 'ally' }
+  function arrowList(st) {
+    if (st) {
+      if (!st.actor || !st.aim || !st.aim.length) return [];
+      return st.aim.map((to) => ({ from: st.actor, to, kind: st.actor.p === 1 ? 'foe' : 'mine' }));
+    }
+    const pd = game.pending;
+    if (pd && (phase === 'respond' || phase === 'wait')) {
+      const tos = pd.target != null ? [pd.target]
+        : pd.type === 'card' && pd.id === 'mg_flame' ? [0, 1].filter((x) => !game.players[1 - pd.p].heroes[x].ko && game.players[1 - pd.p].heroes[x].pos === 'front') : [];
+      return tos.map((k) => ({ from: { p: pd.p, k: pd.k }, to: { p: 1 - pd.p, k }, kind: pd.p === 1 ? 'foe' : 'mine' }));
+    }
+    if (phase === 'mine' && ptarget) {
+      let k = null;
+      if (mode === 'attack' && focus) k = focus.k;
+      else if (sel) k = E.cardHero(game, 0, game.players[0].hand.find((x) => x.uid === sel).id);
+      if (k == null || (ptarget.p === 0 && ptarget.k === k)) return [];
+      return [{ from: { p: 0, k }, to: ptarget, kind: ptarget.p === 0 ? 'ally' : 'mine' }];
+    }
+    return [];
+  }
+
+  function drawArrows(list) {
+    const field = app.querySelector('.field');
+    if (!field || !list.length) return;
+    const fr = field.getBoundingClientRect();
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'arrows');
+    svg.setAttribute('viewBox', `0 0 ${fr.width} ${fr.height}`);
+    svg.setAttribute('aria-hidden', 'true');
+    const color = { foe: 'var(--bad)', mine: 'var(--brass)', ally: 'var(--good)' };
+    let defs = '';
+    for (const kind of Object.keys(color)) defs += `<marker id="ah-${kind}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:${color[kind]}"/></marker>`;
+    let body = '';
+    for (const a of list) {
+      const ea = field.querySelector(`[data-hero="${a.from.p}-${a.from.k}"]`);
+      const eb = field.querySelector(`[data-hero="${a.to.p}-${a.to.k}"]`);
+      if (!ea || !eb) continue;
+      const ra = ea.getBoundingClientRect(), rb = eb.getBoundingClientRect();
+      let x1 = ra.left + ra.width / 2 - fr.left, y1 = ra.top + ra.height / 2 - fr.top;
+      let x2 = rb.left + rb.width / 2 - fr.left, y2 = rb.top + rb.height / 2 - fr.top;
+      const len = Math.hypot(x2 - x1, y2 - y1);
+      if (len < 30) continue;
+      const ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+      x1 += ux * 18; y1 += uy * 18; x2 -= ux * 22; y2 -= uy * 22;
+      body += `<line class="arrow ${a.kind}${phase === 'respond' ? ' live' : ''}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${color[a.kind]}" marker-end="url(#ah-${a.kind})"/>`;
+    }
+    svg.innerHTML = `<defs>${defs}</defs>${body}`;
+    field.appendChild(svg);
   }
 
   function manaGems(n, label) {
@@ -662,6 +719,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     </section>`;
     const t = document.getElementById('timer');
     if (t && deadline) paintTimer(t, (phase === 'respond' ? RESPOND_SECONDS : settings.timer) * 1000);
+    drawArrows(arrowList(st));
     bind();
   }
 

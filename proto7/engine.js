@@ -10,6 +10,9 @@
   const TOWER = 2; // 攻撃の対象としてのタワーの番号
   const TOWER_HP = 20;
   const TOWER_COUNTER = 4;
+  const FRONT_CARDS = 2; // 前衛のヒーローが毎ターン生むカードの枚数（後衛は1枚）
+  const ATTACK_COST = 1; // 通常攻撃のマナ
+  const REVIVE_WAIT = 1; // 倒されたヒーローが、復活するまでに休む自分のターンの数
 
   const HEROES = [
     { id: 'sword', name: '剣士', color: 'red', hp: 12, atk: 3, cards: ['sw_slash', 'sw_focus', 'sw_lunge'] },
@@ -84,7 +87,7 @@
 
   // ── 演出用の記録 ──
   // step = { title, lines, hits, actor, view }。lines の「※」で始まる行は理由（画面で「なぜ」と表示）
-  function begin(state) { state.log = []; state.steps = []; state._hits = []; state._logAt = 0; }
+  function begin(state) { state.log = []; state.steps = []; state._hits = []; state._aim = []; state._logAt = 0; }
   function mark(state, hit) { state._hits.push(hit); }
   function towerDefended(state, p) { return state.players[p].heroes.some((h) => !h.ko && h.hp > 0 && h.pos === 'front'); }
   function view(state) {
@@ -93,13 +96,16 @@
       players: state.players.map((pl, p) => ({ tower: pl.tower, mana: pl.mana, defended: towerDefended(state, p), handCount: pl.hand.length, heroes: pl.heroes.map((h) => ({ ...h })) })),
     };
   }
+  // aim：その段階で攻撃が向かった先（矢印の表示用）。{ p, k } の配列
   function step(state, title, force, actor) {
     const lines = state.log.slice(state._logAt);
     if (!lines.length && !state._hits.length && !force) return;
     state._logAt = state.log.length;
-    state.steps.push({ title, lines, hits: state._hits, actor: actor || null, view: view(state) });
+    state.steps.push({ title, lines, hits: state._hits, actor: actor || null, aim: state._aim || [], view: view(state) });
     state._hits = [];
+    state._aim = [];
   }
+  function aimAt(state, p, k) { (state._aim = state._aim || []).push({ p, k }); }
   function heroName(state, p, k) { return `${state.players[p].name}の${HERO[state.players[p].heroes[k].id].name}`; }
 
   function generate(state, p, k) {
@@ -117,14 +123,17 @@
     pl.mana = manaFor(state, p);
     state.log.push(`${pl.name}のターン（ラウンド${state.round}・マナ${pl.mana}）`);
     pl.heroes.forEach((h, k) => {
-      if (h.ko) {
+      if (h.ko && h.wait > 0) {
+        h.wait--;
+        state.log.push(`${heroName(state, p, k)}は休んでいる（復活まで、あと${h.wait + 1}ターン）`);
+      } else if (h.ko) {
         Object.assign(h, makeHero(h.id, 'back'), { revealed: h.revealed });
         mark(state, { p, k, label: '復活' });
         state.log.push(`${heroName(state, p, k)}が後衛で復活した`);
       }
       h.shield = 0; h.taunt = false; h.focus = 0; h.attacked = false; h.moved = false; h.note = null;
     });
-    for (let k = 0; k < 2; k++) generate(state, p, k);
+    for (let k = 0; k < 2; k++) for (let n = pl.heroes[k].pos === 'front' ? FRONT_CARDS : 1; n > 0; n--) generate(state, p, k);
     step(state, `${pl.name}のターン`, true);
   }
 
@@ -160,7 +169,7 @@
       if (!h || h.ko) return '倒れている';
       if (h.pos !== 'front') return '前衛にいない';
       if (h.attacked) return '通常攻撃は1ターン1回';
-      if (pl.mana < 1) return 'マナが足りない';
+      if (pl.mana < ATTACK_COST) return 'マナが足りない';
       if (!validFoe(state, p, a.target)) return '狙えない相手';
       return null;
     }
@@ -224,7 +233,7 @@
     state.log.push(`${src} → ${heroName(state, p, k)}に${n}ダメージ${absorbed ? `（盾で${absorbed}防いだ）` : ''}`);
     if (h.hp <= 0) {
       const pl = state.players[p];
-      h.ko = true; h.hp = 0; h.shield = 0; h.taunt = false;
+      h.ko = true; h.hp = 0; h.shield = 0; h.taunt = false; h.wait = REVIVE_WAIT;
       const lost = pl.hand.filter((c) => CARD[c.id].hero === h.id).length;
       pl.hand = pl.hand.filter((c) => CARD[c.id].hero !== h.id);
       mark(state, { p, k, label: '撃破' });
@@ -278,6 +287,7 @@
     return `※狙った${nm}は後衛にいた${h.note ? `（${h.note}）` : ''}。後衛はタワーに守られていて、前衛向けの攻撃は届かない`;
   }
   function strike(state, p, k, t, n, src) {
+    aimAt(state, 1 - p, t.k);
     if (t.k === TOWER) { hitTower(state, p, k, n, src); return TOWER; }
     damage(state, 1 - p, t.k, n, src);
     return t.k;
@@ -311,13 +321,14 @@
       case 'mg_flame': {
         const fr = [0, 1].filter((x) => !state.players[o].heroes[x].ko && state.players[o].heroes[x].pos === 'front');
         if (!fr.length) state.log.push('誰にも当たらなかった', '※火炎は前衛にいる敵にだけ当たる。前衛に敵がいなかった');
-        for (const x of fr) damage(state, o, x, 3, def.name);
+        for (const x of fr) { aimAt(state, o, x); damage(state, o, x, 3, def.name); }
         break;
       }
       case 'mg_meditate': pl.mana += 1; mark(state, { p, k, label: 'マナ+1' }); state.log.push('このターン、マナ+1'); break;
       case 'rg_dagger': hit(2); break;
       case 'rg_trip': {
         const t = state.players[o].heroes[target];
+        aimAt(state, o, target);
         damage(state, o, target, 1, def.name);
         if (!t.ko && t.pos === 'front') { t.pos = 'back'; t.note = '足払いで下げられた'; mark(state, { p: o, k: target, label: '後衛へ' }); state.log.push(`${heroName(state, o, target)}は後衛に下げられた`); }
         break;
@@ -354,10 +365,11 @@
       return { done: true };
     }
     if (a.type === 'attack') {
-      pl.mana -= 1;
+      pl.mana -= ATTACK_COST;
       const h = pl.heroes[a.k];
       h.attacked = true;
       state.pending = { p, k: a.k, type: 'attack', target: a.target };
+      aimAt(state, 1 - p, a.target);
       state.log.push(`${heroName(state, p, a.k)}が${targetName(state, p, a.target)}に通常攻撃（${h.atk + h.focus}ダメージ）`);
       step(state, `攻撃の宣言：${HERO[h.id].name}`, true, { p, k: a.k });
       return { waiting: true };
@@ -371,6 +383,8 @@
     pl.heroes[k].revealed = true;
     if (def.attack) {
       state.pending = { p, k, type: 'card', id: def.id, target: a.target };
+      if (a.target != null) aimAt(state, 1 - p, a.target);
+      else if (def.id === 'mg_flame') [0, 1].forEach((x) => { const e = state.players[1 - p].heroes[x]; if (!e.ko && e.pos === 'front') aimAt(state, 1 - p, x); });
       state.log.push(`${heroName(state, p, k)}の「${def.name}」${def.target === 'none' ? '' : `→${targetName(state, p, a.target)}`}：${def.text}`);
       step(state, `攻撃の宣言：${HERO[def.hero].name}の${def.name}`, true, { p, k });
       return { waiting: true };
@@ -552,7 +566,7 @@
 
   const api = {
     MAX_ROUND, HAND_MAX, MANA_MAX, TOWER, TOWER_HP, TOWER_COUNTER, HEROES, HERO, CARDS, CARD, POS_NAME, CPU_TEAMS,
-    validateTeam, newGame, view, towerDefended, check, checkCard, checkResponse, act, respond, endTurn, actions, responses,
+    FRONT_CARDS, REVIVE_WAIT, validateTeam, newGame, view, towerDefended, check, checkCard, checkResponse, act, respond, endTurn, actions, responses,
     cpuAction, cpuResponse, cardHero,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
