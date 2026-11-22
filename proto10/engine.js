@@ -247,7 +247,6 @@
     const e = state.enemy;
     const it = intent(state);
     e.shield = 0; e.phased = false;
-    state.log.push(`${ename(state)}の「${it.name}」`);
     if (it.type === 'charge') {
       e.charge += it.n;
       mark(state, { p: 1, k: 'enemy', label: `溜め+${it.n}` });
@@ -312,13 +311,13 @@
       h.ko = true; h.hp = 0; h.shield = 0; h.taunt = false; h.counter = 0; h.wait = REVIVE_WAIT;
       mark(state, { p: 0, k, label: '倒れた' });
       state.log.push(`${hname(state, k)}は倒れた（ライフ−${KO_LIFE}。次の自分のターンを休んでから復活）`);
-      hitLife(state, KO_LIFE, 'ヒーローが倒れた');
+      hitLife(state, KO_LIFE, null);
     }
   }
   function hitLife(state, n, src) {
     state.life -= n;
     mark(state, { p: 0, k: 'life', n: -n, hit: true });
-    state.log.push(`${src} → あなたのライフに${n}ダメージ`);
+    if (src) state.log.push(`${src} → あなたのライフに${n}ダメージ`);
     if (state.life <= 0) { state.life = 0; finish(state, 1, 'ライフが尽きた'); }
   }
   // pierce = 盾を無視する（毒）
@@ -431,7 +430,6 @@
       const h = state.heroes[a.k], sk = skillOf(h);
       state.mana -= sk.cost;
       h.skilled = true;
-      state.log.push(`${hname(state, a.k)}の「${sk.name}」`);
       switch (h.id) {
         case 'sword': attack(state, a.k, h.up ? 3 : 2); if (h.up && !state.over) shield(state, a.k, 3, sk.name); break;
         case 'mage': attack(state, a.k, h.up ? 4 : 2); break;
@@ -446,7 +444,6 @@
     const def = CARD[c.id], h = state.heroes[k], e = state.enemy;
     cycle(state, k, a.uid);
     state.mana -= def.cost;
-    state.log.push(`${hname(state, k)}の「${def.name}」`);
     switch (def.id) {
       case 'sw_slash': attack(state, k, 3); break;
       case 'sw_focus': h.focus += 2; mark(state, { p: 0, k, label: '次の攻撃+2' }); state.log.push('このターン、次の攻撃1回のダメージ+2'); break;
