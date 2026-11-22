@@ -300,12 +300,21 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .enemy .eh .fore { margin-left: auto; font-size: 11px; color: var(--good); border: 1px solid var(--good); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
 .enemy .eh .fore + .hpn { margin-left: 0; }
 .detail { position: relative; }
-.detail.more::after { content: "▼ 続きはスクロール"; position: sticky; display: block; bottom: -7px; margin: 0 -12px -7px; padding: 14px 12px 3px; text-align: center; font-size: 10.5px; color: var(--brass);
+.detail.more::after { content: "▼ 続きはスクロール" attr(data-stop); position: sticky; display: block; bottom: -7px; margin: 0 -12px -7px; padding: 14px 12px 3px; text-align: center; font-size: 10.5px; color: var(--brass);
   background: linear-gradient(to bottom, transparent, var(--panel) 55%); pointer-events: none; }
 
 .hrow { grid-template-columns: 64px 1fr 1fr 1fr 46px; }
 .card { padding: 3px 5px 4px; }
 .card b { font-size: 11px; white-space: nowrap; overflow-wrap: normal; }
+
+/* 4回目の画面レビューの対応 */
+.hero .pop.label { font-size: 11px; line-height: 16px; padding: 0 5px; }
+.battle.play .hero .pops { inset: 3px 6px auto auto; }
+.battle .frow { grid-template-columns: 16px minmax(0, 1fr) minmax(0, 1fr); }
+.card .tag.up { position: absolute; top: -8px; right: 4px; margin: 0; }
+.enemy.hit .fore { visibility: hidden; }
+.sum .hd { color: var(--muted); font-size: 10.5px; letter-spacing: .1em; margin-right: 6px; }
+.sheet p { overflow-wrap: anywhere; text-wrap: balance; }
 
 /* 道のり・報酬 */
 .route { display: flex; gap: 6px; }
@@ -611,13 +620,13 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     if (!steps.length) { play = null; return after(); }
     showStep();
   }
-  function showStep() {
+  function showStep(resumed) {
     const st = play.steps[play.i];
     render();
     clearTimeout(autoTimer);
     if (!settings.auto) return;
     if (paused) return;
-    if (overflowed) { paused = true; return render(); }   // 説明が入り切らない場面は、自動で止めて読めるようにする
+    if (overflowed && !resumed) { paused = true; return render(); }   // 説明が入り切らない場面は、自動で止めて読めるようにする
     // 読む時間は行数で決める
     autoTimer = setTimeout(advance, Math.max(1300, 800 + st.lines.join('').length * 75));
   }
@@ -639,11 +648,11 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   function finish() { phase = 'play'; render(); result(); }
 
   // ── 盤面の部品 ──
-  function popsHTML(list) {
+  function popsHTML(list, hero) {
     if (!list.length) return '';
     // 同じ相手への数字は合計して1つにする。札は重複を除いて2つまで
     const dmg = list.filter((h) => h.n != null && !h.heal), heal = list.filter((h) => h.heal);
-    const labels = [...new Set(list.map((h) => h.label).filter(Boolean))].filter((l) => !/^盾−/.test(l)).slice(-2);
+    const labels = [...new Set(list.map((h) => h.label).filter(Boolean))].filter((l) => !/^盾−/.test(l) && !(hero && /^(倒れた|かばわれ中|盾\+|挑発|反撃|次の攻撃)/.test(l))).slice(-2);
     let s = '';
     if (dmg.length && (dmg.some((h) => h.n !== 0) || !labels.length)) s += `<span class="pop dmg">${dmg.reduce((a, h) => a + h.n, 0)}</span>`;
     if (heal.length) s += `<span class="pop heal">+${heal.reduce((a, h) => a + h.n, 0)}</span>`;
@@ -688,7 +697,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const who = ctx.did ? (aimed.join('・') || 'なし') : atk ? (it.targets.length ? it.targets.map((t) => t.life ? 'あなたのライフ' : `${H[v.heroes[t.k].id].name}${t.why ? `（${t.why}）` : ''}`).join('・') : 'なし') : '';
     const pat = E.patternOf(e);
     const up = [1, 2].map((d) => pat[(e.step + d) % pat.length]).map(actShort).join(' → ');
-    const cls = ['enemy', ctx.targets.some((t) => t === 'enemy') ? 'target' : '', hits.some((x) => x.hit) ? 'shake' : '', ctx.actor && ctx.actor.p === 1 ? 'lunge-down' : ''].filter(Boolean);
+    const cls = ['enemy', hits.length ? 'hit' : '', ctx.targets.some((t) => t === 'enemy') ? 'target' : '', hits.some((x) => x.hit) ? 'shake' : '', ctx.actor && ctx.actor.p === 1 ? 'lunge-down' : ''].filter(Boolean);
     return `<div class="${cls.join(' ')}" data-target="enemy" role="button" tabindex="0" aria-label="${def.name}">
       <div class="eh"><span class="stage${def.boss ? ' boss' : ''}">${run ? stageName(run.stage) : ''}</span><b>${def.name}</b>${ctx.fore > 0 ? `<span class="fore">反撃・毒で−${ctx.fore}</span>` : ''}<span class="hpn">${e.hp}<small>/${e.maxHp}</small></span></div>
       <span class="hpbar"><i style="width:${pct}%"></i></span>
@@ -709,11 +718,12 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       ctx.actor && ctx.actor.p === 0 && ctx.actor.k === k ? 'lunge-up' : ''].filter(Boolean);
     const flags = [];
     if (h.ko) flags.push(['', `復活まであと${(h.wait || 0) + 1}ターン`]);
-    if (h.taunt && h.counter) flags.push(['hot', `挑発・反撃${h.counter}`]);
+    if (h.ko) { /* 倒れているあいだは復活までの表示だけ */ }
+    else if (h.taunt && h.counter) flags.push(['hot', `挑発・反撃${h.counter}`]);
     else if (h.taunt) flags.push(['hot', '挑発']);
     else if (h.counter) flags.push(['hot', `反撃${h.counter}`]);
-    if (h.guard != null) flags.push(['hot', 'かばわれ中']);
-    if (h.focus) flags.push(['hot', `攻撃+${h.focus}`]);
+    if (!h.ko && h.guard != null) flags.push(['hot', 'かばわれ中']);
+    if (!h.ko && h.focus) flags.push(['hot', `攻撃+${h.focus}`]);
     const pct = Math.max(0, h.hp / h.maxHp * 100);
     const marks = threat.map((t) => `<span class="aim${t === SAFE ? ' safe' : ''}">${esc(t)}</span>`).join('');
     return `<div class="${cls.join(' ')}" data-hero="${k}" role="button" tabindex="0" aria-label="${def.name}">
@@ -721,7 +731,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       <span class="hpbar"><i class="${pct <= 50 ? 'low' : ''}" style="width:${pct}%"></i></span>
       <span class="nums"><span>HP <b>${h.hp}</b>/${h.maxHp}</span>${h.shield ? `<span>盾 <b>${h.shield}</b></span>` : ''}</span>
       <span class="flags">${flags.map(([c, t]) => `<i class="${c}">${t}</i>`).join('')}</span>
-      ${popsHTML(hits)}</div>`;
+      ${popsHTML(hits, true)}</div>`;
   }
 
   function lifeHTML(v, ctx, threat) {
@@ -834,8 +844,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         parts.push(`${k === 'life' ? 'ライフ' : H[x.view.heroes[k].id].name} ${n === 0 ? '防いだ' : '−' + -n}${ko ? ' 倒れた' : ''}`);
       }
       const back = x.hits.filter((h) => h.p === 1 && h.n != null).reduce((a, h) => a + h.n, 0);
-      if (back) parts.push(`反撃で敵 −${-back}`);
-      return `<li><b>${esc(x.did.name)}${x.did.dmg != null ? x.did.dmg : '+' + x.did.n}</b>${parts.length ? '：' + parts.join('／') : ''}</li>`;
+      if (back) parts.push(`反撃 −${-back}`);
+      return `<li><span class="hd">前の敵の行動</span><b>${esc(x.did.name)}${x.did.dmg != null ? x.did.dmg : '+' + x.did.n}</b>${parts.length ? '：' + parts.join('／') : ''}</li>`;
     }).join('')}${(() => { const o = steps.filter((x) => !x.did).map((x) => x.title === 'ボスの本気' ? '本気になった（予告が変わった）' : x.title === '毒' ? '毒で敵 −2' : x.title === '怒り' ? `怒り+${E.ENRAGE}` : x.title); return o.length ? `<li>${o.join('／')}</li>` : ''; })()}</ul>`;
   }
 
@@ -872,7 +882,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     } else if (!flash && lastFoe && game.heroes.every((h) => h.ko)) {
       d = '<span class="muted">2人とも倒れているので、できることがない。「ターン終了」を押す。</span>';
     } else if (!flash && lastFoe) {
-      d = '<div class="sub" style="margin:0 0 2px">前の敵の行動</div>' + foeSummary(lastFoe);
+      d = foeSummary(lastFoe);
     } else if (flash) {
       d = flash.map((x) => `<div class="dh"><b>${esc(x.title)}</b></div><ul>${x.lines.map((l) => l.startsWith('※') ? `<li class="why"><span class="whytag">なぜ</span>${esc(l.slice(1))}</li>` : `<li>${esc(l)}</li>`).join('')}</ul>`).join('');
     } else {
@@ -925,7 +935,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     drawArrows(arrowList(v, st));
     const det = app.querySelector('.detail');
     const over = det && det.scrollHeight > det.clientHeight + 2;
-    if (over) { det.classList.add('more'); det.onscroll = () => { if (det.scrollTop + det.clientHeight >= det.scrollHeight - 4) det.classList.remove('more'); }; }
+    if (over) { det.classList.add('more'); det.dataset.stop = phase !== 'mine' && settings.auto ? '（読めるように止めています。「再開」か「次へ」で進む）' : ''; det.onscroll = () => { if (det.scrollTop + det.clientHeight >= det.scrollHeight - 4) det.classList.remove('more'); }; }
     overflowed = !!over;
     bind();
   }
@@ -934,7 +944,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const on = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
     on('next', () => { paused = false; advance(); });
     on('skip', skipAll);
-    on('pause', () => { paused = !paused; clearTimeout(autoTimer); if (paused) render(); else showStep(); });
+    on('pause', () => { paused = !paused; clearTimeout(autoTimer); if (paused) render(); else showStep(true); });
     if (phase !== 'mine') return;
     // 何かタップしたら、直前の行動の結果表示を消す
     app.querySelector('.battle').addEventListener('click', () => { flash = null; lastFoe = null; }, true);

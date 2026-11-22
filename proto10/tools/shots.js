@@ -67,6 +67,12 @@ fs.copyFileSync(path.join(root, 'tools', 'bot.js'), path.join(out, 'bot.js'));
           if (el.scrollWidth > el.clientWidth + 1) out.push(`横に切れる ${q}「${el.textContent.trim().slice(0, 16)}」`);
         }
         for (const el of document.querySelectorAll('.hero > span:not(.pops):not(.hpbar)')) { const r = el.getBoundingClientRect(), pr = el.parentElement.getBoundingClientRect(); if (r.height && r.bottom > pr.bottom - 4) out.push(`ヒーロー枠の下に切れる「${el.textContent.trim().slice(0, 16)}」`); }
+        const hitTest = (r1, r2) => Math.min(r1.right, r2.right) - Math.max(r1.left, r2.left) > 2 && Math.min(r1.bottom, r2.bottom) - Math.max(r1.top, r2.top) > 2;
+        for (const hero of document.querySelectorAll('.hero, .enemy')) for (const pop of hero.querySelectorAll('.pops .pop')) for (const t of hero.querySelectorAll('.nums > span, .flags i, .fore, .nm b, .hpn')) {
+          if (getComputedStyle(t).visibility !== 'hidden' && hitTest(pop.getBoundingClientRect(), t.getBoundingClientRect())) out.push(`数字「${pop.textContent}」が「${t.textContent.trim().slice(0, 10)}」に重なる`);
+        }
+        for (const tag of document.querySelectorAll('.card .tag')) { const r = tag.getBoundingClientRect(), c = tag.closest('.card').getBoundingClientRect(); if (r.right > c.right + 1 || r.left < c.left - 1) out.push(`札がカードの外「${tag.textContent}」`); }
+        for (const row of document.querySelectorAll('.frow')) { const cs = [...row.querySelectorAll('.cell')].map((c) => Math.round(c.getBoundingClientRect().width)); if (Math.abs(cs[0] - cs[1]) > 1) out.push(`列の幅がずれる ${cs.join('/')}`); }
         for (const el of document.querySelectorAll('.card b, .hr-name b, .hr-name span')) { if (el.getBoundingClientRect().height > 20) out.push(`折り返している「${el.textContent.trim()}」`); }
         return [...new Set(out)];
       });
@@ -115,7 +121,8 @@ fs.copyFileSync(path.join(root, 'tools', 'bot.js'), path.join(out, 'bot.js'));
             else if (!did.card) { did.card = 1; await shot('07-card-selected'); }
             await p.click('#use');
           }
-          await skipPlay(!did.play ? '11-playback' : null); did.play = 1;
+          if (!did.after || (a.type === 'skill' && !did.afterSkill)) { await shot(a.type === 'skill' ? '11b-after-skill' : '11-after-action'); did.after = 1; if (a.type === 'skill') did.afterSkill = 1; }
+          await skipPlay(null);
         }
         if (await p.$('.overlay')) break;
         if (!auto && await p.$('#endturn')) {
@@ -151,6 +158,23 @@ fs.copyFileSync(path.join(root, 'tools', 'bot.js'), path.join(out, 'bot.js'));
     await p.click('#endturn');
     for (let i = 0; i < 6 && await p.$('#next') && !(await p.$('.overlay')); i++) { await shot(`31-stress-play${i}`); await p.click('#next'); }
     if (!(await p.$('.overlay'))) await shot('32-stress-next-mine');
+    // 自動再生で、長い説明で止まったあと「再開」で進むこと
+    await p.evaluate(() => localStorage.setItem('futari-pve-settings', JSON.stringify({ auto: true })));
+    await p.goto('file://' + path.join(out, 'test.html'));
+    await p.click('#go'); await p.click('#fight');
+    await p.waitForSelector('#endturn', { timeout: 20000 });
+    await p.evaluate(() => { const g = window.__dbg.game; g.life = 20; Object.assign(g.heroes[0], { hp: 1, counter: 3, taunt: true }); Object.assign(g.heroes[1], { hp: 1, guard: 0, pos: g.heroes[0].pos }); Object.assign(g.enemy, { charge: 5, weak: 2, loops: 1, poison: 2, step: 0 }); });
+    await p.click('#endturn');
+    await p.waitForTimeout(1500);
+    const before = await p.evaluate(() => document.querySelector('.detail .dh') && document.querySelector('.detail .dh').textContent);
+    const stopped = await p.evaluate(() => { const b = document.querySelector('#pause'); return b && b.textContent; });
+    await shot('33-auto-overflow');
+    if (stopped === '再開') {
+      await p.click('#pause');
+      await p.waitForTimeout(9000);
+      const after = await p.evaluate(() => document.querySelector('.detail .dh') ? document.querySelector('.detail .dh').textContent : 'mine');
+      if (after === before) issues.push('33-auto-overflow: 「再開」を押しても進まない');
+    }
     console.log(`■ ${size}`);
     for (const l of log) console.log('  ' + l);
     if (errs.length) { bad++; console.log('  エラー:', errs); }
