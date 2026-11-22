@@ -47,7 +47,8 @@ pairs.forEach((team, idx) => {
         const want = process.env.REWARD || 'random';
         const cand = opts.filter((o) => o.type !== 'heal' || run.life < E.LIFE);
         const o = (want !== 'random' && cand.find((x) => x.type === want)) || (want === 'heal' && cand.find((x) => x.type === 'up')) || cand[Math.floor(Math.random() * cand.length)];
-        const rep = o.type === 'card' ? run.mods[o.k].cards[Math.floor(Math.random() * 4)] : null;
+        const OUT = { sword: ['sw_lunge', 'sw_double'], saint: ['st_bless', 'st_heal'], knight: ['kn_wall', 'kn_guard'], mage: ['mg_thunder', 'mg_bolt'], rogue: ['rg_dagger', 'rg_backstab'] };
+        const rep = o.type === 'card' ? (OUT[run.heroes[o.k]].find((c) => run.mods[o.k].cards.includes(c)) || run.mods[o.k].cards[0]) : null;
         E.applyReward(run, o, rep);
         rec.rewards.push({ type: o.type, what: o.what || null, card: o.card || null, rep, hero: o.k != null ? run.heroes[o.k] : null });
       }

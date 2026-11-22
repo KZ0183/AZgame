@@ -54,9 +54,9 @@ const tough = (g) => g.heroes.forEach((h) => { h.hp = h.maxHp = 50; });
 {
   const g = setup(['knight', 'sword'], 0, 'dragon');         // 強打8
   E.act(g, { type: 'move', k: 1 });                          // 2人とも前衛。HPが高いのは騎士
-  eq('強打はHPが高い前衛', E.intent(g).targets, [{ k: 0 }]);
+  eq('強打はHPが高い前衛', E.intent(g).targets.map((t) => t.k), [0]);
   g.heroes[0].hp = 5;
-  eq('強打はHPが高いほうへ移る', E.intent(g).targets, [{ k: 1 }]);
+  eq('強打はHPが高いほうへ移る', E.intent(g).targets.map((t) => t.k), [1]);
 }
 
 // ── 挑発・反撃・かばう ──
@@ -136,7 +136,7 @@ ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), 
   play(g, 'sw_slash', 'enemy');
   eq('盾が攻撃を防ぐ', [g.enemy.hp, g.enemy.shield], [hp, 3]);
   play(g, 'sw_cleave', 'enemy');
-  eq('盾割りは盾を壊してから4', [g.enemy.hp, g.enemy.shield], [hp - 4, 0]);
+  eq('盾割りは盾を消してから5', [g.enemy.hp, g.enemy.shield], [hp - 5, 0]);
 }
 
 // ── 怒り・撹乱・毒 ──
