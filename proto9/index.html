@@ -467,6 +467,9 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   function beginMine() {
     if (game.over) return finish();
     phase = 'mine'; clearPick();
+    // マナが0で、使える0マナのカードもなければ、自動でターンを終える
+    const canPlay = game.decks.some((d) => d.hand.some((c) => ['enemy', 0, 1, null].some((t) => !E.check(game, { type: 'card', uid: c.uid, target: t }))));
+    if (game.mana === 0 && !canPlay) return endTurn();
     render();
   }
   function doAct(a) {
