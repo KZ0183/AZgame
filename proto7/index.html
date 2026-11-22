@@ -295,7 +295,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   }
   function saveSettings() { try { localStorage.setItem('futari-settings', JSON.stringify(settings)); } catch {} }
   let game = null, cpuTeam = null;
-  // 入力中：sel = 選んだ手札の uid、focus = 詳しく見ているヒーロー {p,k}、mode = 'attack' のときは攻撃の対象選び
+  // 入力中：sel = 選んだ手札の uid、focus = 詳しく見ているヒーロー {p,k}、mode = 'skill' のときは固有スキルの対象選び
   let sel = null, focus = null, mode = null, last = null, play = null;
   // banner = 今見せているレベルアップ、newUids = レベルアップで得た手札（NEW 印）
   let banner = null, bannerTimer = null;
@@ -310,7 +310,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       <div><h1>ふたりの英雄</h1><p class="muted">二人を選び、前と後ろに立たせて戦う。</p></div>
       <div class="rules"><ul>
         <li>ヒーローを<b>2人</b>選ぶだけでデッキが決まる。各ヒーローは固有のカードを4枚持つ</li>
-        <li><b>交互にターン</b>を行う。自分のターンには、カード・通常攻撃（1マナ）・移動（<b>無料</b>、1人1ターン1回）を<b>1つずつ</b>行う</li>
+        <li><b>交互にターン</b>を行う。自分のターンには、カード・<b>固有スキル</b>（1マナ・1人1ターン1回）・移動（<b>無料</b>、1人1ターン1回）を<b>1つずつ</b>行う</li>
+        <li>各ヒーローには巡回とは別に<b>固有スキル</b>がある（剣士：斬りかかる、聖女：祈りの手、守護騎士：かばう、魔術師：魔弾、盗賊：すり抜け）</li>
         <li>攻撃すると、相手は<b>「対応」カード</b>で割り込める（盾・回復・挑発・足払い）。対応への対応はない</li>
         <li>マナは自分のターンの始めに回復する（ラウンド数+1、最大6）。<b>使わずに残したマナは、相手のターンの対応に使える</b></li>
         <li>ヒーローは<b>前衛</b>か<b>後衛</b>に立つ。前衛向けの攻撃は後衛に届かない。遠距離技は後衛にも届く</li>
@@ -335,9 +336,9 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   // ── 編成 ──
   const heroCards = (id) => H[id].cards;
   // ヒーローのカード一覧（前衛用・後衛用に分けて）
-  const cardListHTML = (id) => ['front', 'back'].map((pos) => {
+  const cardListHTML = (id) => `<div class="clist"><span class="label">固有スキル（いつでも）</span><div><b>${esc(H[id].skill.name)}</b>【${E.SKILL_COST}${H[id].skill.pos === 'front' ? '・前衛' : ''}】${H[id].skill.resp ? '<span class="rtag">対応</span>' : ''}${esc(H[id].skill.text)}</div></div>` + ['front', 'back'].map((pos) => {
     const cs = heroCards(id).filter((cid) => C[cid].pos === pos);
-    return cs.length ? `<div class="clist"><span class="label">${E.POS_NAME[pos]}で生まれる</span>${cs.map((cid) => { const c = C[cid]; return `<div><b>${esc(c.name)}</b>【${c.cost}】${c.resp ? '<span class="rtag">対応</span>' : ''}${esc(c.text)}</div>`; }).join('')}</div>` : '';
+    return cs.length ? `<div class="clist"><span class="label">${pos === 'front' ? '前衛用（前衛にいるときだけ）' : 'どこでも使える'}</span>${cs.map((cid) => { const c = C[cid]; return `<div><b>${esc(c.name)}</b>【${c.cost}】${c.resp ? '<span class="rtag">対応</span>' : ''}${esc(c.text)}</div>`; }).join('')}</div>` : '';
   }).join('');
   function heroInfo(id) {
     const h = H[id];
@@ -353,7 +354,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         const { cards } = heroInfo(h.id);
         return `<button class="hero-pick c-${h.color}" aria-pressed="${i >= 0}" data-hero="${h.id}">
           <span class="hd"><b>${h.name}</b><span class="st">HP ${h.hp}・攻撃 ${h.atk}</span>${i >= 0 ? `<span class="order">${team.front === i ? '最初は前衛' : '最初は後衛'}</span>` : ''}</span>
-          <ul>${cards}</ul></button>`;
+          <span class="grow">固有スキル「<b>${esc(h.skill.name)}</b>」：${esc(h.skill.text)}</span><ul>${cards}</ul></button>`;
       }).join('')}</div>
       ${team.heroes.length === 2 ? `<div class="row"><span class="label">最初に前衛に立つ</span>${team.heroes.map((id, i) => `<button class="mini${team.front === i ? ' on' : ''}" data-front="${i}">${H[id].name}</button>`).join('')}</div>` : ''}
       <div class="foot"><button class="btn ghost" id="back">戻る</button><button class="btn" id="go" ${errs.length ? 'disabled' : ''}>この二人で対戦</button></div>
@@ -544,7 +545,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     if (p === v.active && !h.ko) { if (h.attacked) flags.push(['', '攻撃済み']); if (h.moved) flags.push(['', '移動済み']); }
     const pct = Math.max(0, h.hp / h.maxHp * 100);
     return `<div class="${cls}" data-hero="${p}-${k}" role="button" tabindex="0" aria-label="${def.name}">
-      <span class="nm"><b>${def.name}</b><span class="spd">攻撃${h.atk}</span></span>
+      <span class="nm"><b>${def.name}</b><span class="spd">${esc(def.skill.name)}</span></span>
       <span class="hpbar"><i class="${pct <= 50 ? 'low' : ''}" style="width:${pct}%"></i></span>
       <span class="nums"><span>HP <b>${h.hp}</b>/${h.maxHp}</span>${h.shield ? `<span>盾 <b>${h.shield}</b></span>` : ''}${flags.length ? `<span class="flags">${flags.map((f) => `<i class="${f[0]}">${f[1]}</i>`).join('')}</span>` : ''}</span>
       ${markHTML}${popsHTML(hits)}</div>`;
@@ -559,7 +560,11 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       return def.target === 'ally' ? allies() : [];
     }
     if (phase !== 'mine') return [];
-    if (mode === 'attack' && focus) return foes();
+    if (mode === 'skill' && focus) {
+      const sk = H[game.players[0].heroes[focus.k].id].skill;
+      if (sk.target === 'ally') return [0, 1].filter((k) => !game.players[0].heroes[k].ko && !(sk.resp && k === focus.k)).map((k) => ({ p: 0, k }));
+      return foes();
+    }
     if (sel) {
       const def = C[myCard(sel).id];
       if (def.id === 'rg_trip') return [0, 1].filter((k) => !game.players[1].heroes[k].ko && game.players[1].heroes[k].pos === 'front').map((k) => ({ p: 1, k }));
@@ -595,7 +600,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     }
     if (phase === 'mine' && ptarget) {
       let k = null;
-      if (mode === 'attack' && focus) k = focus.k;
+      if (mode === 'skill' && focus) k = focus.k;
       else if (sel) k = E.cardHero(game, 0, myCard(sel).id);
       if (k == null || (ptarget.p === 0 && ptarget.k === k)) return [];
       return [{ from: { p: 0, k }, to: ptarget, kind: ptarget.p === 0 ? 'ally' : 'mine' }];
@@ -697,7 +702,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       topline = `<div class="timer respond" id="timer"><span class="tl"><span>相手の攻撃！ 対応する？ 残り <b></b>秒</span></span><span class="bar"><i></i></span></div>`;
       const pd = game.pending;
       const atk = game.players[1].heroes[pd.k];
-      const what = pd.type === 'card' ? `「${C[pd.id].name}」：${C[pd.id].text}` : `通常攻撃（${atk.atk + atk.focus}ダメージ）`;
+      const what = pd.type === 'card' ? `「${C[pd.id].name}」：${C[pd.id].text}` : `固有スキル「${H[atk.id].skill.name}」：${H[atk.id].skill.text}`;
       const toName = pd.target == null ? '' : pd.target === E.TOWER ? 'あなたのタワー' : `あなたの${H[me.heroes[pd.target].id].name}`;
       let d = `<b class="h">相手の${H[atk.id].name}</b>${toName ? ` → <b>${toName}</b>` : ''}<br>${esc(what)}`;
       const opts = E.responses(game, 0);
@@ -707,6 +712,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       } else {
         d += `<br><span class="muted">${opts.length ? '光っているカードで対応できる。' : '対応できるカードがない（マナか、カードか、位置が足りない）。'}</span>`;
       }
+      const guards = opts.filter((r) => r.skill != null);
+      if (guards.length) d += `<div class="row" style="margin-top:4px">${guards.map((r) => `<button class="mini lvbtn" data-respskill="${r.skill}">${H[me.heroes[r.skill].id].name}の「${H[me.heroes[r.skill].id].skill.name}」【${E.SKILL_COST}】で対応</button>`).join('')}</div>`;
       panel = `<div class="detail">${d}</div>`;
       const ready = rsel && (C[myCard(rsel).id].target !== 'ally' || rtarget != null);
       buttons = `<button class="btn ghost" id="pass">対応しない</button><button class="btn" id="resp" ${ready ? '' : 'disabled'}>${rsel ? `「${esc(C[myCard(rsel).id].name)}」で対応` : 'カードを選ぶ'}</button>`;
@@ -716,9 +723,10 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         : `<div class="timer idle"><span>あなたのターン</span><span class="muted">${oppMana}</span></div>`;
       let d = '';
       const selCard = sel && myCard(sel);
-      if (mode === 'attack' && focus) {
+      if (mode === 'skill' && focus) {
         const h = me.heroes[focus.k];
-        d = `<b class="h">${H[h.id].name}の通常攻撃</b>（1マナ・${h.atk + h.focus}ダメージ）<br>${ptarget ? `→ <b>${targetName(ptarget.p, ptarget.k)}</b>　<span class="muted">「攻撃する」で確定。相手は対応してくるかもしれない。</span>` : '<span class="muted">狙う相手をタップ</span>'}`;
+        const sk = H[h.id].skill;
+        d = `<b class="h">${H[h.id].name}の「${esc(sk.name)}」</b>（${E.SKILL_COST}マナ）${esc(sk.text)}<br>${ptarget ? `→ <b>${targetName(ptarget.p, ptarget.k)}</b>　<span class="muted">「使う」で確定${sk.attack ? '。相手は対応してくるかもしれない' : ''}</span>` : `<span class="muted">${sk.target === 'ally' ? '緑に光っている味方' : '狙う相手'}をタップ</span>`}`;
       } else if (selCard) {
         const def = C[selCard.id];
         const err = def.target === 'none' ? E.checkCard(game, 0, def, null) : currentTargets().length ? null : E.checkCard(game, 0, def, 0);
@@ -730,11 +738,12 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       } else if (focus) d = focusHTML(v);
       else d = '<span class="muted">手札やヒーローをタップして行動する。攻撃すると、相手は対応してくるかもしれない。使わずに残したマナは、相手のターンの対応に使える。</span>';
       panel = `<div class="detail">${d}</div>`;
-      // カードも通常攻撃も、「使う」を押すまでは何も起きない
+      // カードも固有スキルも、「使う」を押すまでは何も起きない
       const useBtn = (() => {
-        if (mode === 'attack' && focus) {
-          const err = ptarget ? E.check(game, 0, { type: 'attack', k: focus.k, target: ptarget.k }) : '対象を選ぶ';
-          return `<button class="btn" id="use" ${err ? 'disabled' : ''}>${ptarget ? '攻撃する' : '狙う相手を選ぶ'}</button>`;
+        if (mode === 'skill' && focus) {
+          const sk = H[me.heroes[focus.k].id].skill;
+          const err = ptarget ? E.check(game, 0, { type: 'skill', k: focus.k, target: ptarget.k }) : '対象を選ぶ';
+          return `<button class="btn" id="use" ${err ? 'disabled' : ''}>${ptarget ? `「${esc(sk.name)}」を使う` : sk.target === 'ally' ? '味方を選ぶ' : '狙う相手を選ぶ'}</button>`;
         }
         if (!selCard) return null;
         const def = C[selCard.id];
@@ -797,12 +806,15 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const h = v.players[focus.p].heroes[focus.k];
     if (focus.p === 1 && !h.revealed) return '<b class="h">正体不明の後衛</b><br><span class="muted">前衛に出るか、行動するか、ダメージを受けると正体が分かる。</span>';
     const def = H[h.id];
-    let d = `<b class="h">${def.name}</b>　<span class="muted">${focus.p === 0 ? 'あなた' : '相手'}・${E.POS_NAME[h.pos]}・攻撃${h.atk}</span>`;
+    const sk = def.skill;
+    let d = `<b class="h">${def.name}</b>　<span class="muted">${focus.p === 0 ? 'あなた' : '相手'}・${E.POS_NAME[h.pos]}</span><br>固有スキル「<b>${esc(sk.name)}</b>」【${E.SKILL_COST}${sk.pos === 'front' ? '・前衛' : ''}】${esc(sk.text)}`;
     if (focus.p === 0 && phase === 'mine' && !h.ko) {
-      const atkErr = h.pos === 'front' ? E.check(game, 0, { type: 'attack', k: focus.k, target: E.TOWER }) : '前衛にいない';
+      const ts = sk.target === 'ally' ? [0, 1] : [0, 1, E.TOWER];
+      const errs = ts.map((t) => E.check(game, 0, { type: 'skill', k: focus.k, target: t }));
+      const skErr = errs.every(Boolean) ? errs.find(Boolean) : null;
       const mvErr = E.check(game, 0, { type: 'move', k: focus.k });
       d += `<div class="row" style="margin:4px 0 2px">
-        ${h.pos === 'front' ? `<button class="mini" id="atk" ${atkErr ? 'disabled' : ''}>${atkErr ? `攻撃：${esc(atkErr)}` : '通常攻撃【1】'}</button>` : ''}
+        <button class="mini" id="atk" ${skErr ? 'disabled' : ''}>${skErr ? `${esc(sk.name)}：${esc(skErr)}` : `${esc(sk.name)}【${E.SKILL_COST}】`}</button>
         <button class="mini" id="mv" ${mvErr ? 'disabled' : ''}>${mvErr ? `移動：${esc(mvErr)}` : `${h.pos === 'front' ? '後衛' : '前衛'}へ移動${E.MOVE_COST ? `【${E.MOVE_COST}】` : '（無料）'}`}</button></div>`;
     }
     return d + `<div class="clists">${cardListHTML(h.id)}</div>`;
@@ -823,7 +835,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         }
         if (phase !== 'mine') return;
         if (currentTargets().some((t) => t.p === p && t.k === k)) {
-          if (mode === 'attack' || sel) { ptarget = { p, k }; battle(); return; }
+          if (mode === 'skill' || sel) { ptarget = { p, k }; battle(); return; }
         }
         sel = null; mode = null;
         focus = focus && focus.p === p && focus.k === k ? null : { p, k };
@@ -850,10 +862,11 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       ptarget = null;
       battle();
     });
-    on('atk', () => { mode = 'attack'; ptarget = null; battle(); });
+    on('atk', () => { mode = 'skill'; ptarget = null; battle(); });
+    app.querySelectorAll('[data-respskill]').forEach((b) => b.onclick = () => sendResponse({ skill: +b.dataset.respskill }));
     on('mv', () => doMine({ type: 'move', k: focus.k }));
     on('use', () => {
-      if (mode === 'attack' && focus) { if (ptarget) doMine({ type: 'attack', k: focus.k, target: ptarget.k }); return; }
+      if (mode === 'skill' && focus) { if (ptarget) doMine({ type: 'skill', k: focus.k, target: ptarget.k }); return; }
       const def = C[myCard(sel).id];
       if (def.target === 'none') doMine({ type: 'card', uid: sel, target: null });
       else if (ptarget) doMine({ type: 'card', uid: sel, target: ptarget.k });

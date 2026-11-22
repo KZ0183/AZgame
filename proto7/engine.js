@@ -10,7 +10,7 @@
   const TOWER = 2; // 攻撃の対象としてのタワーの番号
   const TOWER_HP = 25;
   const TOWER_COUNTER = 4;
-  const ATTACK_COST = 1; // 通常攻撃のマナ
+  const SKILL_COST = 1; // 固有スキルのマナ（1ターン1回）
   const REVIVE_WAIT = 1; // 倒されたヒーローが、復活するまでに休む自分のターンの数
   const MOVE_COST = 0; // 移動のマナ
   const KO_TOWER = 4; // ヒーローを倒すと、そのヒーローの持ち主のタワーが受けるダメージ
@@ -23,6 +23,16 @@
     { id: 'mage', name: '魔術師', color: 'blue', hp: 8, atk: 1, cards: ['mg_bolt', 'mg_flame', 'mg_meditate', 'mg_thunder'] },
     { id: 'rogue', name: '盗賊', color: 'green', hp: 10, atk: 3, cards: ['rg_dagger', 'rg_trip', 'rg_steal', 'rg_backstab'] },
   ];
+  // 固有スキル：巡回とは別に、毎ターン1回いつでも使える（通常攻撃の代わり）
+  // pos: front = 前衛にいるときだけ / back = どこからでも。target は カードと同じ。attack: 相手が対応できる。resp: 対応で使える
+  const SKILLS = {
+    sword: { name: '斬りかかる', pos: 'front', target: 'front', attack: true, text: '攻撃力ぶん（3）のダメージ。気合いの強化も乗る。' },
+    saint: { name: '祈りの手', pos: 'back', target: 'ally', text: '味方1人のHPを2回復。' },
+    knight: { name: 'かばう', pos: 'front', target: 'ally', resp: true, text: '次の自分のターンまで、味方1人への攻撃を代わりに受ける。対応で使うと、今の攻撃を代わりに受ける。' },
+    mage: { name: '魔弾', pos: 'back', target: 'any', attack: true, text: '遠距離。1ダメージ。後衛からでも撃てる。' },
+    rogue: { name: 'すり抜け', pos: 'front', target: 'front', attack: true, text: '2ダメージ。このターン、もう1回移動できる。' },
+  };
+  HEROES.forEach((h) => { h.skill = SKILLS[h.id]; });
   const HERO = Object.fromEntries(HEROES.map((h) => [h.id, h]));
 
   // pos: front = そのヒーローが前衛にいるときだけ使える / back = どこからでも使える
@@ -68,7 +78,7 @@
   function makeHero(id, pos) {
     const h = HERO[id];
     return { id, hp: h.hp, maxHp: h.hp, atk: h.atk, pos, shield: 0, ko: false, revealed: pos === 'front',
-      focus: 0, taunt: false, attacked: false, moved: false, note: null };
+      focus: 0, taunt: false, attacked: false, moved: false, note: null, guard: null }; // attacked = 固有スキルを使った
   }
 
   // ── 状態 ──
@@ -156,7 +166,7 @@
         mark(state, { p, k, label: '復活' });
         state.log.push(`${heroName(state, p, k)}が後衛で復活した`);
       }
-      h.shield = 0; h.taunt = false; h.focus = 0; h.attacked = false; h.moved = false; h.note = null;
+      h.shield = 0; h.taunt = false; h.focus = 0; h.attacked = false; h.moved = false; h.note = null; h.guard = null;
     });
     step(state, `${pl.name}のターン`, true);
   }
@@ -175,7 +185,7 @@
   }
 
   // ── 行動の確認 ──
-  // action = { type: 'card', uid, target } | { type: 'attack', k, target } | { type: 'move', k }
+  // action = { type: 'card', uid, target } | { type: 'skill', k, target } | { type: 'move', k }
   function cardHero(state, p, id) { return state.players[p].heroes.findIndex((h) => h.id === CARD[id].hero); }
 
   // 自分のターンの行動として正しいか。正しければ null
@@ -189,12 +199,18 @@
       if (pl.mana < MOVE_COST) return 'マナが足りない';
       return null;
     }
-    if (a.type === 'attack') {
+    if (a.type === 'skill') {
       const h = pl.heroes[a.k];
       if (!h || h.ko) return '倒れている';
-      if (h.pos !== 'front') return '前衛にいない';
-      if (h.attacked) return '通常攻撃は1ターン1回';
-      if (pl.mana < ATTACK_COST) return 'マナが足りない';
+      const sk = HERO[h.id].skill;
+      if (sk.pos === 'front' && h.pos !== 'front') return '前衛にいない';
+      if (h.attacked) return '固有スキルは1ターン1回';
+      if (pl.mana < SKILL_COST) return 'マナが足りない';
+      if (sk.target === 'ally') {
+        if (!(a.target === 0 || a.target === 1) || pl.heroes[a.target].ko) return '対象が不正';
+        if (h.id === 'knight' && a.target === a.k) return '自分はかばえない';
+        return null;
+      }
       if (!validFoe(state, p, a.target)) return '狙えない相手';
       return null;
     }
@@ -225,10 +241,20 @@
     return validFoe(state, p, target) ? null : '狙えない相手';
   }
 
-  // 相手の攻撃に対応できるか。resp = { uid, target }
+  // 相手の攻撃に対応できるか。resp = { uid, target }（カード）か { skill: k }（固有スキル）
   function checkResponse(state, q, resp) {
     const pd = state.pending;
     if (!pd || pd.p === q) return '対応できる攻撃がない';
+    if (resp.skill != null) {
+      const h = state.players[q].heroes[resp.skill];
+      if (!h || h.ko || !HERO[h.id].skill.resp) return '対応できる固有スキルではない';
+      if (h.pos !== 'front') return `${HERO[h.id].name}が前衛にいない`;
+      if (h.attacked) return '固有スキルはもう使った';
+      if (state.players[q].mana < SKILL_COST) return 'マナが足りない';
+      if (!(pd.target === 0 || pd.target === 1)) return '味方のヒーローへの攻撃ではない';
+      if (pd.target === resp.skill) return '自分への攻撃はかばえない';
+      return null;
+    }
     const f = findCard(state, q, resp.uid);
     if (!f) return '手札にない';
     const def = CARD[f.c.id];
@@ -309,8 +335,9 @@
     if (t === TOWER) return { k: TOWER };
     const h = hs[t];
     if (h.ko) return null;
-    if (kind === 'any' || h.pos === 'front') return { k: t };
-    return null;
+    if (!(kind === 'any' || h.pos === 'front')) return null;
+    if (h.guard != null && h.guard !== t && !hs[h.guard].ko) return { k: h.guard, why: `※${HERO[hs[h.guard].id].name}が「かばう」で、攻撃を代わりに受けた` };
+    return { k: t };
   }
   function whyMiss(state, p, t) {
     const h = state.players[1 - p].heroes[t];
@@ -323,6 +350,32 @@
     if (t.k === TOWER) { hitTower(state, p, k, n, src); return TOWER; }
     damage(state, 1 - p, t.k, n, src);
     return t.k;
+  }
+
+  // 固有スキルを処理する（攻撃スキルは対応のあと、それ以外はその場で）
+  function applySkill(state, p, k, target) {
+    const pl = state.players[p], o = 1 - p, h = pl.heroes[k], sk = HERO[h.id].skill;
+    h.revealed = true;
+    const hit = (n) => {
+      const t = resolveTarget(state, p, sk.target, target);
+      if (!t) { mark(state, { p: o, k: target, label: '空振り' }); state.log.push('空振り！', whyMiss(state, p, target)); return null; }
+      if (t.why) state.log.push(t.why);
+      const bonus = h.focus; h.focus = 0;
+      return strike(state, p, k, t, n + bonus, sk.name);
+    };
+    switch (h.id) {
+      case 'sword': hit(h.atk); break;
+      case 'rogue': hit(2); if (!h.ko) { h.moved = false; mark(state, { p, k, label: 'もう1回移動できる' }); state.log.push('このターン、もう1回移動できる'); } break;
+      case 'mage': hit(1); break;
+      case 'saint': heal(state, p, target, 2, sk.name); break;
+      case 'knight': {
+        const t = pl.heroes[target];
+        t.guard = k;
+        mark(state, { p, k: target, label: 'かばわれている' });
+        state.log.push(`次の自分のターンまで、${HERO[h.id].name}が${HERO[t.id].name}への攻撃を代わりに受ける`);
+        break;
+      }
+    }
   }
 
   // 攻撃以外のカード、または攻撃カードの本体を処理する
@@ -407,15 +460,23 @@
       step(state, '移動', true, { p, k: a.k });
       return { done: true };
     }
-    if (a.type === 'attack') {
-      pl.mana -= ATTACK_COST;
+    if (a.type === 'skill') {
+      pl.mana -= SKILL_COST;
       const h = pl.heroes[a.k];
+      const sk = HERO[h.id].skill;
       h.attacked = true;
-      state.pending = { p, k: a.k, type: 'attack', target: a.target };
-      aimAt(state, 1 - p, a.target);
-      state.log.push(`${heroName(state, p, a.k)}が${targetName(state, p, a.target)}に通常攻撃（${h.atk + h.focus}ダメージ）`);
-      step(state, `攻撃の宣言：${HERO[h.id].name}`, true, { p, k: a.k });
-      return { waiting: true };
+      h.revealed = true;
+      if (sk.attack) {
+        state.pending = { p, k: a.k, type: 'skill', target: a.target };
+        aimAt(state, 1 - p, a.target);
+        state.log.push(`${heroName(state, p, a.k)}の「${sk.name}」→${targetName(state, p, a.target)}：${sk.text}`);
+        step(state, `攻撃の宣言：${HERO[h.id].name}の${sk.name}`, true, { p, k: a.k });
+        return { waiting: true };
+      }
+      state.log.push(`${heroName(state, p, a.k)}の「${sk.name}」`);
+      applySkill(state, p, a.k, a.target);
+      step(state, `${HERO[h.id].name}：${sk.name}`, true, { p, k: a.k });
+      return { done: true };
     }
     // カード
     const { k, c } = findCard(state, p, a.uid);
@@ -449,7 +510,18 @@
     const pd = state.pending;
     if (!pd) return { error: '対応できる攻撃がない' };
     const P = state.players, p = pd.p;
-    if (resp) {
+    if (resp && resp.skill != null) {
+      const err = checkResponse(state, q, resp);
+      if (err) return { error: err };
+      const kh = P[q].heroes[resp.skill];
+      P[q].mana -= SKILL_COST;
+      kh.attacked = true;
+      kh.revealed = true;
+      state.log.push(`${heroName(state, q, resp.skill)}が対応：「${HERO[kh.id].skill.name}」`, `※${HERO[kh.id].name}が、${HERO[P[q].heroes[pd.target].id].name}への攻撃を代わりに受ける`);
+      pd.target = resp.skill;
+      mark(state, { p: q, k: resp.skill, label: 'かばう' });
+      step(state, `対応：${HERO[kh.id].name}の${HERO[kh.id].skill.name}`, true, { p: q, k: resp.skill });
+    } else if (resp) {
       const err = checkResponse(state, q, resp);
       if (err) return { error: err };
       const { k, c } = findCard(state, q, resp.uid);
@@ -471,9 +543,10 @@
     const h = P[p].heroes[pd.k];
     const nm = HERO[h.id].name;
     const def = pd.type === 'card' ? CARD[pd.id] : null;
-    const title = def ? `${nm}：${def.name}` : `攻撃：${nm}`;
+    const sk = HERO[h.id].skill;
+    const title = def ? `${nm}：${def.name}` : `${nm}：${sk.name}`;
     if (h.ko) { state.log.push(`${heroName(state, p, pd.k)}は倒れていて、攻撃できなかった`); step(state, title, true); return { done: true }; }
-    const needFront = !def || def.pos === 'front';
+    const needFront = def ? def.pos === 'front' : sk.pos === 'front';
     if (needFront && h.pos !== 'front') {
       mark(state, { p, k: pd.k, label: '不発' });
       state.log.push(`${heroName(state, p, pd.k)}の攻撃は不発`, `※${nm}は後衛に下げられていた（${h.note || ''}）。前衛からの攻撃は、後衛からはできない`);
@@ -481,15 +554,7 @@
       return { done: true };
     }
     if (def) applyCard(state, p, def, pd.target);
-    else {
-      const t = resolveTarget(state, p, 'front', pd.target);
-      if (!t) { mark(state, { p: 1 - p, k: pd.target, label: '空振り' }); state.log.push('空振り！', whyMiss(state, p, pd.target)); }
-      else {
-        if (t.why) state.log.push(t.why);
-        const n = h.atk + h.focus; h.focus = 0;
-        strike(state, p, pd.k, t, n, nm);
-      }
-    }
+    else applySkill(state, p, pd.k, pd.target);
     step(state, title, true, { p, k: pd.k });
     return { done: true };
   }
@@ -509,7 +574,7 @@
   function actions(state, p) {
     const pl = state.players[p], out = [];
     const tryA = (a) => { if (!check(state, p, a)) out.push(a); };
-    for (let k = 0; k < 2; k++) { tryA({ type: 'move', k }); for (const t of [0, 1, TOWER]) tryA({ type: 'attack', k, target: t }); }
+    for (let k = 0; k < 2; k++) { tryA({ type: 'move', k }); for (const t of [0, 1, TOWER]) tryA({ type: 'skill', k, target: t }); }
     for (const c of pl.decks.flatMap((d) => d.hand)) {
       const def = CARD[c.id];
       const ts = def.target === 'none' ? [null] : def.target === 'ally' ? [0, 1] : def.id === 'rg_trip' ? [0, 1] : [0, 1, TOWER];
@@ -526,6 +591,7 @@
       if (!def.resp) continue;
       for (const t of def.target === 'ally' ? [0, 1] : [null]) { const r = { uid: c.uid, target: t }; if (!checkResponse(state, q, r)) out.push(r); }
     }
+    for (let k = 0; k < 2; k++) { const r = { skill: k }; if (!checkResponse(state, q, r)) out.push(r); }
     return out;
   }
 
@@ -606,7 +672,7 @@
   ];
 
   const api = {
-    MAX_ROUND, HAND_SIZE, MANA_MAX, TOWER, TOWER_HP, TOWER_COUNTER, HEROES, HERO, CARDS, CARD, POS_NAME, CPU_TEAMS,
+    MAX_ROUND, HAND_SIZE, MANA_MAX, SKILL_COST, TOWER, TOWER_HP, TOWER_COUNTER, HEROES, HERO, CARDS, CARD, POS_NAME, CPU_TEAMS,
     REVIVE_WAIT, MOVE_COST, KO_TOWER, COUNTER_ONCE, validateTeam, newGame, view, towerDefended, check, checkCard, checkResponse, act, respond, endTurn, actions, responses,
     cpuAction, cpuResponse, cardHero, findCard,
   };
