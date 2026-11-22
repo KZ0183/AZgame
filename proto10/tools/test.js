@@ -84,7 +84,7 @@ const tough = (g) => g.heroes.forEach((h) => { h.hp = h.maxHp = 50; });
   E.act(g, { type: 'skill', k: 0, target: 1 });              // かばう
   eq('かばうで後衛への攻撃も騎士へ', E.intent(g).targets, [{ k: 0, why: 'かばう', from: 1 }]);
   E.endTurn(g);
-  eq('かばった結果', [g.heroes[0].hp, g.heroes[1].hp], [50 - N('spider', 0) + 2, 50]);
+  eq('かばった結果', [g.heroes[0].hp, g.heroes[1].hp], [50 - N('spider', 0) + 3, 50]);
   eq('かばうは次のターンに消える', g.heroes[1].guard, null);
 }
 {
@@ -94,7 +94,7 @@ const tough = (g) => g.heroes.forEach((h) => { h.hp = h.maxHp = 50; });
   E.act(g, { type: 'skill', k: 0, target: 1 });
   eq('全体攻撃をかばうと2回受ける', E.intent(g).targets.map((t) => t.k), [0, 0]);
   E.endTurn(g);
-  eq('2回ぶん受ける', [g.heroes[0].hp, g.heroes[1].hp], [50 - 2 * N('spider', 4) + 2, 50]);
+  eq('2回ぶん受ける', [g.heroes[0].hp, g.heroes[1].hp], [50 - 2 * N('spider', 4) + 3, 50]);
 }
 ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), { type: 'skill', k: 0, target: 0 }));
 

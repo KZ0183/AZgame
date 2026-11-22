@@ -21,7 +21,7 @@
     { id: 'saint', name: '聖女', color: 'gold', hp: 11, cards: ['st_heal', 'st_mace', 'st_bless', 'st_prayer'],
       skill: { name: '祈りの手', pos: 'back', target: 'ally', text: '敵に2ダメージ。味方1人のHPを1回復。' } },
     { id: 'knight', name: '守護騎士', color: 'grey', hp: 14, cards: ['kn_bash', 'kn_taunt', 'kn_guard', 'kn_wall'],
-      skill: { name: 'かばう', pos: 'front', target: 'ally', text: '次の自分のターンまで、味方1人が受ける敵の攻撃を代わりに受ける。自分に盾2。' } },
+      skill: { name: 'かばう', pos: 'front', target: 'ally', text: '次の自分のターンまで、味方1人が受ける敵の攻撃を代わりに受ける。自分に盾3。' } },
     { id: 'mage', name: '魔術師', color: 'blue', hp: 10, cards: ['mg_bolt', 'mg_flame', 'mg_meditate', 'mg_thunder'],
       skill: { name: '魔弾', pos: 'back', target: 'enemy', text: '敵に3ダメージ。' } },
     { id: 'rogue', name: '盗賊', color: 'green', hp: 12, cards: ['rg_dagger', 'rg_trip', 'rg_jam', 'rg_backstab'],
@@ -32,7 +32,7 @@
   const SKILL_UP = {
     sword: '敵に3ダメージ。自分に盾3。',
     saint: '敵に3ダメージ。味方1人のHPを2回復。',
-    knight: '次の自分のターンまで、味方1人が受ける敵の攻撃を代わりに受ける。自分に盾5。',
+    knight: '次の自分のターンまで、味方1人が受ける敵の攻撃を代わりに受ける。自分に盾6。',
     mage: '敵に5ダメージ。',
     rogue: '敵に3ダメージ。このターン、自分はもう1回移動できる。',
   };
@@ -97,7 +97,7 @@
       pattern: [{ type: 'strong', n: 11 }, { type: 'charge', n: 5 }, { type: 'all', n: 9 }, { type: 'guard', n: 5 }, { type: 'strong', n: 11 }] },
   ];
   // ボス：HPが半分になると、予告の巡回が変わる
-  const BOSS = { id: 'lord', name: '黄昏の魔王', hp: 52, boss: true, text: 'HPが半分以下になると本気を出し、予告が変わる。',
+  const BOSS = { id: 'lord', name: '黄昏の魔王', hp: 54, boss: true, text: 'HPが半分以下になると本気を出し、予告が変わる。',
     pattern: [{ type: 'front', n: 11 }, { type: 'back', n: 11 }, { type: 'charge', n: 4 }, { type: 'strong', n: 14 }, { type: 'guard', n: 6 }],
     phase2: { text: '本気を出した。', pattern: [{ type: 'all', n: 11 }, { type: 'charge', n: 5 }, { type: 'strong', n: 14 }, { type: 'back', n: 13 }] } };
   ENEMIES.push(BOSS);
@@ -436,7 +436,7 @@
         case 'mage': attack(state, a.k, h.up ? 5 : 3); break;
         case 'rogue': attack(state, a.k, h.up ? 3 : 2); if (!state.over) { h.moves++; mark(state, { p: 0, k: a.k, label: '移動+1回' }); state.log.push(`このターン、${hname(state, a.k)}はもう1回移動できる`); } break;
         case 'saint': attack(state, a.k, h.up ? 3 : 2); if (!state.over) heal(state, a.target, h.up ? 2 : 1, sk.name); break;
-        case 'knight': state.heroes[a.target].guard = a.k; mark(state, { p: 0, k: a.target, label: 'かばわれ中' }); state.log.push(`次の自分のターンまで、${hname(state, a.k)}が${hname(state, a.target)}への敵の攻撃を代わりに受ける`); shield(state, a.k, h.up ? 5 : 2, sk.name); break;
+        case 'knight': state.heroes[a.target].guard = a.k; mark(state, { p: 0, k: a.target, label: 'かばわれ中' }); state.log.push(`次の自分のターンまで、${hname(state, a.k)}が${hname(state, a.target)}への敵の攻撃を代わりに受ける`); shield(state, a.k, h.up ? 6 : 3, sk.name); break;
       }
       step(state, `${HERO[h.id].name}：${sk.name}`, true, { p: 0, k: a.k });
       return { done: true };
