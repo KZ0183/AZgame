@@ -1,0 +1,832 @@
+<title>ふたりの英雄</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@700;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+/* 縦一画面。上から 敵（次の行動の予告）／真ん中の帯／自分の前衛・後衛／ライフ／マナ・手札・説明・ボタン */
+:root {
+  --bg: #1b2230;
+  --panel: #252f40;
+  --panel-2: #2f3a4e;
+  --line: #3d4a61;
+  --ink: #ede7d9;
+  --muted: #9ba5b6;
+  --brass: #d8b26a;
+  --bad: #e2694f;
+  --good: #7cc18a;
+  --h-red: #e2694f;
+  --h-gold: #e6c56f;
+  --h-grey: #b9b3a6;
+  --h-blue: #5ea3e8;
+  --h-green: #73c08d;
+  --f-display: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --f-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: inherit; }
+button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+#app {
+  height: 100%; max-width: 480px; margin: 0 auto; box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 10px;
+  display: flex; flex-direction: column;
+}
+.screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: balance; letter-spacing: .04em; }
+.muted { color: var(--muted); }
+.label { font-size: 11px; letter-spacing: .12em; color: var(--muted); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.c-red { --hc: var(--h-red); } .c-gold { --hc: var(--h-gold); } .c-grey { --hc: var(--h-grey); } .c-blue { --hc: var(--h-blue); } .c-green { --hc: var(--h-green); }
+
+.btn { border: 1px solid var(--brass); background: var(--brass); color: var(--bg); font-weight: 700; border-radius: 10px; padding: 11px 14px; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--brass); }
+.btn:disabled { opacity: .4; cursor: default; }
+.mini { border: 1px solid var(--brass); background: transparent; color: var(--brass); border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+.mini.on, .mini.solid { background: var(--brass); color: var(--bg); font-weight: 700; }
+.mini:disabled { border-color: var(--line); background: transparent; color: var(--muted); font-weight: 400; cursor: default; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { background: transparent; border: 0; padding: 7px 12px; cursor: pointer; color: var(--muted); font-size: 12px; }
+.seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--brass); }
+.foot { display: flex; gap: 8px; }
+.foot .btn { flex: 1; }
+.tag { display: inline-block; font-size: 9.5px; font-weight: 700; line-height: 15px; border-radius: 4px; padding: 0 4px; vertical-align: 1px; white-space: nowrap; }
+.tag.front { border: 1px solid var(--line); color: var(--muted); font-weight: 400; }
+.tag.new { background: var(--brass); color: var(--bg); }
+
+/* タイトル */
+.title { justify-content: center; gap: 16px; }
+.title header { text-align: center; }
+.title h1 { font-size: 44px; color: var(--brass); }
+.points { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.points li { background: var(--panel); border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.6; }
+.points li b { color: var(--brass); }
+.title .actions { display: grid; gap: 8px; }
+.linkbtn { background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; padding: 4px; justify-self: center; font-size: 12px; }
+
+/* ルール */
+.scroll { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 10px; align-content: start; }
+.scroll section { background: var(--panel); border-radius: 10px; padding: 10px 14px; }
+.scroll h3 { margin: 0 0 4px; font-family: var(--f-display); font-size: 15px; color: var(--brass); }
+.scroll ul { margin: 0; padding-left: 1.2em; font-size: 12.5px; line-height: 1.7; }
+
+/* 選択画面 */
+.pickitem { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--hc, var(--bad)); border-radius: 10px; padding: 10px 12px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 5px; }
+.pickitem[aria-pressed="true"] { border-color: var(--brass); border-left-color: var(--hc, var(--bad)); box-shadow: 0 0 0 1px var(--brass) inset; background: var(--panel-2); }
+.pickitem .hd { display: flex; align-items: baseline; gap: 8px; }
+.pickitem .hd b { font-family: var(--f-display); font-size: 18px; }
+.pickitem .st { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pickitem .order { margin-left: auto; font-size: 11px; color: var(--brass); }
+.pickitem p { margin: 0; font-size: 12px; }
+.clist { display: grid; gap: 3px; font-size: 11.5px; line-height: 1.55; color: var(--muted); }
+.clist div b { color: var(--ink); }
+.clist .sk b { color: var(--brass); }
+.chain { display: flex; flex-wrap: wrap; gap: 4px; }
+.chain span { font-size: 11px; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; color: var(--ink); white-space: nowrap; }
+.chain span.atk { border-color: var(--bad); }
+
+/* 盤面 */
+.field { flex: 1 1 0; position: relative; display: grid; gap: 5px; border-radius: 12px;
+  grid-template-rows: auto auto minmax(60px, 1fr) minmax(60px, 1fr) auto; min-height: calc(118px + 28px + 60px * 2 + 34px + 5px * 4); }
+.frow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-height: 0; position: relative; }
+.cell { border: 1px dashed var(--line); border-radius: 10px; position: relative; min-height: 0; display: flex; }
+.cell .slot { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--line); letter-spacing: .2em; }
+
+/* 敵 */
+.enemy { position: relative; background: color-mix(in srgb, var(--bad) 9%, var(--panel)); border: 1px solid color-mix(in srgb, var(--bad) 45%, var(--line)); border-radius: 12px; padding: 8px 10px; display: grid; gap: 6px; cursor: pointer; }
+.enemy.target { box-shadow: 0 0 0 2px var(--brass) inset; }
+.enemy .eh { display: flex; align-items: baseline; gap: 8px; }
+.enemy .eh b { font-family: var(--f-display); font-size: 17px; }
+.enemy .eh .hpn { margin-left: auto; font-family: var(--f-display); font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
+.enemy .eh .hpn small { font-size: 11px; color: var(--muted); }
+.enemy .hpbar { height: 7px; }
+.enemy .hpbar i { background: var(--bad); }
+.estat { display: flex; gap: 4px; flex-wrap: wrap; min-height: 15px; }
+.estat i { font-style: normal; font-size: 10px; line-height: 15px; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+.estat i.hot { border-color: var(--bad); color: var(--bad); }
+.estat i.good { border-color: var(--good); color: var(--good); }
+.intent { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: center; background: var(--bg); border-radius: 8px; padding: 6px 10px; border: 1px solid var(--bad); }
+.intent .il { font-size: 10px; color: var(--muted); letter-spacing: .1em; grid-row: span 2; writing-mode: vertical-rl; }
+.intent .iw { font-family: var(--f-display); font-weight: 800; font-size: 16px; color: var(--bad); }
+.intent .iw .dmg { font-size: 20px; margin-left: 4px; }
+.intent .it { font-size: 11.5px; color: var(--ink); }
+.intent.calm { border-color: var(--line); }
+.intent.calm .iw { color: var(--brass); }
+.upnext { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ヒーロー */
+.hero { flex: 1; min-width: 0; border-radius: 10px; border: 1px solid var(--line); border-top: 3px solid var(--hc); background: var(--panel);
+  padding: 4px 8px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; position: relative; box-sizing: border-box; }
+.hero.focus { border-color: var(--brass); border-top-color: var(--hc); box-shadow: 0 0 0 1px var(--brass) inset; }
+.hero.target { box-shadow: 0 0 0 2px var(--good) inset; }
+.hero.ko { opacity: .45; border-style: dashed; }
+.hero.danger { background: color-mix(in srgb, var(--bad) 10%, var(--panel)); }
+.hero .nm { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.hero .nm b { font-family: var(--f-display); font-size: 14px; line-height: 1.2; }
+.hero .nm .sk { margin-left: auto; font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hpbar { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+.hpbar i { display: block; height: 100%; background: var(--good); }
+.hpbar i.low { background: var(--bad); }
+.hero .nums { display: flex; gap: 8px; align-items: center; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; overflow: hidden; }
+.hero .nums > span { white-space: nowrap; }
+.hero .nums b { color: var(--ink); font-size: 13px; }
+.flags { display: flex; gap: 3px; overflow: hidden; }
+.flags i { font-style: normal; font-size: 10px; padding: 0 5px; border-radius: 4px; line-height: 15px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.flags i.hot { border-color: var(--brass); color: var(--brass); }
+.aim { position: absolute; right: 4px; bottom: 4px; max-width: 75%; font-size: 10px; border-radius: 5px; padding: 1px 5px; background: var(--bad); color: var(--bg); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 1; }
+.aim.mine { background: var(--brass); }
+.aim.safe { background: var(--good); }
+
+/* ライフ */
+.life { position: relative; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; background: color-mix(in srgb, var(--brass) 8%, var(--panel)); border: 1px solid var(--line); border-radius: 10px; padding: 5px 10px; }
+.life > b { font-family: var(--f-display); font-size: 13px; }
+.life .hpbar { height: 7px; }
+.life .tn { font-family: var(--f-display); font-weight: 800; font-size: 16px; font-variant-numeric: tabular-nums; }
+.life .tn small { font-size: 10px; color: var(--muted); }
+.life.danger { border-color: var(--bad); }
+
+/* 真ん中の帯 */
+.turnline { position: relative; z-index: 3; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 99px;
+  border: 1px solid var(--tc); background: color-mix(in srgb, var(--tc) 16%, var(--bg)); font-size: 11px; }
+.turnline.me { --tc: var(--brass); }
+.turnline.foe { --tc: var(--bad); }
+.turnline .tl-round { color: var(--muted); font-variant-numeric: tabular-nums; }
+.turnline .tl-who { text-align: center; font-family: var(--f-display); font-weight: 800; font-size: 14px; color: var(--tc); letter-spacing: .08em; }
+.turnline .tl-phase { font-size: 10.5px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--tc); white-space: nowrap; }
+
+/* 矢印 */
+.arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: visible; }
+.arrows line { stroke-width: 5; stroke-linecap: round; filter: drop-shadow(0 0 3px var(--bg)); }
+.arrows line.live { stroke-dasharray: 10 6; animation: march .6s linear infinite; }
+@keyframes march { to { stroke-dashoffset: -16; } }
+
+/* マナ・手札・説明・ボタン */
+.bar { display: flex; align-items: center; gap: 8px; background: var(--panel); border-radius: 10px; padding: 4px 12px; min-height: 26px; }
+.bar .who { font-weight: 700; font-size: 13px; }
+.mana { display: inline-flex; align-items: center; gap: 8px; }
+.gems { display: inline-flex; gap: 5px; align-items: center; }
+.gem { width: 11px; height: 11px; transform: rotate(45deg); border: 1.5px solid var(--brass); border-radius: 2px; box-sizing: border-box; background: var(--brass); box-shadow: 0 0 6px color-mix(in srgb, var(--brass) 55%, transparent); }
+.gem.empty { background: transparent; border-color: var(--line); box-shadow: none; }
+.mana b { font-family: var(--f-display); font-size: 17px; color: var(--brass); font-variant-numeric: tabular-nums; }
+.hand { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.hgroup { border-top: 3px solid var(--hc); border-radius: 8px; background: color-mix(in srgb, var(--panel) 60%, var(--bg)); padding: 3px 4px 4px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hgroup.ko { opacity: .5; }
+.hg-head { display: flex; align-items: baseline; gap: 6px; font-size: 11px; min-width: 0; }
+.hg-head b { font-family: var(--f-display); font-size: 12px; }
+.hg-next { margin-left: auto; color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hg-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.card { position: relative; background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--hc); border-radius: 8px; padding: 3px 6px 4px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.card[aria-pressed="true"] { border-color: var(--brass); border-top-color: var(--hc); background: var(--panel-2); box-shadow: 0 0 0 1px var(--brass) inset; }
+.card.off { opacity: .4; }
+.card .ch { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.card .cost { font-family: var(--f-display); font-weight: 800; color: var(--brass); }
+.card .ch .tag { margin-left: auto; }
+.card b { font-size: 12px; line-height: 1.25; overflow-wrap: anywhere; }
+.card .tag.new { position: absolute; top: -8px; left: 4px; }
+.detail { background: var(--panel); border-radius: 10px; padding: 7px 12px; font-size: 12px; line-height: 1.6; min-height: 3.2em; max-height: 6.5em; overflow-y: auto; }
+.detail.log { max-height: 9em; min-height: 5em; }
+.detail .dh { display: flex; gap: 8px; align-items: baseline; }
+.detail .dh b { color: var(--brass); }
+.detail .dh .muted { margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; }
+.detail b.h { color: var(--brass); }
+.detail .err { color: var(--bad); }
+.detail ul { margin: 3px 0 0; padding-left: 1.1em; }
+.detail li.why { list-style: none; margin-left: -1.1em; padding: 4px 8px; margin-block: 3px; border-radius: 6px; background: color-mix(in srgb, var(--brass) 12%, transparent); }
+.whytag { display: inline-block; font-size: 10px; font-weight: 700; color: var(--bg); background: var(--brass); border-radius: 4px; padding: 0 5px; margin-right: 6px; letter-spacing: .1em; }
+.detail .acts { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 2px; }
+.act { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+
+/* 演出 */
+.pops { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; pointer-events: none; z-index: 2; }
+.pop { font-family: var(--f-display); font-weight: 800; font-size: 26px; text-shadow: 0 0 6px var(--bg), 0 0 2px var(--bg); animation: pop .4s ease-out both; white-space: nowrap; }
+.pop.dmg { color: var(--bad); }
+.pop.heal { color: var(--good); }
+.pop.label { font-family: var(--f-body); font-size: 12px; color: var(--bg); background: var(--brass); border-radius: 6px; padding: 2px 8px; text-shadow: none; }
+@keyframes pop { from { opacity: 0; scale: .5; } to { opacity: 1; scale: 1; } }
+.shake { animation: shake .45s ease-in-out; }
+@keyframes shake { 0%, 100% { transform: none; } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
+.lunge-up { animation: lunge-up .5s ease-out; z-index: 3; }
+.lunge-down { animation: lunge-down .5s ease-out; z-index: 3; }
+@keyframes lunge-up { 35% { transform: translateY(-14px) scale(1.04); } }
+@keyframes lunge-down { 35% { transform: translateY(10px) scale(1.02); } }
+
+.overlay { position: fixed; inset: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 82%, transparent); display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.sheet { width: 100%; max-width: 440px; max-height: 100%; overflow-y: auto; background: var(--panel); border: 1px solid var(--brass); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; text-align: center; }
+.sheet h2 { font-size: 36px; }
+.sheet h2.win { color: var(--brass); }
+.sheet h2.lose { color: var(--bad); }
+.sheet p { margin: 0; }
+.sheet .foot { flex-wrap: wrap; }
+
+/* 道のり・報酬 */
+.route { display: flex; gap: 6px; }
+.route .st { flex: 1; border: 1px solid var(--line); border-radius: 10px; padding: 8px 6px; text-align: center; background: var(--panel); display: grid; gap: 2px; }
+.route .st small { font-size: 10px; color: var(--muted); letter-spacing: .1em; }
+.route .st b { font-family: var(--f-display); font-size: 13px; }
+.route .st.now { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass) inset; }
+.route .st.done { opacity: .45; }
+.route .st.boss b { color: var(--bad); }
+.lifebox { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 10px; padding: 8px 12px; }
+.lifebox .hpbar { flex: 1; height: 8px; }
+.lifebox b.n { font-family: var(--f-display); font-size: 20px; }
+.party { display: grid; gap: 8px; }
+.pcard { background: var(--panel); border-left: 4px solid var(--hc); border-radius: 10px; padding: 8px 12px; display: grid; gap: 4px; }
+.pcard .hd { display: flex; gap: 8px; align-items: baseline; }
+.pcard .hd b { font-family: var(--f-display); font-size: 16px; }
+.pcard .hd span { font-size: 12px; color: var(--muted); }
+.tag.up { background: var(--good); color: var(--bg); }
+.tag.extra { border: 1px solid var(--brass); color: var(--brass); }
+.reward { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--hc, var(--brass)); border-radius: 10px; padding: 10px 12px; text-align: left; cursor: pointer; display: grid; gap: 4px; }
+.reward:disabled { opacity: .4; cursor: default; }
+.reward .rk { font-size: 10.5px; letter-spacing: .15em; color: var(--muted); }
+.reward b { font-family: var(--f-display); font-size: 16px; }
+.reward p { margin: 0; font-size: 12px; line-height: 1.6; }
+.swapnew { border: 1px solid var(--brass); border-radius: 10px; padding: 8px 12px; background: color-mix(in srgb, var(--brass) 10%, var(--panel)); font-size: 12.5px; line-height: 1.6; }
+.swapnew b { color: var(--brass); }
+.stage { font-size: 10px; letter-spacing: .1em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+.stage.boss { color: var(--bad); border-color: var(--bad); }
+
+@media (prefers-reduced-motion: reduce) { .pop, .shake, .lunge-up, .lunge-down, .arrows line.live { animation: none; } }
+</style>
+
+<div id="app"></div>
+
+<script src="engine.js"></script>
+<script>
+(() => {
+  const E = window.Engine;
+  const H = E.HERO, C = E.CARD;
+  const app = document.getElementById('app');
+  const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+  // ── 保存 ──
+  const store = {
+    get(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
+    set(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch {} },
+  };
+  let team = (() => { const t = store.get('futari-pve-team'); return t && !E.validateTeam(t).length ? t : { heroes: ['knight', 'sword'], front: 1 }; })();
+  let settings = (() => { const v = store.get('futari-pve-settings'); return { auto: !(v && v.auto === false) }; })();
+
+  // ── 共通の部品 ──
+  const skillTag = (sk) => `【${E.SKILL_COST}${sk.pos === 'front' ? '・前衛' : ''}】`;
+  const cardLine = (cid) => { const c = C[cid]; return `<b>${esc(c.name)}</b>【${c.cost}${c.pos === 'front' ? '・前衛' : ''}】${esc(c.text)}${c.extra ? ' <span class="tag extra">報酬</span>' : ''}`; };
+  // cards・up は連戦での今の状態（省略すると初期のまま）
+  const heroListHTML = (id, cards, up) => {
+    const sk = E.skillOf({ id, up });
+    return `<div class="clist">
+      <div class="sk"><b>固有スキル「${esc(sk.name)}」</b>${up ? '<span class="tag up">強化</span>' : ''}${skillTag(sk)}${esc(sk.text)}</div>
+      ${(cards || H[id].cards).map((cid) => `<div>${cardLine(cid)}</div>`).join('')}
+    </div>`;
+  };
+  // 敵の行動の短い名前（「強打9」など）
+  const actShort = (a) => ['front', 'back', 'strong', 'all'].includes(a.type) ? `${E.ACT_NAME[a.type]}${a.n}` : `${E.ACT_NAME[a.type]}${a.n}`;
+  const chainHTML = (pattern) => `<div class="chain">${pattern.map((a) => `<span class="${a.type === 'charge' || a.type === 'guard' ? '' : 'atk'}">${actShort(a)}</span>`).join('<span style="border:0;padding:0;color:var(--muted)">→</span>')}</div>`;
+
+  // ── タイトル ──
+  function title() {
+    app.innerHTML = `<section class="screen title">
+      <header><h1>ふたりの英雄</h1><p class="muted">二人を前と後ろに立たせ、次の一手が見える敵に挑む。</p></header>
+      <ul class="points">
+        <li>敵は<b>次の行動を予告</b>している。誰に何ダメージ来るかを見て、自分のターンのうちに備える</li>
+        <li><b>前衛</b>と<b>後衛</b>の入れ替え、盾、挑発で受け止め方を変え、そのあいだに敵のHPを削り切る</li>
+        <li>カードはヒーローごとに2枚ずつ、決まった順番で巡回する</li>
+        <li><b>3連戦</b>でボスまで。ライフは持ち越し。勝つたびに報酬でカードを入れ替え、ヒーローを強くする</li>
+      </ul>
+      <div class="row"><span class="label">処理の再生</span><div class="seg">${[[true, '自動'], [false, '「次へ」で進める']].map(([a, l]) => `<button data-auto="${a}" aria-pressed="${settings.auto === a}">${l}</button>`).join('')}</div></div>
+      <div class="actions">
+        <button class="btn" id="go">${H[team.heroes[0]].name}と${H[team.heroes[1]].name}で冒険に出る</button>
+        <button class="btn ghost" id="pick">ヒーローを選ぶ</button>
+        <button class="linkbtn" id="rules">ルールを読む</button>
+      </div>
+    </section>`;
+    const on = (id, fn) => { document.getElementById(id).onclick = fn; };
+    on('go', startRun); on('pick', pick); on('rules', rules);
+    app.querySelectorAll('[data-auto]').forEach((b) => b.onclick = () => { settings.auto = b.dataset.auto === 'true'; store.set('futari-pve-settings', settings); title(); });
+  }
+
+  // ── ルール ──
+  function rules() {
+    const sec = (h, items) => `<section><h3>${h}</h3><ul>${items.map((x) => `<li>${x}</li>`).join('')}</ul></section>`;
+    app.innerHTML = `<section class="screen">
+      <h2 style="font-size:24px">ルール</h2>
+      <div class="scroll">
+        ${sec('勝ち負け', [
+          '<b>敵のHPを0にしたら勝ち</b>',
+          `あなたのライフ（${E.LIFE}）が0になったら負け`,
+          `ヒーローが倒れるとライフが${E.KO_LIFE}減る。倒れたヒーローは1ターン休んでから後衛で復活する`,
+        ])}
+        ${sec('冒険', [
+          '<b>3連戦</b>：普通の敵2体のあと、ボス「' + E.BOSS.name + '」と戦う。ボスを倒せば踏破',
+          'ライフは戦闘をまたいで持ち越す。ヒーローのHPは戦闘ごとに全快する',
+          '勝つたびに報酬を1つ選ぶ：<b>新しいカードと入れ替え</b>（枚数は4枚のまま）／<b>ヒーローの強化</b>（固有スキル、または最大HP+3）／<b>ライフ回復</b>（+' + E.RUN_LIFE_HEAL + '）',
+          'ボスはHPが半分を切ると本気を出し、予告の巡回が変わる',
+        ])}
+        ${sec('敵の予告', [
+          '敵は<b>次の行動を予告</b>している。予告は決まった順番で巡回する',
+          '前衛へ攻撃：前衛の全員に当たる。前衛が空ならライフに当たる',
+          '後衛へ攻撃：後衛の全員に当たる。後衛が空ならライフに当たる',
+          '強打：前衛でHPが一番高い1人に当たる。挑発・かばうで向きを変えられる。前衛が空ならライフに当たる',
+          '全体攻撃：全員に当たる',
+          '溜め：次の攻撃が強くなる。身を固める：敵に盾が付く',
+          `敵は${E.RAGE_EVERY}回行動するたびに怒り、攻撃が${E.ENRAGE}ずつ強くなる。長引くほど不利になる`,
+        ])}
+        ${sec('自分のターン', [
+          'マナは毎ターン回復する（1ターン目は2、その後はラウンド数+1、最大6）。余っても持ち越さない',
+          'カード・固有スキル（1マナ・1人1回）・移動（無料・1人1回）を、1つずつ使う。終わったら「ターン終了」で敵が動く',
+          '前衛の付いたカードとスキルは、そのヒーローが前衛にいるときだけ使える',
+          '盾・挑発・かばうは、次の自分のターンが来るまで続く',
+        ])}
+        ${sec('カードの巡回', [
+          '各ヒーローは4枚のカードを決まった順番で巡回させる。手札は各ヒーロー2枚',
+          '使ったカードは列の最後へ回り、同じ場所に次のカードが入る。次に来るカードは手札の上に見えている',
+        ])}
+      </div>
+      <div class="foot"><button class="btn" id="back">戻る</button></div>
+    </section>`;
+    document.getElementById('back').onclick = title;
+  }
+
+  // ── ヒーロー選択 ──
+  function pick() {
+    const ok = !E.validateTeam(team).length;
+    app.innerHTML = `<section class="screen">
+      <div class="row"><h2 style="font-size:24px">ヒーローを選ぶ</h2><span class="muted" style="margin-left:auto">${team.heroes.length} / 2</span></div>
+      <div class="scroll">${E.HEROES.map((h) => {
+        const i = team.heroes.indexOf(h.id);
+        return `<button class="pickitem c-${h.color}" aria-pressed="${i >= 0}" data-hero="${h.id}">
+          <span class="hd"><b>${h.name}</b><span class="st">HP ${h.hp}</span>${i >= 0 ? `<span class="order">${team.front === i ? '最初は前衛' : '最初は後衛'}</span>` : ''}</span>
+          ${heroListHTML(h.id)}</button>`;
+      }).join('')}</div>
+      ${team.heroes.length === 2 ? `<div class="row"><span class="label">最初に前衛に立つ</span>${team.heroes.map((id, i) => `<button class="mini${team.front === i ? ' on' : ''}" data-front="${i}">${H[id].name}</button>`).join('')}</div>` : ''}
+      <div class="foot"><button class="btn ghost" id="back">戻る</button><button class="btn" id="ok" ${ok ? '' : 'disabled'}>決定</button></div>
+    </section>`;
+    app.querySelectorAll('[data-hero]').forEach((b) => b.onclick = () => {
+      const id = b.dataset.hero;
+      const y = app.querySelector('.scroll').scrollTop;
+      if (team.heroes.includes(id)) team.heroes = team.heroes.filter((x) => x !== id);
+      else if (team.heroes.length < 2) team.heroes.push(id);
+      else team.heroes = [team.heroes[1], id];
+      if (team.front >= team.heroes.length) team.front = 0;
+      pick();
+      app.querySelector('.scroll').scrollTop = y;
+    });
+    app.querySelectorAll('[data-front]').forEach((b) => b.onclick = () => { team.front = +b.dataset.front; pick(); });
+    document.getElementById('back').onclick = () => { if (!E.validateTeam(team).length) store.set('futari-pve-team', team); title(); };
+    document.getElementById('ok').onclick = () => { store.set('futari-pve-team', team); title(); };
+  }
+
+  // ── 戦闘の状態 ──
+  // phase: mine = 自分のターン / play = 処理の再生
+  let game = null, play = null, phase = 'play', autoTimer = null;
+  // 選択：sel = 手札の uid、mode = 'skill'（固有スキルの対象選び）、focus = 見ているもの（ヒーローの番号か 'enemy'）、ptarget = 選んだ対象
+  let sel = null, mode = null, focus = null, ptarget = null;
+  const myCard = (uid) => { const f = uid != null && E.findCard(game, uid); return f ? f.c : null; };
+  const cardOwner = (uid) => { const f = E.findCard(game, uid); return f ? f.k : null; };
+  const clearPick = () => { sel = null; mode = null; focus = null; ptarget = null; };
+  const tname = (t) => t === 'enemy' ? E.ENEMY[game.enemy.id].name : H[game.heroes[t].id].name;
+
+  // ── 連戦 ──
+  let run = null;
+  const stageName = (i) => i === run.foes.length - 1 ? 'ボス' : `第${i + 1}戦`;
+  function routeHTML() {
+    return `<div class="route">${run.foes.map((id, i) => `<div class="st${i === run.stage ? ' now' : i < run.stage ? ' done' : ''}${E.ENEMY[id].boss ? ' boss' : ''}">
+      <small>${stageName(i)}</small><b>${i <= run.stage || E.ENEMY[id].boss ? E.ENEMY[id].name : '？'}</b></div>`).join('')}</div>`;
+  }
+  function lifeBoxHTML() {
+    const pct = run.life / E.LIFE * 100;
+    return `<div class="lifebox"><span class="label">ライフ</span><span class="hpbar"><i class="${pct <= 40 ? 'low' : ''}" style="width:${pct}%"></i></span><b class="n">${run.life}</b><span class="muted">/${E.LIFE}</span></div>`;
+  }
+  function partyHTML() {
+    return `<div class="party">${run.heroes.map((id, k) => { const m = run.mods[k]; return `<div class="pcard c-${H[id].color}">
+      <div class="hd"><b>${H[id].name}</b><span>HP ${H[id].hp + m.hp}${m.hp ? `（+${m.hp}）` : ''}</span><span>${run.front === k ? '前衛から' : '後衛から'}</span></div>
+      ${heroListHTML(id, m.cards, m.up)}</div>`; }).join('')}</div>`;
+  }
+  function startRun() {
+    run = E.newRun(structuredClone(team));
+    route();
+  }
+  function route() {
+    const id = run.foes[run.stage], en = E.ENEMY[id];
+    app.innerHTML = `<section class="screen">
+      <div class="row"><h2 style="font-size:24px">冒険</h2><span class="muted" style="margin-left:auto">${stageName(run.stage)}</span></div>
+      ${routeHTML()}${lifeBoxHTML()}
+      <div class="scroll">
+        <section class="pickitem" style="cursor:default"><span class="hd"><b>次の敵：${en.name}</b></span><p>${esc(en.text)}</p>${chainHTML(en.pattern)}</section>
+        ${partyHTML()}
+      </div>
+      <div class="foot"><button class="btn ghost" id="quit">やめる</button><button class="btn" id="fight">戦う</button></div>
+    </section>`;
+    document.getElementById('quit').onclick = title;
+    document.getElementById('fight').onclick = start;
+  }
+  function start() {
+    game = E.runFight(run);
+    playback(game.steps.slice(), beginMine);
+  }
+
+  // 報酬：3つから1つ
+  function reward() {
+    const opts = E.rewardOptions(run);
+    const label = (o) => {
+      if (o.type === 'card') { const c = C[o.card]; return ['新しいカード', `${H[run.heroes[o.k]].name}：${c.name}`, `【${c.cost}${c.pos === 'front' ? '・前衛' : ''}】${c.text}<br><span class="muted">今のカード1枚と入れ替える（4枚のまま）</span>`, H[run.heroes[o.k]].color]; }
+      if (o.type === 'up') { const id = run.heroes[o.k]; return o.what === 'skill'
+        ? ['強化', `${H[id].name}：固有スキル強化`, `「${H[id].skill.name}」${H[id].skill.text} → <b>${E.SKILL_UP[id]}</b>`, H[id].color]
+        : ['強化', `${H[id].name}：最大HP+3`, `HP ${H[id].hp + run.mods[o.k].hp} → ${H[id].hp + run.mods[o.k].hp + 3}`, H[id].color]; }
+      return ['回復', `ライフ+${E.RUN_LIFE_HEAL}`, `ライフ ${run.life} → ${Math.min(E.LIFE, run.life + E.RUN_LIFE_HEAL)}`, null];
+    };
+    app.innerHTML = `<section class="screen">
+      <div class="row"><h2 style="font-size:24px">報酬を1つ選ぶ</h2></div>
+      ${routeHTML()}${lifeBoxHTML()}
+      <div class="scroll">${opts.map((o, i) => { const [kind, head, body, color] = label(o); return `<button class="reward${color ? ` c-${color}` : ''}" data-opt="${i}" ${o.type === 'heal' && run.life >= E.LIFE ? 'disabled' : ''}>
+        <span class="rk">${kind}</span><b>${esc(head)}</b><p>${body}</p></button>`; }).join('')}
+        ${partyHTML()}</div>
+    </section>`;
+    app.querySelectorAll('[data-opt]').forEach((b) => b.onclick = () => {
+      const o = opts[+b.dataset.opt];
+      if (o.type === 'card') return swap(o);
+      E.applyReward(run, o);
+      route();
+    });
+  }
+  // 新しいカードと入れ替えるカードを選ぶ
+  function swap(o) {
+    const m = run.mods[o.k], id = run.heroes[o.k];
+    app.innerHTML = `<section class="screen">
+      <h2 style="font-size:24px">入れ替えるカードを選ぶ</h2>
+      <div class="swapnew">新しく入る：${cardLine(o.card)}</div>
+      <div class="scroll">${m.cards.map((cid, i) => `<button class="reward c-${H[id].color}" data-rep="${i}"><span class="rk">${H[id].name}・外す</span><p>${cardLine(cid)}</p></button>`).join('')}</div>
+      <div class="foot"><button class="btn ghost" id="back">報酬を選び直す</button></div>
+    </section>`;
+    app.querySelectorAll('[data-rep]').forEach((b) => b.onclick = () => { E.applyReward(run, o, m.cards[+b.dataset.rep]); route(); });
+    document.getElementById('back').onclick = reward;
+  }
+
+  function beginMine() {
+    if (game.over) return finish();
+    phase = 'mine'; clearPick();
+    // マナが0で、使える0マナのカードもなければ、自動でターンを終える
+    const canPlay = game.decks.some((d) => d.hand.some((c) => ['enemy', 0, 1, null].some((t) => !E.check(game, { type: 'card', uid: c.uid, target: t }))));
+    if (game.mana === 0 && !canPlay) return endTurn();
+    render();
+  }
+  function doAct(a) {
+    const r = E.act(game, a);
+    if (r.error) return;
+    clearPick();
+    playback(game.steps.slice(), beginMine);
+  }
+  function endTurn() {
+    if (phase !== 'mine') return;
+    playback(E.endTurn(game).slice(), beginMine);
+  }
+
+  // ── 処理の再生 ──
+  function playback(steps, after) {
+    clearTimeout(autoTimer);
+    phase = 'play';
+    play = { steps, i: 0, after };
+    if (!steps.length) { play = null; return after(); }
+    showStep();
+  }
+  function showStep() {
+    const st = play.steps[play.i];
+    render();
+    clearTimeout(autoTimer);
+    if (!settings.auto) return;
+    const whys = st.lines.filter((l) => l.startsWith('※')).length;
+    const base = st.title.startsWith('敵の行動') ? 1600 : st.title.startsWith('ラウンド') ? 1000 : 1100;
+    autoTimer = setTimeout(advance, base + whys * 1300);
+  }
+  function advance() {
+    clearTimeout(autoTimer);
+    if (!play) return;
+    if (play.i < play.steps.length - 1) { play.i++; return showStep(); }
+    const after = play.after;
+    play = null;
+    if (game.over) return finish();
+    after();
+  }
+  function skipAll() {
+    clearTimeout(autoTimer);
+    play.i = play.steps.length - 1;
+    render();
+    if (settings.auto) autoTimer = setTimeout(advance, 600);
+  }
+  function finish() { phase = 'play'; render(); result(); }
+
+  // ── 盤面の部品 ──
+  function popsHTML(list) {
+    if (!list.length) return '';
+    return `<span class="pops">${list.map((h) => {
+      let s = '';
+      if (h.n != null && (h.n !== 0 || !h.label)) s += `<span class="pop ${h.heal ? 'heal' : 'dmg'}">${h.heal ? '+' : ''}${h.n}</span>`;
+      if (h.label) s += `<span class="pop label">${esc(h.label)}</span>`;
+      return s;
+    }).join('')}</span>`;
+  }
+
+  // 敵の予告が誰に何ダメージ当たるか（自分のターン中だけ表示）
+  function threats(v) {
+    const out = { heroes: [[], []], life: [] };
+    if (phase !== 'mine' || !v.intent.targets) return out;
+    // 盾を引いたあとの、実際に減る量を出す。かばうで2回受けるときは合計する
+    const hits = [0, 0];
+    let life = 0;
+    for (const t of v.intent.targets) { if (t.life) life += v.intent.dmg; else hits[t.k]++; }
+    hits.forEach((n, k) => {
+      if (!n) return;
+      const h = v.heroes[k], total = v.intent.dmg * n, loss = Math.max(0, total - h.shield);
+      if (loss >= h.hp) { out.heroes[k].push(`−${loss} 倒れる`); life += E.KO_LIFE; }
+      else if (loss > 0) out.heroes[k].push(h.shield ? `−${loss}（盾で${total - loss}防ぐ）` : `−${loss}`);
+      else out.heroes[k].push('盾で防ぐ');
+    });
+    if (life) out.life.push(`−${life}`);
+    return out;
+  }
+
+  function enemyHTML(v, ctx) {
+    const e = v.enemy, def = E.ENEMY[e.id], it = v.intent;
+    const pct = Math.max(0, e.hp / e.maxHp * 100);
+    const hits = ctx.hits.filter((x) => x.p === 1);
+    const stat = [];
+    if (e.shield) stat.push(['good', `盾 ${e.shield}`]);
+    if (e.charge) stat.push(['hot', `溜め +${e.charge}`]);
+    if (e.weak) stat.push(['good', `弱体 −${e.weak}`]);
+    const toRage = E.RAGE_EVERY - e.acted % E.RAGE_EVERY;
+    stat.push([e.rage ? 'hot' : '', `${e.rage ? `怒り +${e.rage}・` : ''}あと${toRage}回行動で怒り+${E.ENRAGE}`]);
+    if (e.poison) stat.push(['good', `毒 あと${e.poison}回`]);
+    if (e.phase) stat.push(['hot', '本気']);
+    const atk = it.dmg != null;
+    const who = atk ? (it.targets.length ? it.targets.map((t) => t.life ? 'あなたのライフ' : `${H[v.heroes[t.k].id].name}${t.why ? `（${t.why}）` : ''}`).join('・') : 'なし') : '';
+    const pat = E.patternOf(e);
+    const up = [1, 2].map((d) => pat[(e.step + d) % pat.length]).map(actShort).join(' → ');
+    const cls = ['enemy', ctx.targets.some((t) => t === 'enemy') ? 'target' : '', hits.some((x) => x.hit) ? 'shake' : '', ctx.actor && ctx.actor.p === 1 ? 'lunge-down' : ''].filter(Boolean);
+    return `<div class="${cls.join(' ')}" data-target="enemy" role="button" tabindex="0" aria-label="${def.name}">
+      <div class="eh"><span class="stage${def.boss ? ' boss' : ''}">${run ? stageName(run.stage) : ''}</span><b>${def.name}</b><span class="hpn">${e.hp}<small>/${e.maxHp}</small></span></div>
+      <span class="hpbar"><i style="width:${pct}%"></i></span>
+      <div class="estat">${stat.map(([c, t]) => `<i class="${c}">${t}</i>`).join('')}</div>
+      <div class="intent${atk ? '' : ' calm'}"><span class="il">次の行動</span>
+        <span class="iw">${it.name}${atk ? `<span class="dmg">${it.dmg}</span>` : `<span class="dmg">+${it.n}</span>`}</span>
+        <span class="it">${atk ? `→ ${esc(who)}` : it.type === 'charge' ? '次の攻撃が強くなる' : '敵に盾が付く'}</span></div>
+      <div class="upnext">その先：${up}</div>
+      ${popsHTML(hits)}</div>`;
+  }
+
+  function heroHTML(v, k, ctx, threat) {
+    const h = v.heroes[k], def = H[h.id];
+    const hits = ctx.hits.filter((x) => x.p === 0 && x.k === k);
+    const cls = ['hero', `c-${def.color}`,
+      focus === k ? 'focus' : '',
+      ctx.targets.includes(k) ? 'target' : '',
+      h.ko ? 'ko' : '', threat.some((t) => t !== '盾で防ぐ') ? 'danger' : '', hits.some((x) => x.hit) ? 'shake' : '',
+      ctx.actor && ctx.actor.p === 0 && ctx.actor.k === k ? 'lunge-up' : ''].filter(Boolean);
+    const flags = [];
+    if (h.ko) flags.push(['', `倒れている・あと${(h.wait || 0) + 1}ターン`]);
+    if (h.taunt) flags.push(['hot', '挑発']);
+    if (h.counter) flags.push(['hot', `反撃${h.counter}`]);
+    if (h.guard != null) flags.push(['hot', 'かばわれ中']);
+    if (h.focus) flags.push(['hot', `次の攻撃+${h.focus}`]);
+    if (!h.ko && phase === 'mine') { if (h.skilled) flags.push(['', 'スキル済']); if (h.moved) flags.push(['', '移動済']); }
+    const pct = Math.max(0, h.hp / h.maxHp * 100);
+    const marks = threat.map((t) => `<span class="aim${t === '盾で防ぐ' ? ' safe' : ''}">${esc(t)}</span>`).join('') + (ptarget === k && (sel || mode) ? '<span class="aim mine">ここに使う</span>' : '');
+    return `<div class="${cls.join(' ')}" data-hero="${k}" role="button" tabindex="0" aria-label="${def.name}">
+      <span class="nm"><b>${def.name}</b><span class="sk">${esc(E.skillOf(h).name)}${h.up ? '+' : ''}</span></span>
+      <span class="hpbar"><i class="${pct <= 50 ? 'low' : ''}" style="width:${pct}%"></i></span>
+      <span class="nums"><span>HP <b>${h.hp}</b>/${h.maxHp}</span>${h.shield ? `<span>盾 <b>${h.shield}</b></span>` : ''}${flags.length ? `<span class="flags">${flags.map(([c, t]) => `<i class="${c}">${t}</i>`).join('')}</span>` : ''}</span>
+      ${marks}${popsHTML(hits)}</div>`;
+  }
+
+  function lifeHTML(v, ctx, threat) {
+    const hits = ctx.hits.filter((x) => x.p === 0 && x.k === 'life');
+    const pct = Math.max(0, v.life / E.LIFE * 100);
+    return `<div class="life${threat.length ? ' danger' : ''}${hits.some((x) => x.hit) ? ' shake' : ''}" data-life="1">
+      <b>あなたのライフ</b><span class="hpbar"><i class="${pct <= 40 ? 'low' : ''}" style="width:${pct}%"></i></span>
+      <span class="tn">${v.life}<small>/${E.LIFE}</small></span>
+      ${threat.map((t) => `<span class="aim">${esc(t)}</span>`).join('')}${popsHTML(hits)}</div>`;
+  }
+
+  // 今の選択で狙える相手（'enemy' かヒーローの番号）
+  function currentTargets() {
+    if (phase !== 'mine') return [];
+    const allies = (except) => [0, 1].filter((k) => !game.heroes[k].ko && k !== except);
+    let kind = null, self = null;
+    if (mode === 'skill' && focus != null && focus !== 'enemy') { kind = E.skillOf(game.heroes[focus]).target; if (game.heroes[focus].id === 'knight') self = focus; }
+    else if (sel) kind = C[myCard(sel).id].target;
+    if (kind === 'enemy') return ['enemy'];
+    if (kind === 'ally') return allies(self);
+    return [];
+  }
+
+  // 矢印：敵の予告（自分のターン中）と、処理の再生中の行動
+  function arrowList(v, st) {
+    if (st) return st.actor && st.aim ? st.aim.map((to) => ({ from: st.actor, to, kind: st.actor.p === 1 ? 'foe' : 'mine' })) : [];
+    if (phase !== 'mine') return [];
+    const out = (v.intent.targets || []).map((t) => ({ from: { p: 1, k: 'enemy' }, to: { p: 0, k: t.life ? 'life' : t.k }, kind: 'foe', live: true }));
+    if (ptarget != null) {
+      const k = mode === 'skill' ? focus : sel ? cardOwner(sel) : null;
+      if (k != null && ptarget !== k) out.push({ from: { p: 0, k }, to: ptarget === 'enemy' ? { p: 1, k: 'enemy' } : { p: 0, k: ptarget }, kind: ptarget === 'enemy' ? 'mine' : 'ally' });
+    }
+    return out;
+  }
+  function drawArrows(list) {
+    const field = app.querySelector('.field');
+    if (!field || !list.length) return;
+    const fr = field.getBoundingClientRect();
+    const color = { foe: 'var(--bad)', mine: 'var(--brass)', ally: 'var(--good)' };
+    const find = (pt) => pt.p === 1 ? field.querySelector('[data-target="enemy"]') : pt.k === 'life' ? field.querySelector('[data-life]') : field.querySelector(`[data-hero="${pt.k}"]`);
+    const defs = Object.entries(color).map(([kind, c]) => `<marker id="ah-${kind}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:${c}"/></marker>`).join('');
+    let body = '';
+    for (const a of list) {
+      const ea = find(a.from), eb = find(a.to);
+      if (!ea || !eb) continue;
+      const ra = ea.getBoundingClientRect(), rb = eb.getBoundingClientRect();
+      // 敵の枠からは、下の縁の中央から出す
+      let x1 = ra.left + ra.width / 2 - fr.left, y1 = (a.from.p === 1 ? ra.bottom - 4 : ra.top + ra.height / 2) - fr.top;
+      let x2 = rb.left + rb.width / 2 - fr.left, y2 = (a.to.p === 1 ? rb.bottom - 8 : rb.top + rb.height / 2) - fr.top;
+      const len = Math.hypot(x2 - x1, y2 - y1);
+      if (len < 30) continue;
+      const ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+      if (a.from.p !== 1) { x1 += ux * 18; y1 += uy * 18; }
+      x2 -= ux * 18; y2 -= uy * 18;
+      body += `<line class="${a.live ? 'live' : ''}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${color[a.kind]}" marker-end="url(#ah-${a.kind})"/>`;
+    }
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'arrows');
+    svg.setAttribute('viewBox', `0 0 ${fr.width} ${fr.height}`);
+    svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = `<defs>${defs}</defs>${body}`;
+    field.appendChild(svg);
+  }
+
+  function turnLine(v, st) {
+    const foe = st && st.actor && st.actor.p === 1 || st && st.title === '怒り';
+    const ph = phase === 'mine' ? '備える・攻める' : st ? (st.title.startsWith('ラウンド') ? 'ターン開始' : foe ? '敵の行動' : '処理') : '';
+    return `<div class="turnline ${foe ? 'foe' : 'me'}" role="status" aria-live="polite">
+      <span class="tl-round">R${v.round}</span>
+      <span class="tl-who">${foe ? '▼ 敵の行動' : '▲ あなたのターン'}</span>
+      <span class="tl-phase">${ph}</span></div>`;
+  }
+
+  function manaHTML(n) {
+    return `<span class="mana" aria-label="マナ ${n}"><span class="gems">${n > 0 ? '<i class="gem"></i>'.repeat(n) : '<i class="gem empty"></i>'}</span><b>${n}</b></span>`;
+  }
+
+  function handHTML() {
+    const card = (c) => {
+      const def = C[c.id];
+      const usable = phase === 'mine' && ['enemy', 0, 1, null].some((t) => !E.check(game, { type: 'card', uid: c.uid, target: t }));
+      return `<button class="card c-${H[def.hero].color}${usable ? '' : ' off'}" aria-pressed="${sel === c.uid}" data-card="${c.uid}">
+        <span class="ch"><span class="cost">${def.cost}</span>${def.pos === 'front' ? '<span class="tag front">前衛</span>' : ''}</span><b>${esc(def.name)}</b>${c.fresh ? '<span class="tag new">NEW</span>' : ''}</button>`;
+    };
+    return [0, 1].map((k) => {
+      const h = game.heroes[k], d = game.decks[k];
+      return `<div class="hgroup c-${H[h.id].color}${h.ko ? ' ko' : ''}">
+        <span class="hg-head"><b>${H[h.id].name}</b><span class="hg-next">次：${esc(C[d.queue[0]].name)}</span></span>
+        <div class="hg-cards">${d.hand.map(card).join('')}</div></div>`;
+    }).join('');
+  }
+
+  // ── 説明欄とボタン ──
+  function minePanel() {
+    let d, use = null;
+    if (mode === 'skill' && focus != null) {
+      const sk = E.skillOf(game.heroes[focus]);
+      const err = ptarget != null ? E.check(game, { type: 'skill', k: focus, target: ptarget }) : '対象を選ぶ';
+      d = `<b class="h">「${esc(sk.name)}」</b>${skillTag(sk)}${esc(sk.text)}<br>${ptarget != null ? `→ <b>${tname(ptarget)}</b>` : `<span class="muted">${sk.target === 'ally' ? '緑に光っている味方' : '敵'}をタップ</span>`}`;
+      use = `<button class="btn" id="use" ${err ? 'disabled' : ''}>${ptarget != null ? '使う' : '対象を選ぶ'}</button>`;
+    } else if (sel) {
+      const def = C[myCard(sel).id];
+      const t = def.target === 'none' ? null : ptarget;
+      const blocked = E.check(game, { type: 'card', uid: sel, target: def.target === 'none' ? null : def.target === 'enemy' ? 'enemy' : (ptarget ?? [0, 1].find((k) => !game.heroes[k].ko)) });
+      const err = blocked || (def.target !== 'none' && t == null ? '対象を選ぶ' : E.check(game, { type: 'card', uid: sel, target: t }));
+      d = `<b class="h">${esc(def.name)}</b>【${def.cost}${def.pos === 'front' ? '・前衛' : ''}】${esc(def.text)}`
+        + (blocked ? `<br><span class="err">使えない：${esc(blocked)}</span>`
+          : def.target === 'none' ? '' : t != null ? `<br>→ <b>${tname(t)}</b>` : `<br><span class="muted">${def.target === 'ally' ? '緑に光っている味方' : '敵'}をタップ</span>`);
+      use = `<button class="btn" id="use" ${err ? 'disabled' : ''}>${def.target !== 'none' && t == null && !blocked ? '対象を選ぶ' : '使う'}</button>`;
+    } else if (focus === 'enemy') {
+      const en = E.ENEMY[game.enemy.id];
+      d = `<b class="h">${en.name}</b>　<span class="muted">${esc(en.text)}</span>${chainHTML(E.patternOf(game.enemy))}${en.phase2 && !game.enemy.phase ? `<span class="muted">本気になると：</span>${chainHTML(en.phase2.pattern)}` : ''}<span class="muted">${E.RAGE_EVERY}回行動するたびに怒り、攻撃が${E.ENRAGE}強くなる</span>`;
+    } else if (focus != null) {
+      d = focusHTML();
+    } else {
+      d = '<span class="muted">敵の予告（赤い矢印）を見て備える。カードかヒーローをタップ。終わったら「ターン終了」で敵が動く。</span>';
+    }
+    return {
+      panel: `<div class="detail">${d}</div>`,
+      buttons: `<button class="btn ghost" id="cancel" ${sel || mode || focus != null ? '' : 'disabled'}>やめる</button>${use || '<button class="btn" id="endturn">ターン終了</button>'}`,
+    };
+  }
+
+  function focusHTML() {
+    const h = game.heroes[focus], def = H[h.id], sk = E.skillOf(h);
+    let d = `<b class="h">${def.name}</b>　<span class="muted">${E.POS_NAME[h.pos]}</span>`;
+    if (phase === 'mine' && !h.ko) {
+      const errs = (sk.target === 'ally' ? [0, 1] : sk.target === 'enemy' ? ['enemy'] : [null]).map((t) => E.check(game, { type: 'skill', k: focus, target: t }));
+      const skErr = errs.every(Boolean) ? errs.find(Boolean) : null;
+      const mvErr = E.check(game, { type: 'move', k: focus });
+      d += `<div class="acts">
+        <button class="mini solid" id="skill" ${skErr ? 'disabled' : ''}>${esc(sk.name)}【${E.SKILL_COST}】${skErr ? `：${esc(skErr)}` : ''}</button>
+        <button class="mini" id="move" ${mvErr ? 'disabled' : ''}>${h.pos === 'front' ? '後衛' : '前衛'}へ移動${mvErr ? `：${esc(mvErr)}` : ''}</button></div>`;
+    }
+    return d + heroListHTML(h.id, run.mods[focus].cards, h.up);
+  }
+
+  function playPanel(st) {
+    const lines = st ? st.lines : [];
+    const lastStep = play && play.i === play.steps.length - 1;
+    return {
+      panel: `<div class="detail log"><div class="dh"><b>${esc(st ? st.title : '')}</b>${play ? `<span class="muted">${play.i + 1} / ${play.steps.length}</span>` : ''}</div>
+        ${lines.length ? `<ul>${lines.map((s) => s.startsWith('※') ? `<li class="why"><span class="whytag">なぜ</span>${esc(s.slice(1))}</li>` : `<li>${esc(s)}</li>`).join('')}</ul>` : ''}</div>`,
+      buttons: `<button class="btn ghost" id="skip" ${lastStep ? 'disabled' : ''}>最後まで</button><button class="btn" id="next">${lastStep ? (game.over ? '結果を見る' : '続ける') : '次へ'}</button>`,
+    };
+  }
+
+  // ── 描画 ──
+  function render() {
+    const st = play ? play.steps[play.i] : null;
+    const v = st ? st.view : E.view(game);
+    const ctx = { hits: st ? st.hits : [], actor: st ? st.actor : null, targets: currentTargets() };
+    const th = threats(v);
+    const row = (pos) => `<div class="frow">${[0, 1].map((k) => `<div class="cell">${v.heroes[k].pos === pos ? heroHTML(v, k, ctx, th.heroes[k]) : `<span class="slot">${E.POS_NAME[pos]}</span>`}</div>`).join('')}</div>`;
+    const { panel, buttons } = phase === 'mine' ? minePanel() : playPanel(st);
+    app.innerHTML = `<section class="screen battle" style="gap:5px">
+      <div class="field">
+        ${enemyHTML(v, ctx)}
+        ${turnLine(v, st)}
+        ${row('front')}${row('back')}
+        ${lifeHTML(v, ctx, th.life)}
+      </div>
+      <div class="bar"><span class="who">マナ</span>${manaHTML(v.mana)}</div>
+      <div class="hand" ${phase === 'mine' ? '' : 'hidden'}>${handHTML()}</div>
+      ${panel}
+      <div class="act">${buttons}</div>
+    </section>`;
+    drawArrows(arrowList(v, st));
+    bind();
+  }
+
+  function bind() {
+    const on = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
+    on('next', advance);
+    on('skip', skipAll);
+    if (phase !== 'mine') return;
+    const tapTarget = (t) => {
+      if (currentTargets().includes(t) && (sel || mode)) { ptarget = t; return render(); }
+      sel = null; mode = null; ptarget = null;
+      focus = focus === t ? null : t;
+      render();
+    };
+    const keyable = (el, fn) => { el.onclick = fn; el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }; };
+    app.querySelectorAll('[data-hero]').forEach((el) => keyable(el, () => tapTarget(+el.dataset.hero)));
+    const en = app.querySelector('[data-target="enemy"]');
+    if (en) keyable(en, () => tapTarget('enemy'));
+    app.querySelectorAll('[data-card]').forEach((b) => b.onclick = () => {
+      const uid = +b.dataset.card;
+      mode = null; focus = null; ptarget = null;
+      sel = sel === uid ? null : uid;
+      // 敵を狙うカードは、対象を自動で敵にする
+      if (sel && C[myCard(sel).id].target === 'enemy') ptarget = 'enemy';
+      render();
+    });
+    on('skill', () => {
+      mode = 'skill';
+      ptarget = E.skillOf(game.heroes[focus]).target === 'enemy' ? 'enemy' : null;
+      render();
+    });
+    on('move', () => doAct({ type: 'move', k: focus }));
+    on('use', () => {
+      if (mode === 'skill' && focus != null) { if (ptarget != null) doAct({ type: 'skill', k: focus, target: ptarget }); return; }
+      const def = C[myCard(sel).id];
+      doAct({ type: 'card', uid: sel, target: def.target === 'none' ? null : ptarget });
+    });
+    on('cancel', () => { clearPick(); render(); });
+    on('endturn', endTurn);
+  }
+
+  function result() {
+    clearTimeout(autoTimer);
+    const win = game.winner === 0;
+    const stage = stageName(run.stage);
+    const more = E.endFight(run, game);
+    const head = run.won ? '踏破' : win ? '勝利' : '冒険失敗';
+    const o = document.createElement('div');
+    o.className = 'overlay';
+    o.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${head}">
+      <h2 class="${win ? 'win' : 'lose'}">${head}</h2>
+      <p class="muted">${stage}：${esc(game.endReason)}</p>
+      ${run.won ? `<p>ボスを倒した。残りライフ ${run.life}</p>` : ''}
+      <div class="foot">${more ? '<button class="btn" id="next-r">報酬を選ぶ</button>'
+        : '<button class="btn ghost" id="totitle">タイトルへ</button><button class="btn" id="again">もう一度冒険する</button>'}</div></div>`;
+    document.body.appendChild(o);
+    const b = (id, fn) => { const el = o.querySelector('#' + id); if (el) el.onclick = () => { o.remove(); fn(); }; };
+    b('next-r', reward); b('again', startRun); b('totitle', title);
+    o.querySelector('.btn').focus();
+  }
+
+  title();
+})();
+</script>
