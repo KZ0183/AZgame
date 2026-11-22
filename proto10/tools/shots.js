@@ -63,6 +63,11 @@ fs.copyFileSync(path.join(root, 'tools', 'bot.js'), path.join(out, 'bot.js'));
         if (life && detail && !hand && life.bottom > detail.top + 1) out.push('ライフの帯が説明欄に重なる');
         if (detail && act && detail.bottom > act.top + 1) out.push('説明欄がボタンに重なる');
         for (const el of document.querySelectorAll('.hero')) { if (el.scrollHeight > el.clientHeight + 1) out.push(`ヒーロー枠の中身がはみ出す ${el.scrollHeight}>${el.clientHeight}`); }
+        for (const q of ['.estat', '.hr-name span', '.hero .nm', '.hero .nums', '.hero .flags', '.upnext', '.card b']) for (const el of document.querySelectorAll(q)) {
+          if (el.scrollWidth > el.clientWidth + 1) out.push(`横に切れる ${q}「${el.textContent.trim().slice(0, 16)}」`);
+        }
+        for (const el of document.querySelectorAll('.hero > span:not(.pops):not(.hpbar)')) { const r = el.getBoundingClientRect(), pr = el.parentElement.getBoundingClientRect(); if (r.height && r.bottom > pr.bottom - 4) out.push(`ヒーロー枠の下に切れる「${el.textContent.trim().slice(0, 16)}」`); }
+        for (const el of document.querySelectorAll('.card b, .hr-name b, .hr-name span')) { if (el.getBoundingClientRect().height > 20) out.push(`折り返している「${el.textContent.trim()}」`); }
         return [...new Set(out)];
       });
       for (const x of r) issues.push(`${name}: ${x}`);
@@ -130,6 +135,22 @@ fs.copyFileSync(path.join(root, 'tools', 'bot.js'), path.join(out, 'bot.js'));
       if (await p.$('[data-rep]')) { await p.click('[data-rep="1"]'); await shot('22-swap'); await p.click('#take'); }
       await shot(`23-route-${fight + 1}`);
     }
+    // 込み入った場面：状態をたくさん付けた盤面を作って撮る
+    await p.evaluate(() => localStorage.setItem('futari-pve-settings', JSON.stringify({ auto: false })));
+    await p.goto('file://' + path.join(out, 'test.html'));
+    await p.click('#go'); await p.click('#fight'); await skipPlay(null);
+    await p.evaluate(() => {
+      const g = window.__dbg.game;
+      Object.assign(g.heroes[0], { shield: 12, taunt: true, counter: 6, focus: 2, hp: 3 });
+      Object.assign(g.heroes[1], { shield: 5, guard: 0, focus: 4, hp: 2, pos: g.heroes[0].pos });
+      Object.assign(g.enemy, { shield: 6, charge: 9, weak: 3, poison: 6, loops: 3, acted: 16, hp: 9 });
+      g.life = 3;
+    });
+    await p.click('[data-target="enemy"]'); await p.click('#cancel');
+    await shot('30-stress-mine');
+    await p.click('#endturn');
+    for (let i = 0; i < 6 && await p.$('#next') && !(await p.$('.overlay')); i++) { await shot(`31-stress-play${i}`); await p.click('#next'); }
+    if (!(await p.$('.overlay'))) await shot('32-stress-next-mine');
     console.log(`■ ${size}`);
     for (const l of log) console.log('  ' + l);
     if (errs.length) { bad++; console.log('  エラー:', errs); }

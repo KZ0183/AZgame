@@ -276,7 +276,7 @@
           damageHero(state, k, it.dmg, ename(state));
           // 反撃：攻撃を受けるたび、敵にダメージ（倒れたら反撃しない）
           const hh = state.heroes[k];
-          if (hh.counter && !hh.ko && !state.over) { state.log.push(`※${hname(state, k)}の反撃`); damageEnemy(state, hh.counter, hname(state, k)); if (state.over && t !== it.targets[it.targets.length - 1]) state.log.push('※反撃で敵が倒れたので、残りの攻撃は当たらない'); }
+          if (hh.counter && !hh.ko && !state.over) { damageEnemy(state, hh.counter, `${hname(state, k)}の反撃`); if (state.over && t !== it.targets[it.targets.length - 1]) state.log.push('※反撃で敵が倒れたので、残りの攻撃は当たらない'); }
           state._aim.push({ p: 0, k });
         }
       }
@@ -304,13 +304,14 @@
     if (h.ko || n <= 0) return;
     const absorbed = Math.min(h.shield, n);
     h.shield -= absorbed;
+    const lost = Math.min(h.hp, n - absorbed);
     h.hp -= n - absorbed;
-    mark(state, { p: 0, k, n: -(n - absorbed), label: absorbed ? `盾−${absorbed}` : null, hit: true });
+    mark(state, { p: 0, k, n: -lost, label: absorbed ? `盾−${absorbed}` : null, hit: true });
     state.log.push(`${src} → ${hname(state, k)}に${n}ダメージ${absorbed ? `（盾で${absorbed}防いだ）` : ''}`);
     if (h.hp <= 0) {
       h.ko = true; h.hp = 0; h.shield = 0; h.taunt = false; h.counter = 0; h.wait = REVIVE_WAIT;
       mark(state, { p: 0, k, label: '倒れた' });
-      state.log.push(`${hname(state, k)}は倒れた（ライフ−${KO_LIFE}。次の自分のターンを休んでから復活）`);
+      state.log.push(`${hname(state, k)}は倒れた（ライフ−${KO_LIFE}）`);
       hitLife(state, KO_LIFE, null);
     }
   }
