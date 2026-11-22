@@ -26,20 +26,24 @@ function setup(heroes, front, enemyId, hands, opt) {
 }
 const play = (g, id, target) => { const c = g.decks.flatMap((d) => d.hand).find((x) => x.id === id); return E.act(g, { type: 'card', uid: c.uid, target: target === undefined ? null : target }); };
 const setIntent = (g, i) => { g.enemy.step = i; };
+// 敵 id の i 番目の行動の数値（敵の数値を調整してもテストが壊れないように、定義から読む）
+const N = (id, i) => E.ENEMY[id].pattern[i].n;
+const KN = E.HERO.knight.hp;
+const tough = (g) => g.heroes.forEach((h) => { h.hp = h.maxHp = 50; });
 
 // ── 予告の当たり先 ──
 {
   const g = setup(['knight', 'mage'], 0, 'golem');           // 騎士が前衛、魔術師が後衛。予告は「前衛へ6」
   eq('前衛へ攻撃は前衛だけ', E.intent(g).targets, [{ k: 0 }]);
   E.endTurn(g);
-  eq('前衛へ攻撃のダメージ', [g.heroes[0].hp, g.heroes[1].hp], [15 - 6, 9]);
+  eq('前衛へ攻撃のダメージ', [g.heroes[0].hp, g.heroes[1].hp], [KN - N('golem', 0), 10]);
 }
 {
   const g = setup(['knight', 'mage'], 0, 'golem');
   E.act(g, { type: 'move', k: 0 });                          // 前衛が空になる
   eq('前衛が空ならライフ', E.intent(g).targets, [{ life: true }]);
   E.endTurn(g);
-  eq('ライフに当たる', g.life, 20 - 6);
+  eq('ライフに当たる', g.life, 20 - N('golem', 0));
 }
 {
   const g = setup(['knight', 'mage'], 0, 'spider');          // 後衛へ7
@@ -71,24 +75,26 @@ const setIntent = (g, i) => { g.enemy.step = i; };
   play(g, 'kn_taunt');
   const hp = g.enemy.hp;
   E.endTurn(g);
-  eq('反撃4', g.enemy.hp, hp - 4);
+  eq('反撃3', g.enemy.hp, hp - 3);
   eq('反撃は次のターンに消える', g.heroes[0].counter, 0);
 }
 {
   const g = setup(['knight', 'mage'], 0, 'spider');          // 後衛へ7 → 魔術師
+  tough(g);
   E.act(g, { type: 'skill', k: 0, target: 1 });              // かばう
   eq('かばうで後衛への攻撃も騎士へ', E.intent(g).targets, [{ k: 0, why: 'かばう', from: 1 }]);
   E.endTurn(g);
-  eq('かばった結果', [g.heroes[0].hp, g.heroes[1].hp], [15 - 7, 9]);
+  eq('かばった結果', [g.heroes[0].hp, g.heroes[1].hp], [50 - N('spider', 0), 50]);
   eq('かばうは次のターンに消える', g.heroes[1].guard, null);
 }
 {
   const g = setup(['knight', 'mage'], 0, 'spider');
-  setIntent(g, 4);                                           // 全体6
+  setIntent(g, 4);                                           // 全体攻撃
+  tough(g);
   E.act(g, { type: 'skill', k: 0, target: 1 });
   eq('全体攻撃をかばうと2回受ける', E.intent(g).targets.map((t) => t.k), [0, 0]);
   E.endTurn(g);
-  eq('2回ぶん受ける', [g.heroes[0].hp, g.heroes[1].hp], [15 - 12, 9]);
+  eq('2回ぶん受ける', [g.heroes[0].hp, g.heroes[1].hp], [50 - 2 * N('spider', 4), 50]);
 }
 ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), { type: 'skill', k: 0, target: 0 }));
 
@@ -104,23 +110,23 @@ ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), 
 // ── 盾・溜め・弱体・身を固める ──
 {
   const g = setup(['knight', 'saint'], 0, 'golem', [['kn_guard', 'kn_bash'], null]);
-  play(g, 'kn_guard', 0);                                    // 盾5、予告は前衛へ6
+  play(g, 'kn_guard', 0);                                    // 盾4、予告は前衛へ6
   E.endTurn(g);
-  eq('盾が先に減る', [g.heroes[0].hp, g.heroes[0].shield], [14, 0]);
+  eq('盾が先に減る', [g.heroes[0].hp, g.heroes[0].shield], [KN - (N('golem', 0) - 4), 0]);
 }
 {
   const g = setup(['rogue', 'saint'], 0, 'golem', [['rg_trip', 'rg_dagger'], null]);
   play(g, 'rg_trip', 'enemy');
-  eq('足払いで予告のダメージ−3', E.intent(g).dmg, 3);
+  eq('足払いで予告のダメージ−3', E.intent(g).dmg, N('golem', 0) - 3);
   E.endTurn(g);
   eq('弱体は1回で消える', g.enemy.weak, 0);
 }
 {
   const g = setup(['mage', 'saint'], 0, 'dragon', [['mg_flame', 'mg_bolt'], null]);
   setIntent(g, 1); E.endTurn(g);                             // 溜め4 → 次は全体6
-  eq('溜めが次の攻撃に乗る', E.intent(g).dmg, 10);
+  eq('溜めが次の攻撃に乗る', E.intent(g).dmg, N('dragon', 1) + N('dragon', 2));
   play(g, 'mg_flame', 'enemy');
-  eq('火炎で溜めが消える', E.intent(g).dmg, 6);
+  eq('火炎で溜めが消える', E.intent(g).dmg, N('dragon', 2));
 }
 {
   const g = setup(['sword', 'saint'], 0, 'golem', [['sw_slash', 'sw_cleave'], null]);
@@ -174,10 +180,8 @@ ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), 
 // ── マナ・巡回・スキル ──
 {
   const g = E.newGame({ heroes: ['sword', 'mage'], front: 0 }, 'golem', rng(3));
-  eq('1ラウンド目のマナ', g.mana, 2);
-  E.endTurn(g); eq('2ラウンド目のマナ', g.mana, 3);
-  for (let i = 0; i < 6; i++) { g.life = 99; g.heroes.forEach((h) => { h.hp = h.maxHp; }); E.endTurn(g); }
-  eq('マナの上限', g.mana, E.MANA_MAX);
+  eq('1ターン目のマナ', g.mana, E.MANA);
+  g.mana = 1; E.endTurn(g); eq('マナは持ち越さず、毎ターン同じ', g.mana, E.MANA);
 }
 {
   const g = setup(['sword', 'mage'], 0, 'golem', [['sw_slash', 'sw_focus'], null]);
@@ -196,16 +200,25 @@ ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), 
   const g = setup(['rogue', 'mage'], 0, 'golem');
   E.act(g, { type: 'move', k: 0 }); E.act(g, { type: 'move', k: 1 });
   ok('すり抜けは前衛だけ', !!E.check(g, { type: 'skill', k: 0, target: 'enemy' }));
-  g.heroes[0].pos = 'front'; g.heroes[0].moved = true;
+  g.heroes[0].pos = 'front';
+  ok('移動済みなら移動できない', !!E.check(g, { type: 'move', k: 0 }));
   E.act(g, { type: 'skill', k: 0, target: 'enemy' });
   ok('すり抜けでもう1回移動', !E.check(g, { type: 'move', k: 0 }));
+}
+{
+  const g = setup(['rogue', 'mage'], 0, 'golem');
+  E.act(g, { type: 'skill', k: 0, target: 'enemy' });        // 移動前に使っても、合計2回動ける
+  E.act(g, { type: 'move', k: 0 });
+  ok('すり抜けを先に使っても2回動ける', !E.check(g, { type: 'move', k: 0 }));
+  E.act(g, { type: 'move', k: 0 });
+  ok('3回目は動けない', !!E.check(g, { type: 'move', k: 0 }));
 }
 {
   const g = setup(['saint', 'mage'], 0, 'golem');
   g.heroes[1].hp = 5;
   const hp = g.enemy.hp;
   E.act(g, { type: 'skill', k: 0, target: 1 });
-  eq('祈りの手：1ダメージと2回復', [hp - g.enemy.hp, g.heroes[1].hp], [1, 7]);
+  eq('祈りの手：2ダメージと2回復', [hp - g.enemy.hp, g.heroes[1].hp], [2, 7]);
 }
 
 // ── ボスの本気 ──
@@ -215,6 +228,32 @@ ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), 
   E.act(g, { type: 'skill', k: 1, target: 'enemy' });        // 魔弾2 → 19（半分=20以下）
   ok('HP半分で本気、予告は最初から、溜めは消える', g.enemy.phase === 1 && g.enemy.step === 0 && g.enemy.charge === 0, g.enemy);
   eq('本気の予告', E.intent(g).type, E.BOSS.phase2.pattern[0].type);
+}
+
+{
+  const g = setup(['knight', 'mage'], 0, 'lord', [['kn_taunt', 'kn_bash'], null]);
+  g.enemy.hp = Math.floor(g.enemy.maxHp / 2) + 2;            // 反撃3で半分以下になる
+  play(g, 'kn_taunt');
+  E.endTurn(g);                                              // 前衛へ攻撃 → 反撃 → 本気
+  ok('敵の行動中に本気になっても、新しい巡回の1番目から', g.enemy.phase === 1 && g.enemy.step === 0 && E.intent(g).type === E.BOSS.phase2.pattern[0].type, g.enemy);
+  eq('本気になっても怒りの数え方は続く', g.enemy.acted, 1);
+}
+{
+  const g = setup(['knight', 'mage'], 0, 'spider');
+  setIntent(g, 4);                                           // 全体攻撃。騎士が2回受ける
+  tough(g); g.heroes[0].hp = 1;
+  E.act(g, { type: 'skill', k: 0, target: 1 });
+  const dmg = E.intent(g).dmg;
+  E.endTurn(g);
+  ok('かばう側が倒れたら、残りは元の味方に当たる', g.heroes[0].ko && g.heroes[1].hp === 50 - dmg, g.heroes.map((h) => h.hp));
+}
+{
+  const g = setup(['knight', 'rogue'], 0, 'golem', [['kn_taunt', 'kn_bash'], ['rg_trip', 'rg_dagger']]);
+  g.enemy.weak = 9;                                          // 攻撃は0ダメージになる
+  play(g, 'kn_taunt');
+  const hp = g.enemy.hp;
+  E.endTurn(g);
+  ok('0ダメージでも反撃する', g.heroes[0].hp === KN && g.enemy.hp === hp - 3, { hp: g.enemy.hp });
 }
 
 // ── 連戦 ──
@@ -238,6 +277,7 @@ ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), 
   const g2 = E.runFight(run, rng(8));
   ok('強化と新カードが戦闘に反映', g2.heroes[opts[1].k].up && g2.decks[opts[0].k].hand.concat(g2.decks[opts[0].k].queue.map((id) => ({ id }))).some((c) => c.id === opts[0].card));
   eq('ヒーローのHPは全快', g2.heroes.map((h) => h.hp), g2.heroes.map((h) => h.maxHp));
+  eq('並びは最初に選んだものに戻る', g2.heroes.map((h) => h.pos), ['front', 'back']);
   g2.life = 0; g2.over = true; g2.winner = 1;
   ok('負けたら冒険終了', E.endFight(run, g2) === false && run.over && !run.won);
 }

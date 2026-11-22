@@ -66,7 +66,8 @@ function playFight(E, g, stats, opt) {
       if (stats && a.type === 'card') { const f = E.findCard(g, a.uid); if (f) stats.card[f.c.id] = (stats.card[f.c.id] || 0) + 1; }
       if (stats && a.type === 'skill') stats.skill[g.heroes[a.k].id] = (stats.skill[g.heroes[a.k].id] || 0) + 1;
       if (stats && a.type === 'move') stats.move++;
-      E.act(g, a);
+      const r = E.act(g, a);
+      if (r.error) throw new Error('計画した行動が実行できない: ' + r.error + ' ' + JSON.stringify(a));
     }
     if (!g.over) E.endTurn(g);
   }

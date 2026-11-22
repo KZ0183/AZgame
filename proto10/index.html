@@ -45,11 +45,11 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .btn { border: 1px solid var(--brass); background: var(--brass); color: var(--bg); font-weight: 700; border-radius: 10px; padding: 11px 14px; cursor: pointer; }
 .btn.ghost { background: transparent; color: var(--brass); }
 .btn:disabled { opacity: .4; cursor: default; }
-.mini { border: 1px solid var(--brass); background: transparent; color: var(--brass); border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+.mini { border: 1px solid var(--brass); background: transparent; color: var(--brass); border-radius: 8px; min-height: 40px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
 .mini.on, .mini.solid { background: var(--brass); color: var(--bg); font-weight: 700; }
 .mini:disabled { border-color: var(--line); background: transparent; color: var(--muted); font-weight: 400; cursor: default; }
 .seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.seg button { background: transparent; border: 0; padding: 7px 12px; cursor: pointer; color: var(--muted); font-size: 12px; }
+.seg button { background: transparent; border: 0; min-height: 40px; padding: 7px 12px; cursor: pointer; color: var(--muted); font-size: 12px; }
 .seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--brass); }
 .foot { display: flex; gap: 8px; }
 .foot .btn { flex: 1; }
@@ -65,7 +65,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .points li { background: var(--panel); border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.6; }
 .points li b { color: var(--brass); }
 .title .actions { display: grid; gap: 8px; }
-.linkbtn { background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; padding: 4px; justify-self: center; font-size: 12px; }
+.linkbtn { background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; min-height: 40px; padding: 4px 12px; justify-self: center; font-size: 12px; }
 
 /* ルール */
 .scroll { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 10px; align-content: start; }
@@ -171,20 +171,28 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .gem { width: 11px; height: 11px; transform: rotate(45deg); border: 1.5px solid var(--brass); border-radius: 2px; box-sizing: border-box; background: var(--brass); box-shadow: 0 0 6px color-mix(in srgb, var(--brass) 55%, transparent); }
 .gem.empty { background: transparent; border-color: var(--line); box-shadow: none; }
 .mana b { font-family: var(--f-display); font-size: 17px; color: var(--brass); font-variant-numeric: tabular-nums; }
-.hand { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.hgroup { border-top: 3px solid var(--hc); border-radius: 8px; background: color-mix(in srgb, var(--panel) 60%, var(--bg)); padding: 3px 4px 4px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.hgroup.ko { opacity: .5; }
-.hg-head { display: flex; align-items: baseline; gap: 6px; font-size: 11px; min-width: 0; }
-.hg-head b { font-family: var(--f-display); font-size: 12px; }
-.hg-next { margin-left: auto; color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hg-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.hand { display: grid; gap: 5px; }
+.hrow { display: grid; grid-template-columns: 50px 1fr 1fr 1fr 46px; gap: 4px; align-items: stretch; border-left: 3px solid var(--hc); padding-left: 5px; min-width: 0; }
+.hrow.ko { opacity: .5; }
+.hr-name { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; }
+.hr-name b { font-family: var(--f-display); font-size: 12px; line-height: 1.2; }
+.hr-name span { font-size: 9.5px; color: var(--muted); line-height: 1.25; overflow: hidden; }
 .card { position: relative; background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--hc); border-radius: 8px; padding: 3px 6px 4px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .card[aria-pressed="true"] { border-color: var(--brass); border-top-color: var(--hc); background: var(--panel-2); box-shadow: 0 0 0 1px var(--brass) inset; }
 .card.off { opacity: .4; }
 .card .ch { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .card .cost { font-family: var(--f-display); font-weight: 800; color: var(--brass); }
 .card .ch .tag { margin-left: auto; }
-.card b { font-size: 12px; line-height: 1.25; overflow-wrap: anywhere; }
+.card { min-height: 44px; box-sizing: border-box; }
+.card b { font-size: 11.5px; line-height: 1.25; overflow-wrap: anywhere; }
+.card.skill { border-top-style: double; background: color-mix(in srgb, var(--hc) 10%, var(--panel)); }
+.card.move { align-items: center; justify-content: center; text-align: center; border-top-color: var(--line); padding: 2px; }
+.card.move b { font-size: 10.5px; }
+.card.move .arw { font-size: 13px; color: var(--brass); line-height: 1; }
+.card .kind { font-size: 8.5px; color: var(--muted); line-height: 1.1; }
+.turnline .mana b { font-size: 15px; }
+.turnline .gem { width: 9px; height: 9px; }
+.intent.now { border-style: dashed; }
 .card .tag.new { position: absolute; top: -8px; left: 4px; }
 .detail { background: var(--panel); border-radius: 10px; padding: 7px 12px; font-size: 12px; line-height: 1.6; min-height: 3.2em; max-height: 6.5em; overflow-y: auto; }
 .detail.log { max-height: 9em; min-height: 5em; }
@@ -272,7 +280,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   let settings = (() => { const v = store.get('futari-pve-settings'); return { auto: !(v && v.auto === false) }; })();
 
   // ── 共通の部品 ──
-  const skillTag = (sk) => `【${E.SKILL_COST}${sk.pos === 'front' ? '・前衛' : ''}】`;
+  const skillTag = (sk) => `【${sk.cost}${sk.pos === 'front' ? '・前衛' : ''}】`;
   const cardLine = (cid) => { const c = C[cid]; return `<b>${esc(c.name)}</b>【${c.cost}${c.pos === 'front' ? '・前衛' : ''}】${esc(c.text)}${c.extra ? ' <span class="tag extra">報酬</span>' : ''}`; };
   // cards・up は連戦での今の状態（省略すると初期のまま）
   const heroListHTML = (id, cards, up) => {
@@ -315,33 +323,43 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       <h2 style="font-size:24px">ルール</h2>
       <div class="scroll">
         ${sec('勝ち負け', [
-          '<b>敵のHPを0にしたら勝ち</b>',
-          `あなたのライフ（${E.LIFE}）が0になったら負け`,
-          `ヒーローが倒れるとライフが${E.KO_LIFE}減る。倒れたヒーローは1ターン休んでから後衛で復活する`,
+          '<b>敵のHPを0にしたら、その戦闘に勝つ</b>。3戦すべてに勝てば踏破',
+          `あなたのライフ（${E.LIFE}）が0になったら負け。冒険はそこで終わる`,
+          `ヒーローのHPが0になると倒れ、ライフが${E.KO_LIFE}減る。倒れたヒーローは次の自分のターンを休み、その次のターンに後衛でHP全快で復活する`,
         ])}
         ${sec('冒険', [
-          '<b>3連戦</b>：普通の敵2体のあと、ボス「' + E.BOSS.name + '」と戦う。ボスを倒せば踏破',
-          'ライフは戦闘をまたいで持ち越す。ヒーローのHPは戦闘ごとに全快する',
-          '勝つたびに報酬を1つ選ぶ：<b>新しいカードと入れ替え</b>（枚数は4枚のまま）／<b>ヒーローの強化</b>（固有スキル、または最大HP+3）／<b>ライフ回復</b>（+' + E.RUN_LIFE_HEAL + '）',
-          'ボスはHPが半分を切ると本気を出し、予告の巡回が変わる',
+          '<b>3連戦</b>：普通の敵2体のあと、ボス「' + E.BOSS.name + '」と戦う',
+          'ライフは戦闘をまたいで持ち越す。ヒーローのHPは戦闘ごとに全快する。どの戦闘も、前衛1人・後衛1人の並びで始まる（戦闘の前に入れ替えられる）',
+          '勝つたびに報酬を1つ選ぶ：<b>新しいカード</b>（今のカード1枚と入れ替える。4枚のまま）／<b>強化</b>（固有スキルの強化。強化済みなら最大HP+3）／<b>回復</b>（ライフ+' + E.RUN_LIFE_HEAL + '。上限' + E.LIFE + '）',
+          'ボスはHPが半分以下になると本気を出し、予告の巡回が別のものに変わって最初から始まる。溜めていたぶんは消える。怒り・毒・弱体はそのまま続く',
         ])}
         ${sec('敵の予告', [
-          '敵は<b>次の行動を予告</b>している。予告は決まった順番で巡回する',
-          '前衛へ攻撃：前衛の全員に当たる。前衛が空ならライフに当たる',
-          '後衛へ攻撃：後衛の全員に当たる。後衛が空ならライフに当たる',
-          '強打：前衛でHPが一番高い1人に当たる。挑発・かばうで向きを変えられる。前衛が空ならライフに当たる',
-          '全体攻撃：全員に当たる',
-          '溜め：次の攻撃が強くなる。身を固める：敵に盾が付く',
-          `敵は${E.RAGE_EVERY}回行動するたびに怒り、攻撃が${E.ENRAGE}ずつ強くなる。長引くほど不利になる`,
+          '敵は<b>次の行動を予告</b>している。予告は決まった順番で巡回し、あなたが「ターン終了」を押すと予告どおりに動く',
+          '<b>前衛へ攻撃</b>：前衛の全員に当たる。前衛に誰もいなければ、あなたのライフに当たる',
+          '<b>後衛へ攻撃</b>：後衛の全員に当たる。後衛に誰もいなければ、あなたのライフに当たる',
+          '<b>強打</b>：前衛のうち、今のHPが高いほう1人に当たる（同じなら左のヒーロー）。挑発しているヒーローがいれば、前衛・後衛に関係なくそちらに当たる。前衛に誰もいなければライフに当たる',
+          '<b>全体攻撃</b>：立っているヒーロー全員に当たる。誰も立っていなければライフに当たる',
+          '倒れているヒーローは、その列にいないものとして扱う',
+          '<b>溜め</b>：次の攻撃のダメージが増える。<b>身を固める</b>：敵に盾が付く。敵の盾は、敵の次の行動が始まるときに消える（それまでのあなたの攻撃を防ぐ）',
+          `<b>怒り</b>：敵は${E.RAGE_EVERY}回行動するたびに怒り、以後の攻撃のダメージが${E.ENRAGE}ずつ増える。長引くほど不利になる。予告を飛ばしても、怒りは早まらない`,
         ])}
         ${sec('自分のターン', [
-          'マナは毎ターン回復する（1ターン目は2、その後はラウンド数+1、最大6）。余っても持ち越さない',
-          'カード・固有スキル（1マナ・1人1回）・移動（無料・1人1回）を、1つずつ使う。終わったら「ターン終了」で敵が動く',
-          '前衛の付いたカードとスキルは、そのヒーローが前衛にいるときだけ使える',
-          '盾・挑発・かばうは、次の自分のターンが来るまで続く',
+          `マナは毎ターン${E.MANA}になる。余っても持ち越さない`,
+          `カード、固有スキル（${E.SKILL_COST}マナ・1人1ターン1回）、移動（無料・1人1ターン1回）を、好きな順に1つずつ使う。移動は前衛と後衛を行き来することで、2人が同じ列に並んでもよい`,
+          '「ターン終了」を押すと敵が動く。マナが0で、使える0マナのカードも移動も残っていなければ、自動でターンが終わる',
+          '「前衛」の付いたカードとスキルは、そのヒーローが前衛にいるときだけ使える。付いていないものはどこからでも使える',
+          '倒れているヒーローのカードとスキルは使えない',
+        ])}
+        ${sec('守る', [
+          '<b>盾</b>：ダメージを盾の数だけ防ぐ。防いだぶん盾は減る。次の自分のターンが来ると消える',
+          '<b>挑発</b>：次の自分のターンまで、敵の強打がそのヒーローに向く（ほかの攻撃の向きは変わらない）',
+          '<b>反撃</b>：次の自分のターンまで、そのヒーローが敵の攻撃を受けるたびに、敵にダメージを与える。盾で全部防いでも、ダメージが0でも反撃する。その攻撃で倒れたら反撃しない。反撃で敵が倒れたら、残りの攻撃は当たらない',
+          '<b>かばう</b>：次の自分のターンまで、味方1人が受けるはずの敵の攻撃を、代わりに受ける。自分も同じ攻撃の対象なら（全体攻撃や、同じ列に並んでいるとき）2回受ける。途中で自分が倒れたら、残りは元の味方に当たる',
+          '<b>敵の攻撃を弱める</b>（足払い・氷結）：敵の次の攻撃1回に効く。溜めや身を固めるをはさんでも残り、重ねると合計される',
+          '挑発・反撃・かばうは、使ったあとに後衛へ下がっても続く',
         ])}
         ${sec('カードの巡回', [
-          '各ヒーローは4枚のカードを決まった順番で巡回させる。手札は各ヒーロー2枚',
+          `各ヒーローは4枚のカードを決まった順番で巡回させる。手札は各ヒーロー${E.HAND_SIZE}枚。順番は戦闘ごとにランダムに決まる`,
           '使ったカードは列の最後へ回り、同じ場所に次のカードが入る。次に来るカードは手札の上に見えている',
         ])}
       </div>
@@ -418,12 +436,14 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         <section class="pickitem" style="cursor:default"><span class="hd"><b>次の敵：${en.name}</b></span><p>${esc(en.text)}</p>${chainHTML(en.pattern)}</section>
         ${partyHTML()}
       </div>
-      <div class="foot"><button class="btn ghost" id="quit">やめる</button><button class="btn" id="fight">戦う</button></div>
+      <div class="foot"><button class="btn ghost" id="quit">やめる</button><button class="btn ghost" id="swapPos">並びを替える</button><button class="btn" id="fight">戦う</button></div>
     </section>`;
     document.getElementById('quit').onclick = title;
     document.getElementById('fight').onclick = start;
+    document.getElementById('swapPos').onclick = () => { run.front = 1 - run.front; route(); };
   }
   function start() {
+    flash = null;
     game = E.runFight(run);
     playback(game.steps.slice(), beginMine);
   }
@@ -470,18 +490,28 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     phase = 'mine'; clearPick();
     // マナが0で、使える0マナのカードもなければ、自動でターンを終える
     const canPlay = game.decks.some((d) => d.hand.some((c) => ['enemy', 0, 1, null].some((t) => !E.check(game, { type: 'card', uid: c.uid, target: t }))));
-    if (game.mana === 0 && !canPlay) return endTurn();
+    const canMove = [0, 1].some((k) => !E.check(game, { type: 'move', k }));
+    if (game.mana === 0 && !canPlay && !canMove) return endTurn(true);
     render();
   }
+  // flash = 直前の自分の行動の結果（盤面の数字と説明欄に出す。次に何かタップしたら消える）
+  let flash = null;
   function doAct(a) {
     const r = E.act(game, a);
     if (r.error) return;
     clearPick();
-    playback(game.steps.slice(), beginMine);
+    const steps = game.steps.slice();
+    if (game.over) return playback(steps, beginMine);
+    flash = steps;
+    beginMine();
   }
-  function endTurn() {
+  function endTurn(auto) {
     if (phase !== 'mine') return;
-    playback(E.endTurn(game).slice(), beginMine);
+    const mine = auto === true && flash ? flash : [];   // 自動で終わるときは、最後の自分の行動も再生に含める
+    flash = null;
+    const steps = E.endTurn(game).slice();
+    if (auto === true && steps.length) steps[0] = { ...steps[0], lines: ['※マナも移動も使い切ったので、自動でターンを終えた'].concat(steps[0].lines) };
+    playback(mine.concat(steps), beginMine);
   }
 
   // ── 処理の再生 ──
@@ -498,7 +528,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     clearTimeout(autoTimer);
     if (!settings.auto) return;
     const whys = st.lines.filter((l) => l.startsWith('※')).length;
-    const base = st.title.startsWith('敵の行動') ? 1600 : st.title.startsWith('ラウンド') ? 1000 : 1100;
+    const base = st.title.startsWith('敵の行動') ? 1600 : st.title.startsWith('ターン') ? 1000 : 1100;
     autoTimer = setTimeout(advance, base + whys * 1300);
   }
   function advance() {
@@ -529,22 +559,22 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     }).join('')}</span>`;
   }
 
+  const SAFE = '防ぐ';
   // 敵の予告が誰に何ダメージ当たるか（自分のターン中だけ表示）
   function threats(v) {
     const out = { heroes: [[], []], life: [] };
     if (phase !== 'mine' || !v.intent.targets) return out;
-    // 盾を引いたあとの、実際に減る量を出す。かばうで2回受けるときは合計する
-    const hits = [0, 0];
-    let life = 0;
-    for (const t of v.intent.targets) { if (t.life) life += v.intent.dmg; else hits[t.k]++; }
-    hits.forEach((n, k) => {
-      if (!n) return;
-      const h = v.heroes[k], total = v.intent.dmg * n, loss = Math.max(0, total - h.shield);
-      if (loss >= h.hp) { out.heroes[k].push(`−${loss} 倒れる`); life += E.KO_LIFE; }
-      else if (loss > 0) out.heroes[k].push(h.shield ? `−${loss}（盾で${total - loss}防ぐ）` : `−${loss}`);
-      else out.heroes[k].push('盾で防ぐ');
+    // 実際に敵の行動を先に進めた結果を使う（盾・かばう・反撃まで入った、本当に減る量）
+    const fc = E.forecast(game);
+    const hit = [false, false];
+    for (const t of v.intent.targets) { if (!t.life) { hit[t.k] = true; if (t.from != null) hit[t.from] = true; } }
+    fc.heroes.forEach((x, k) => {
+      if (x.ko) out.heroes[k].push(`−${x.loss} 倒れる`);
+      else if (x.loss > 0) out.heroes[k].push(`−${x.loss}`);
+      else if (hit[k] && v.heroes[k].guard == null) out.heroes[k].push(SAFE);
     });
-    if (life) out.life.push(`−${life}`);
+    if (fc.life > 0) out.life.push(fc.over && fc.winner !== 0 ? `−${fc.life} 負ける` : `−${fc.life}`);
+    out.enemy = fc.enemy;
     return out;
   }
 
@@ -559,6 +589,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const toRage = E.RAGE_EVERY - e.acted % E.RAGE_EVERY;
     stat.push([e.rage ? 'hot' : '', `${e.rage ? `怒り +${e.rage}・` : ''}あと${toRage}回行動で怒り+${E.ENRAGE}`]);
     if (e.poison) stat.push(['good', `毒 あと${e.poison}回`]);
+    if (ctx.fore > 0) stat.push(['good', `次の敵の行動で −${ctx.fore}（反撃・毒）`]);
     if (e.phase) stat.push(['hot', '本気']);
     const atk = it.dmg != null;
     const who = atk ? (it.targets.length ? it.targets.map((t) => t.life ? 'あなたのライフ' : `${H[v.heroes[t.k].id].name}${t.why ? `（${t.why}）` : ''}`).join('・') : 'なし') : '';
@@ -569,7 +600,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       <div class="eh"><span class="stage${def.boss ? ' boss' : ''}">${run ? stageName(run.stage) : ''}</span><b>${def.name}</b><span class="hpn">${e.hp}<small>/${e.maxHp}</small></span></div>
       <span class="hpbar"><i style="width:${pct}%"></i></span>
       <div class="estat">${stat.map(([c, t]) => `<i class="${c}">${t}</i>`).join('')}</div>
-      <div class="intent${atk ? '' : ' calm'}"><span class="il">次の行動</span>
+      <div class="intent${atk ? '' : ' calm'}${ctx.actor && ctx.actor.p === 1 ? ' now' : ''}"><span class="il">${ctx.actor && ctx.actor.p === 1 ? '行動中' : '次の行動'}</span>
         <span class="iw">${it.name}${atk ? `<span class="dmg">${it.dmg}</span>` : `<span class="dmg">+${it.n}</span>`}</span>
         <span class="it">${atk ? `→ ${esc(who)}` : it.type === 'charge' ? '次の攻撃が強くなる' : '敵に盾が付く'}</span></div>
       <div class="upnext">その先：${up}</div>
@@ -582,7 +613,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const cls = ['hero', `c-${def.color}`,
       focus === k ? 'focus' : '',
       ctx.targets.includes(k) ? 'target' : '',
-      h.ko ? 'ko' : '', threat.some((t) => t !== '盾で防ぐ') ? 'danger' : '', hits.some((x) => x.hit) ? 'shake' : '',
+      h.ko ? 'ko' : '', threat.some((t) => t !== SAFE) ? 'danger' : '', hits.some((x) => x.hit) ? 'shake' : '',
       ctx.actor && ctx.actor.p === 0 && ctx.actor.k === k ? 'lunge-up' : ''].filter(Boolean);
     const flags = [];
     if (h.ko) flags.push(['', `倒れている・あと${(h.wait || 0) + 1}ターン`]);
@@ -590,9 +621,9 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     if (h.counter) flags.push(['hot', `反撃${h.counter}`]);
     if (h.guard != null) flags.push(['hot', 'かばわれ中']);
     if (h.focus) flags.push(['hot', `次の攻撃+${h.focus}`]);
-    if (!h.ko && phase === 'mine') { if (h.skilled) flags.push(['', 'スキル済']); if (h.moved) flags.push(['', '移動済']); }
+    if (!h.ko && phase === 'mine') { if (h.skilled) flags.push(['', 'スキル済']); if (!h.moves) flags.push(['', '移動済']); }
     const pct = Math.max(0, h.hp / h.maxHp * 100);
-    const marks = threat.map((t) => `<span class="aim${t === '盾で防ぐ' ? ' safe' : ''}">${esc(t)}</span>`).join('') + (ptarget === k && (sel || mode) ? '<span class="aim mine">ここに使う</span>' : '');
+    const marks = threat.map((t) => `<span class="aim${t === SAFE ? ' safe' : ''}">${esc(t)}</span>`).join('') + (ptarget === k && (sel || mode) ? '<span class="aim mine">ここに使う</span>' : '');
     return `<div class="${cls.join(' ')}" data-hero="${k}" role="button" tabindex="0" aria-label="${def.name}">
       <span class="nm"><b>${def.name}</b><span class="sk">${esc(E.skillOf(h).name)}${h.up ? '+' : ''}</span></span>
       <span class="hpbar"><i class="${pct <= 50 ? 'low' : ''}" style="width:${pct}%"></i></span>
@@ -664,40 +695,55 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 
   function turnLine(v, st) {
     const foe = st && st.actor && st.actor.p === 1 || st && st.title === '怒り';
-    const ph = phase === 'mine' ? '備える・攻める' : st ? (st.title.startsWith('ラウンド') ? 'ターン開始' : foe ? '敵の行動' : '処理') : '';
+    const ph = phase === 'mine' ? '備える・攻める' : st ? (st.title.startsWith('ターン') ? 'ターン開始' : foe ? '敵の行動' : '処理') : '';
     return `<div class="turnline ${foe ? 'foe' : 'me'}" role="status" aria-live="polite">
-      <span class="tl-round">R${v.round}</span>
+      <span class="tl-round">ターン${v.round}</span>
       <span class="tl-who">${foe ? '▼ 敵の行動' : '▲ あなたのターン'}</span>
-      <span class="tl-phase">${ph}</span></div>`;
+      ${phase === 'mine' ? manaHTML(v.mana) : `<span class="tl-phase">${ph}</span>`}</div>`;
   }
 
   function manaHTML(n) {
-    return `<span class="mana" aria-label="マナ ${n}"><span class="gems">${n > 0 ? '<i class="gem"></i>'.repeat(n) : '<i class="gem empty"></i>'}</span><b>${n}</b></span>`;
+    return `<span class="mana" aria-label="マナ ${n}"><span class="label">マナ</span><span class="gems">${n > 0 ? '<i class="gem"></i>'.repeat(n) : '<i class="gem empty"></i>'}</span><b>${n}</b></span>`;
   }
 
   function handHTML() {
+    const can = (a, targets) => phase === 'mine' && targets.some((t) => !E.check(game, { ...a, target: t }));
     const card = (c) => {
       const def = C[c.id];
-      const usable = phase === 'mine' && ['enemy', 0, 1, null].some((t) => !E.check(game, { type: 'card', uid: c.uid, target: t }));
+      const usable = can({ type: 'card', uid: c.uid }, ['enemy', 0, 1, null]);
       return `<button class="card c-${H[def.hero].color}${usable ? '' : ' off'}" aria-pressed="${sel === c.uid}" data-card="${c.uid}">
         <span class="ch"><span class="cost">${def.cost}</span>${def.pos === 'front' ? '<span class="tag front">前衛</span>' : ''}</span><b>${esc(def.name)}</b>${c.fresh ? '<span class="tag new">NEW</span>' : ''}</button>`;
     };
     return [0, 1].map((k) => {
-      const h = game.heroes[k], d = game.decks[k];
-      return `<div class="hgroup c-${H[h.id].color}${h.ko ? ' ko' : ''}">
-        <span class="hg-head"><b>${H[h.id].name}</b><span class="hg-next">次：${esc(C[d.queue[0]].name)}</span></span>
-        <div class="hg-cards">${d.hand.map(card).join('')}</div></div>`;
+      const h = game.heroes[k], d = game.decks[k], sk = E.skillOf(h);
+      const skOk = can({ type: 'skill', k }, ['enemy', 0, 1, null]);
+      const mvOk = phase === 'mine' && !E.check(game, { type: 'move', k });
+      return `<div class="hrow c-${H[h.id].color}${h.ko ? ' ko' : ''}">
+        <span class="hr-name"><b>${H[h.id].name}</b><span>次：${esc(C[d.queue[0]].name)}</span></span>
+        ${d.hand.map(card).join('')}
+        <button class="card skill c-${H[h.id].color}${skOk ? '' : ' off'}" aria-pressed="${mode === 'skill' && focus === k}" data-skill="${k}">
+          <span class="ch"><span class="cost">${sk.cost}</span>${sk.pos === 'front' ? '<span class="tag front">前衛</span>' : ''}</span><b>${esc(sk.name)}${h.up ? '+' : ''}</b><span class="kind">固有スキル</span></button>
+        <button class="card move${mvOk ? '' : ' off'}" aria-pressed="${mode === 'move' && focus === k}" data-move="${k}" aria-label="${H[h.id].name}を${h.pos === 'front' ? '後衛' : '前衛'}へ移動">
+          <span class="arw">${h.pos === 'front' ? '▼' : '▲'}</span><b>${h.pos === 'front' ? '後衛へ' : '前衛へ'}</b></button></div>`;
     }).join('');
   }
 
   // ── 説明欄とボタン ──
   function minePanel() {
     let d, use = null;
-    if (mode === 'skill' && focus != null) {
+    if (mode === 'move' && focus != null) {
+      const h = game.heroes[focus], err = E.check(game, { type: 'move', k: focus });
+      d = `<b class="h">移動</b>【0】${H[h.id].name}を<b>${h.pos === 'front' ? '後衛' : '前衛'}</b>へ動かす。1人1ターン1回。`
+        + (err ? `<br><span class="err">使えない：${esc(err)}</span>` : '');
+      use = `<button class="btn" id="use" ${err ? 'disabled' : ''}>動かす</button>`;
+    } else if (mode === 'skill' && focus != null) {
       const sk = E.skillOf(game.heroes[focus]);
-      const err = ptarget != null ? E.check(game, { type: 'skill', k: focus, target: ptarget }) : '対象を選ぶ';
-      d = `<b class="h">「${esc(sk.name)}」</b>${skillTag(sk)}${esc(sk.text)}<br>${ptarget != null ? `→ <b>${tname(ptarget)}</b>` : `<span class="muted">${sk.target === 'ally' ? '緑に光っている味方' : '敵'}をタップ</span>`}`;
-      use = `<button class="btn" id="use" ${err ? 'disabled' : ''}>${ptarget != null ? '使う' : '対象を選ぶ'}</button>`;
+      const blocked = [0, 1, 'enemy', null].map((t) => E.check(game, { type: 'skill', k: focus, target: t }));
+      const no = blocked.every(Boolean) ? blocked.find((x) => x && x !== '対象が不正' && x !== '自分はかばえない') || blocked[0] : null;
+      const err = no || (ptarget != null ? E.check(game, { type: 'skill', k: focus, target: ptarget }) : '対象を選ぶ');
+      d = `<b class="h">固有スキル「${esc(sk.name)}」</b>${skillTag(sk)}${esc(sk.text)}<br>`
+        + (no ? `<span class="err">使えない：${esc(no)}</span>` : ptarget != null ? `→ <b>${tname(ptarget)}</b>` : `<span class="muted">${sk.target === 'ally' ? '緑に光っている味方' : '敵'}をタップ</span>`);
+      use = `<button class="btn" id="use" ${err ? 'disabled' : ''}>${ptarget != null || no ? '使う' : '対象を選ぶ'}</button>`;
     } else if (sel) {
       const def = C[myCard(sel).id];
       const t = def.target === 'none' ? null : ptarget;
@@ -712,8 +758,10 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       d = `<b class="h">${en.name}</b>　<span class="muted">${esc(en.text)}</span>${chainHTML(E.patternOf(game.enemy))}${en.phase2 && !game.enemy.phase ? `<span class="muted">本気になると：</span>${chainHTML(en.phase2.pattern)}` : ''}<span class="muted">${E.RAGE_EVERY}回行動するたびに怒り、攻撃が${E.ENRAGE}強くなる</span>`;
     } else if (focus != null) {
       d = focusHTML();
+    } else if (flash) {
+      d = flash.map((x) => `<div class="dh"><b>${esc(x.title)}</b></div><ul>${x.lines.map((l) => l.startsWith('※') ? `<li class="why"><span class="whytag">なぜ</span>${esc(l.slice(1))}</li>` : `<li>${esc(l)}</li>`).join('')}</ul>`).join('');
     } else {
-      d = '<span class="muted">敵の予告（赤い矢印）を見て備える。カードかヒーローをタップ。終わったら「ターン終了」で敵が動く。</span>';
+      d = '<span class="muted">赤い矢印と数字は、このままターンを終えたときに受けるダメージ。下のカード・スキル・移動を選んで「使う」。終わったら「ターン終了」で敵が動く。</span>';
     }
     return {
       panel: `<div class="detail">${d}</div>`,
@@ -722,16 +770,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   }
 
   function focusHTML() {
-    const h = game.heroes[focus], def = H[h.id], sk = E.skillOf(h);
+    const h = game.heroes[focus], def = H[h.id];
     let d = `<b class="h">${def.name}</b>　<span class="muted">${E.POS_NAME[h.pos]}</span>`;
-    if (phase === 'mine' && !h.ko) {
-      const errs = (sk.target === 'ally' ? [0, 1] : sk.target === 'enemy' ? ['enemy'] : [null]).map((t) => E.check(game, { type: 'skill', k: focus, target: t }));
-      const skErr = errs.every(Boolean) ? errs.find(Boolean) : null;
-      const mvErr = E.check(game, { type: 'move', k: focus });
-      d += `<div class="acts">
-        <button class="mini solid" id="skill" ${skErr ? 'disabled' : ''}>${esc(sk.name)}【${E.SKILL_COST}】${skErr ? `：${esc(skErr)}` : ''}</button>
-        <button class="mini" id="move" ${mvErr ? 'disabled' : ''}>${h.pos === 'front' ? '後衛' : '前衛'}へ移動${mvErr ? `：${esc(mvErr)}` : ''}</button></div>`;
-    }
     return d + heroListHTML(h.id, run.mods[focus].cards, h.up);
   }
 
@@ -749,8 +789,10 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   function render() {
     const st = play ? play.steps[play.i] : null;
     const v = st ? st.view : E.view(game);
-    const ctx = { hits: st ? st.hits : [], actor: st ? st.actor : null, targets: currentTargets() };
+    const fl = !st && flash ? flash[flash.length - 1] : null;
+    const ctx = { hits: st ? st.hits : fl ? fl.hits : [], actor: st ? st.actor : fl ? fl.actor : null, targets: currentTargets() };
     const th = threats(v);
+    ctx.fore = th.enemy || 0;
     const row = (pos) => `<div class="frow">${[0, 1].map((k) => `<div class="cell">${v.heroes[k].pos === pos ? heroHTML(v, k, ctx, th.heroes[k]) : `<span class="slot">${E.POS_NAME[pos]}</span>`}</div>`).join('')}</div>`;
     const { panel, buttons } = phase === 'mine' ? minePanel() : playPanel(st);
     app.innerHTML = `<section class="screen battle" style="gap:5px">
@@ -760,7 +802,6 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         ${row('front')}${row('back')}
         ${lifeHTML(v, ctx, th.life)}
       </div>
-      <div class="bar"><span class="who">マナ</span>${manaHTML(v.mana)}</div>
       <div class="hand" ${phase === 'mine' ? '' : 'hidden'}>${handHTML()}</div>
       ${panel}
       <div class="act">${buttons}</div>
@@ -774,8 +815,10 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     on('next', advance);
     on('skip', skipAll);
     if (phase !== 'mine') return;
+    // 何かタップしたら、直前の行動の結果表示を消す
+    app.querySelector('.battle').addEventListener('click', () => { flash = null; }, true);
     const tapTarget = (t) => {
-      if (currentTargets().includes(t) && (sel || mode)) { ptarget = t; return render(); }
+      if (currentTargets().includes(t) && (sel || mode === 'skill')) { ptarget = t; return render(); }
       sel = null; mode = null; ptarget = null;
       focus = focus === t ? null : t;
       render();
@@ -789,22 +832,32 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       mode = null; focus = null; ptarget = null;
       sel = sel === uid ? null : uid;
       // 敵を狙うカードは、対象を自動で敵にする
-      if (sel && C[myCard(sel).id].target === 'enemy') ptarget = 'enemy';
+      if (sel) { const ts = currentTargets(); if (ts.length === 1) ptarget = ts[0]; }
       render();
     });
-    on('skill', () => {
-      mode = 'skill';
-      ptarget = E.skillOf(game.heroes[focus]).target === 'enemy' ? 'enemy' : null;
+    app.querySelectorAll('[data-skill]').forEach((b) => b.onclick = () => {
+      const k = +b.dataset.skill;
+      if (mode === 'skill' && focus === k) { clearPick(); return render(); }
+      sel = null; mode = 'skill'; focus = k; ptarget = null;
+      // 対象が1つに決まるなら、自動で選ぶ
+      const ts = currentTargets();
+      if (ts.length === 1) ptarget = ts[0];
       render();
     });
-    on('move', () => doAct({ type: 'move', k: focus }));
+    app.querySelectorAll('[data-move]').forEach((b) => b.onclick = () => {
+      const k = +b.dataset.move;
+      if (mode === 'move' && focus === k) { clearPick(); return render(); }
+      sel = null; mode = 'move'; focus = k; ptarget = null;
+      render();
+    });
     on('use', () => {
+      if (mode === 'move' && focus != null) return doAct({ type: 'move', k: focus });
       if (mode === 'skill' && focus != null) { if (ptarget != null) doAct({ type: 'skill', k: focus, target: ptarget }); return; }
       const def = C[myCard(sel).id];
       doAct({ type: 'card', uid: sel, target: def.target === 'none' ? null : ptarget });
     });
     on('cancel', () => { clearPick(); render(); });
-    on('endturn', endTurn);
+    on('endturn', () => endTurn());
   }
 
   function result() {
