@@ -26,7 +26,7 @@ function evalShallow(E, s) {
 
 // このターンの行動の並びを返す
 function planTurn(E, state, opt) {
-  const B = (opt && opt.beam) || 6, K = (opt && opt.final) || 6;
+  const B = (opt && opt.beam) || 30, K = (opt && opt.final) || 6;
   let frontier = [{ s: E.clone(state), seq: [] }];
   const seen = new Set([key(frontier[0].s)]);
   const all = [{ s: frontier[0].s, seq: [], v: evalShallow(E, frontier[0].s) }];

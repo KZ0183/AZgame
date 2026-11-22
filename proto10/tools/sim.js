@@ -44,8 +44,9 @@ pairs.forEach((team, idx) => {
       if (more) {
         const opts = E.rewardOptions(run);
         // 報酬はランダム（回復は減っているときだけ候補）。あとで「選んだ報酬ごとのクリア率」を見る
-        const cand = opts.filter((o) => o.type !== 'heal' || run.life <= E.LIFE - 4);
-        const o = cand[Math.floor(Math.random() * cand.length)];
+        const want = process.env.REWARD || 'random';
+        const cand = opts.filter((o) => o.type !== 'heal' || run.life < E.LIFE);
+        const o = (want !== 'random' && cand.find((x) => x.type === want)) || (want === 'heal' && cand.find((x) => x.type === 'up')) || cand[Math.floor(Math.random() * cand.length)];
         const rep = o.type === 'card' ? run.mods[o.k].cards[Math.floor(Math.random() * 4)] : null;
         E.applyReward(run, o, rep);
         rec.rewards.push({ type: o.type, what: o.what || null, card: o.card || null, rep, hero: o.k != null ? run.heroes[o.k] : null });

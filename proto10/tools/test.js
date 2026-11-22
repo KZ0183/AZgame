@@ -84,7 +84,7 @@ const tough = (g) => g.heroes.forEach((h) => { h.hp = h.maxHp = 50; });
   E.act(g, { type: 'skill', k: 0, target: 1 });              // かばう
   eq('かばうで後衛への攻撃も騎士へ', E.intent(g).targets, [{ k: 0, why: 'かばう', from: 1 }]);
   E.endTurn(g);
-  eq('かばった結果', [g.heroes[0].hp, g.heroes[1].hp], [50 - N('spider', 0), 50]);
+  eq('かばった結果', [g.heroes[0].hp, g.heroes[1].hp], [50 - N('spider', 0) + 2, 50]);
   eq('かばうは次のターンに消える', g.heroes[1].guard, null);
 }
 {
@@ -94,7 +94,7 @@ const tough = (g) => g.heroes.forEach((h) => { h.hp = h.maxHp = 50; });
   E.act(g, { type: 'skill', k: 0, target: 1 });
   eq('全体攻撃をかばうと2回受ける', E.intent(g).targets.map((t) => t.k), [0, 0]);
   E.endTurn(g);
-  eq('2回ぶん受ける', [g.heroes[0].hp, g.heroes[1].hp], [50 - 2 * N('spider', 4), 50]);
+  eq('2回ぶん受ける', [g.heroes[0].hp, g.heroes[1].hp], [50 - 2 * N('spider', 4) + 2, 50]);
 }
 ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), { type: 'skill', k: 0, target: 0 }));
 
@@ -218,7 +218,7 @@ ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), 
   g.heroes[1].hp = 5;
   const hp = g.enemy.hp;
   E.act(g, { type: 'skill', k: 0, target: 1 });
-  eq('祈りの手：2ダメージと2回復', [hp - g.enemy.hp, g.heroes[1].hp], [2, 7]);
+  eq('祈りの手：2ダメージと1回復', [hp - g.enemy.hp, g.heroes[1].hp], [2, 6]);
 }
 
 // ── ボスの本気 ──
@@ -289,7 +289,7 @@ ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), 
   E.applyReward(run, opts[1]);
   ok('スキル強化', run.mods[opts[1].k].up === true);
   E.applyReward(run, { type: 'heal' });
-  eq('回復', run.life, 19);
+  eq('回復', run.life, 13 + E.RUN_LIFE_HEAL);
   const g2 = E.runFight(run, rng(8));
   ok('強化と新カードが戦闘に反映', g2.heroes[opts[1].k].up && g2.decks[opts[0].k].hand.concat(g2.decks[opts[0].k].queue.map((id) => ({ id }))).some((c) => c.id === opts[0].card));
   eq('ヒーローのHPは全快', g2.heroes.map((h) => h.hp), g2.heroes.map((h) => h.maxHp));

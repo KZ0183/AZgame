@@ -26,7 +26,6 @@ for (const h of E.HEROES) {
   jobs.push({ hero: h.id, kind: 'base', label: '報酬なし', mod: null });
   jobs.push({ hero: h.id, kind: 'up', label: 'スキル強化', mod: (m) => { m.up = true; } });
   jobs.push({ hero: h.id, kind: 'hp', label: '最大HP+3', mod: (m) => { m.hp += 3; } });
-  jobs.push({ hero: h.id, kind: 'heal', label: 'ライフ+6（第2戦の前に相当：最初からライフ+6扱い）', mod: (m, run) => { run.bonusLife = 6; } });
   for (const c of E.CARDS.filter((x) => x.hero === h.id && x.extra)) for (const old of h.cards) {
     jobs.push({ hero: h.id, kind: 'card', label: `${c.name} ← ${E.CARD[old].name}`, card: c.id, old, mod: (m) => { m.cards[m.cards.indexOf(old)] = c.id; } });
   }
