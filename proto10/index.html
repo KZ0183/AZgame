@@ -300,7 +300,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .enemy .eh .fore { margin-left: auto; font-size: 11px; color: var(--good); border: 1px solid var(--good); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
 .enemy .eh .fore + .hpn { margin-left: 0; }
 .detail { position: relative; }
-.detail.more::after { content: "▼ 続きはスクロール" attr(data-stop); position: sticky; display: block; bottom: -7px; margin: 0 -12px -7px; padding: 14px 12px 3px; text-align: center; font-size: 10.5px; color: var(--brass);
+.detail.more::after { content: "▼ 続きあり（スクロール）" attr(data-stop); position: sticky; display: block; bottom: -7px; margin: 0 -12px -7px; padding: 14px 12px 3px; text-align: center; font-size: 10.5px; color: var(--brass);
   background: linear-gradient(to bottom, transparent, var(--panel) 55%); pointer-events: none; }
 
 .hrow { grid-template-columns: 64px 1fr 1fr 1fr 46px; }
@@ -315,6 +315,15 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .enemy.hit .fore { visibility: hidden; }
 .sum .hd { color: var(--muted); font-size: 10.5px; letter-spacing: .1em; margin-right: 6px; }
 .sheet p { overflow-wrap: anywhere; text-wrap: balance; }
+
+/* 5回目の画面レビューの対応 */
+.enemy .pop.label { font-size: 11px; line-height: 16px; padding: 0 5px; }
+.enemy.hit .fore { visibility: visible; }
+.battle.play .enemy.hit .fore { visibility: hidden; }
+.battle:not(.play) .enemy.hit .fore { animation: foreback 1.8s steps(1, end) both; }
+@keyframes foreback { from { visibility: hidden; } to { visibility: visible; } }
+.detail.more::after { white-space: nowrap; overflow: hidden; background: linear-gradient(to bottom, transparent, var(--panel) 40%, var(--panel)); padding-top: 18px; }
+.sum .nw { white-space: nowrap; }
 
 /* 道のり・報酬 */
 .route { display: flex; gap: 6px; }
@@ -652,7 +661,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     if (!list.length) return '';
     // 同じ相手への数字は合計して1つにする。札は重複を除いて2つまで
     const dmg = list.filter((h) => h.n != null && !h.heal), heal = list.filter((h) => h.heal);
-    const labels = [...new Set(list.map((h) => h.label).filter(Boolean))].filter((l) => !/^盾−/.test(l) && !(hero && /^(倒れた|かばわれ中|盾\+|挑発|反撃|次の攻撃)/.test(l))).slice(-2);
+    const labels = [...new Set(list.map((h) => h.label).filter(Boolean))].filter((l) => !/^盾−/.test(l) && !(hero && /^(倒れた|かばわれ中|盾\+|挑発|反撃|次の攻撃|前衛へ|後衛へ)/.test(l))).slice(-2);
     let s = '';
     if (dmg.length && (dmg.some((h) => h.n !== 0) || !labels.length)) s += `<span class="pop dmg">${dmg.reduce((a, h) => a + h.n, 0)}</span>`;
     if (heal.length) s += `<span class="pop heal">+${heal.reduce((a, h) => a + h.n, 0)}</span>`;
@@ -845,7 +854,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       }
       const back = x.hits.filter((h) => h.p === 1 && h.n != null).reduce((a, h) => a + h.n, 0);
       if (back) parts.push(`反撃 −${-back}`);
-      return `<li><span class="hd">前の敵の行動</span><b>${esc(x.did.name)}${x.did.dmg != null ? x.did.dmg : '+' + x.did.n}</b>${parts.length ? '：' + parts.join('／') : ''}</li>`;
+      return `<li><span class="hd">前の敵の行動</span><b>${esc(x.did.name)}${x.did.dmg != null ? x.did.dmg : '+' + x.did.n}</b>${parts.length ? '：' + parts.map((x) => `<span class="nw">${x}</span>`).join('／') : ''}</li>`;
     }).join('')}${(() => { const o = steps.filter((x) => !x.did).map((x) => x.title === 'ボスの本気' ? '本気になった（予告が変わった）' : x.title === '毒' ? '毒で敵 −2' : x.title === '怒り' ? `怒り+${E.ENRAGE}` : x.title); return o.length ? `<li>${o.join('／')}</li>` : ''; })()}</ul>`;
   }
 
@@ -935,7 +944,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     drawArrows(arrowList(v, st));
     const det = app.querySelector('.detail');
     const over = det && det.scrollHeight > det.clientHeight + 2;
-    if (over) { det.classList.add('more'); det.dataset.stop = phase !== 'mine' && settings.auto ? '（読めるように止めています。「再開」か「次へ」で進む）' : ''; det.onscroll = () => { if (det.scrollTop + det.clientHeight >= det.scrollHeight - 4) det.classList.remove('more'); }; }
+    if (over) { det.classList.add('more'); det.dataset.stop = phase !== 'mine' && settings.auto ? '・停止中（「再開」で進む）' : ''; det.onscroll = () => { if (det.scrollTop + det.clientHeight >= det.scrollHeight - 4) det.classList.remove('more'); }; }
     overflowed = !!over;
     bind();
   }
@@ -944,7 +953,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const on = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
     on('next', () => { paused = false; advance(); });
     on('skip', skipAll);
-    on('pause', () => { paused = !paused; clearTimeout(autoTimer); if (paused) render(); else showStep(true); });
+    on('pause', () => { clearTimeout(autoTimer); if (!paused) { paused = true; render(); } else { paused = false; advance(); } });
     if (phase !== 'mine') return;
     // 何かタップしたら、直前の行動の結果表示を消す
     app.querySelector('.battle').addEventListener('click', () => { flash = null; lastFoe = null; }, true);

@@ -163,15 +163,16 @@ fs.copyFileSync(path.join(root, 'tools', 'bot.js'), path.join(out, 'bot.js'));
     await p.goto('file://' + path.join(out, 'test.html'));
     await p.click('#go'); await p.click('#fight');
     await p.waitForSelector('#endturn', { timeout: 20000 });
-    await p.evaluate(() => { const g = window.__dbg.game; g.life = 20; Object.assign(g.heroes[0], { hp: 1, counter: 3, taunt: true }); Object.assign(g.heroes[1], { hp: 1, guard: 0, pos: g.heroes[0].pos }); Object.assign(g.enemy, { charge: 5, weak: 2, loops: 1, poison: 2, step: 0 }); });
+    await p.evaluate(() => { const g = window.__dbg.game; g.life = 20; Object.assign(g.heroes[0], { hp: 30, maxHp: 30, counter: 3, taunt: true, shield: 2 }); Object.assign(g.heroes[1], { hp: 1, guard: 0, pos: g.heroes[0].pos }); Object.assign(g.enemy, { id: 'spider', step: 4, charge: 5, weak: 2, loops: 1, poison: 2 }); });
     await p.click('#endturn');
     await p.waitForTimeout(1500);
     const before = await p.evaluate(() => document.querySelector('.detail .dh') && document.querySelector('.detail .dh').textContent);
     const stopped = await p.evaluate(() => { const b = document.querySelector('#pause'); return b && b.textContent; });
     await shot('33-auto-overflow');
+    if (size === '375x650' && stopped !== '再開') issues.push('33-auto-overflow: 説明があふれる場面を作れていない（検査が空振り）');
     if (stopped === '再開') {
       await p.click('#pause');
-      await p.waitForTimeout(9000);
+      await p.waitForTimeout(1500);
       const after = await p.evaluate(() => document.querySelector('.detail .dh') ? document.querySelector('.detail .dh').textContent : 'mine');
       if (after === before) issues.push('33-auto-overflow: 「再開」を押しても進まない');
     }
