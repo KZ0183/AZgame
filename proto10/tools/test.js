@@ -256,6 +256,22 @@ ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), 
   ok('0ダメージでも反撃する', g.heroes[0].hp === KN && g.enemy.hp === hp - 3, { hp: g.enemy.hp });
 }
 
+{
+  // かばう側が右にいても、先に自分のぶんを受け、倒れたら残りは元の味方に当たる
+  const g = setup(['mage', 'knight'], 1, 'spider');
+  setIntent(g, 4); tough(g); g.heroes[1].hp = 1;
+  E.act(g, { type: 'skill', k: 1, target: 0 });
+  const dmg = E.intent(g).dmg;
+  E.endTurn(g);
+  ok('かばう側が右でも同じ結果', g.heroes[1].ko && g.heroes[0].hp === 50 - dmg, g.heroes.map((h) => h.hp));
+}
+{
+  const run = E.newRun({ heroes: ['sword', 'mage'], front: 0 }, rng(9));
+  run.stage = 1;
+  const a = JSON.stringify(E.rewardOptions(run)), b = JSON.stringify(E.rewardOptions(run));
+  ok('報酬の候補は引き直せない', a === b);
+}
+
 // ── 連戦 ──
 {
   const run = E.newRun({ heroes: ['sword', 'mage'], front: 0 }, rng(5));

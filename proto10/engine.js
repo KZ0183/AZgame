@@ -18,36 +18,36 @@
   const HEROES = [
     { id: 'sword', name: '剣士', color: 'red', hp: 12, cards: ['sw_slash', 'sw_focus', 'sw_lunge', 'sw_double'],
       skill: { name: '斬りかかる', pos: 'front', target: 'enemy', text: '敵に2ダメージ。' } },
-    { id: 'saint', name: '聖女', color: 'gold', hp: 10, cards: ['st_heal', 'st_mace', 'st_bless', 'st_prayer'],
+    { id: 'saint', name: '聖女', color: 'gold', hp: 11, cards: ['st_heal', 'st_mace', 'st_bless', 'st_prayer'],
       skill: { name: '祈りの手', pos: 'back', target: 'ally', text: '敵に2ダメージ。味方1人のHPを2回復。' } },
     { id: 'knight', name: '守護騎士', color: 'grey', hp: 14, cards: ['kn_bash', 'kn_taunt', 'kn_guard', 'kn_wall'],
       skill: { name: 'かばう', pos: 'front', target: 'ally', text: '次の自分のターンまで、味方1人が受ける敵の攻撃を代わりに受ける。' } },
     { id: 'mage', name: '魔術師', color: 'blue', hp: 10, cards: ['mg_bolt', 'mg_flame', 'mg_meditate', 'mg_thunder'],
       skill: { name: '魔弾', pos: 'back', target: 'enemy', text: '敵に2ダメージ。' } },
     { id: 'rogue', name: '盗賊', color: 'green', hp: 12, cards: ['rg_dagger', 'rg_trip', 'rg_jam', 'rg_backstab'],
-      skill: { name: 'すり抜け', pos: 'front', target: 'enemy', text: '敵に2ダメージ。このターン、もう1回移動できる。' } },
+      skill: { name: 'すり抜け', pos: 'front', target: 'enemy', text: '敵に2ダメージ。このターン、自分はもう1回移動できる。' } },
   ];
   const HERO = Object.fromEntries(HEROES.map((h) => [h.id, h]));
   // 報酬で強化した固有スキル
   const SKILL_UP = {
-    sword: '敵に2ダメージ。コストが0になる。',
+    sword: '敵に3ダメージ。自分に盾3。',
     saint: '敵に3ダメージ。味方1人のHPを3回復。',
     knight: '次の自分のターンまで、味方1人が受ける敵の攻撃を代わりに受ける。自分に盾5。',
-    mage: '敵に3ダメージ。',
-    rogue: '敵に3ダメージ。このターン、もう1回移動できる。',
+    mage: '敵に4ダメージ。',
+    rogue: '敵に3ダメージ。このターン、自分はもう1回移動できる。',
   };
   // h = { id, up }
   function skillOf(h) {
     const sk = HERO[h.id].skill;
-    return h.up ? { ...sk, cost: h.id === 'sword' ? 0 : SKILL_COST, text: SKILL_UP[h.id], up: true } : { ...sk, cost: SKILL_COST };
+    return h.up ? { ...sk, cost: SKILL_COST, text: SKILL_UP[h.id], up: true } : { ...sk, cost: SKILL_COST };
   }
 
   // ── カード ──
   // pos: front = そのヒーローが前衛にいるときだけ使える / back = どこからでも
   const CARDS = [
     { id: 'sw_slash', hero: 'sword', name: '斬撃', cost: 1, pos: 'front', target: 'enemy', text: '敵に3ダメージ。' },
-    { id: 'sw_focus', hero: 'sword', name: '気合い', cost: 0, pos: 'back', target: 'none', text: 'このターン、自分の次の攻撃1回のダメージ+2。' },
-    { id: 'sw_lunge', hero: 'sword', name: '踏み込み', cost: 2, pos: 'front', target: 'enemy', text: '敵に5ダメージ。自分に1ダメージ。' },
+    { id: 'sw_focus', hero: 'sword', name: '気合い', cost: 0, pos: 'back', target: 'none', text: 'このターン、自分の次の攻撃1回（カードでも固有スキルでも）のダメージ+2。' },
+    { id: 'sw_lunge', hero: 'sword', name: '踏み込み', cost: 2, pos: 'front', target: 'enemy', text: '敵に5ダメージ。そのあと自分に1ダメージ（盾で防げる）。' },
     { id: 'sw_double', hero: 'sword', name: '連撃', cost: 2, pos: 'front', target: 'enemy', text: '敵に3ダメージを2回。' },
 
     { id: 'st_heal', hero: 'saint', name: '癒しの光', cost: 1, pos: 'back', target: 'ally', text: '味方1人のHPを3回復し、盾2。' },
@@ -76,9 +76,9 @@
     { id: 'st_judge', hero: 'saint', name: '裁きの光', cost: 2, pos: 'back', target: 'enemy', text: '敵に6ダメージ。', extra: true },
     { id: 'kn_charge', hero: 'knight', name: '突撃', cost: 1, pos: 'front', target: 'enemy', text: '敵に1ダメージ。自分の盾の数だけダメージが増える。', extra: true },
     { id: 'kn_stand', hero: 'knight', name: '不動', cost: 1, pos: 'front', target: 'none', text: '自分に盾4。次の自分のターンまで、反撃3（自分が敵の攻撃を受けるたび、敵に3ダメージ）。', extra: true },
-    { id: 'mg_frost', hero: 'mage', name: '氷結', cost: 1, pos: 'back', target: 'enemy', text: '敵に2ダメージ。敵の次の攻撃1回のダメージ−3。', extra: true },
+    { id: 'mg_frost', hero: 'mage', name: '氷結', cost: 1, pos: 'back', target: 'enemy', text: '敵に1ダメージ。敵の次の攻撃1回のダメージ−2。', extra: true },
     { id: 'mg_meteor', hero: 'mage', name: '隕石', cost: 3, pos: 'back', target: 'enemy', text: '敵に10ダメージ。', extra: true },
-    { id: 'rg_poison', hero: 'rogue', name: '毒刃', cost: 1, pos: 'front', target: 'enemy', text: '敵に1ダメージ。毒3回（敵が行動するたび、盾を無視して2ダメージ）。', extra: true },
+    { id: 'rg_poison', hero: 'rogue', name: '毒刃', cost: 1, pos: 'front', target: 'enemy', text: '敵に1ダメージ。毒3回（敵が行動するたび、盾を無視して2ダメージ。重ねると回数が増える）。', extra: true },
     { id: 'rg_pick', hero: 'rogue', name: 'かすめ取る', cost: 1, pos: 'back', target: 'enemy', text: '敵の盾を消してから、敵に2ダメージ。', extra: true },
   ];
   const CARD = Object.fromEntries(CARDS.map((c) => [c.id, c]));
@@ -97,7 +97,7 @@
       pattern: [{ type: 'strong', n: 11 }, { type: 'charge', n: 5 }, { type: 'all', n: 9 }, { type: 'guard', n: 5 }, { type: 'strong', n: 11 }] },
   ];
   // ボス：HPが半分になると、予告の巡回が変わる
-  const BOSS = { id: 'lord', name: '黄昏の魔王', hp: 48, boss: true, text: 'HPが半分を切ると本気を出し、予告が変わる。',
+  const BOSS = { id: 'lord', name: '黄昏の魔王', hp: 48, boss: true, text: 'HPが半分以下になると本気を出し、予告が変わる。',
     pattern: [{ type: 'front', n: 10 }, { type: 'back', n: 10 }, { type: 'charge', n: 4 }, { type: 'strong', n: 13 }, { type: 'guard', n: 6 }],
     phase2: { text: '本気を出した。', pattern: [{ type: 'all', n: 10 }, { type: 'charge', n: 5 }, { type: 'strong', n: 13 }, { type: 'back', n: 12 }] } };
   ENEMIES.push(BOSS);
@@ -205,7 +205,7 @@
     const cover = (list) => list.map((t) => {
       const g = state.heroes[t.k].guard;
       return g != null && g !== t.k && !state.heroes[g].ko ? { k: g, why: 'かばう', from: t.k } : t;
-    });
+    }).sort((a, b) => (a.from != null) - (b.from != null));   // かばう側は、自分のぶんを先に受ける
     if (type === 'all') return alive.length ? cover(alive.map((k) => ({ k }))) : [{ life: true }];
     if (type === 'back') return back.length ? cover(back.map((k) => ({ k }))) : [{ life: true }];
     if (type === 'front') return front.length ? cover(front.map((k) => ({ k }))) : [{ life: true }];
@@ -248,9 +248,13 @@
     } else if (it.type === 'guard') {
       e.shield = it.n;
       mark(state, { p: 1, k: 'enemy', label: `盾+${it.n}` });
-      state.log.push(`敵に盾${it.n}（次の敵の行動まで）`);
+      state.log.push(`敵に盾${it.n}（敵の次の行動が始まるまで）`);
     } else {
-      if (e.weak) state.log.push(`※敵の攻撃が弱まっていて、ダメージが${e.weak}減っている`);
+      { const parts = [];
+        if (e.charge) parts.push(`溜め+${e.charge}`);
+        if (rage(state)) parts.push(`怒り+${rage(state)}`);
+        if (e.weak) parts.push(`弱体−${e.weak}`);
+        if (parts.length) state.log.push(`※${parts.join('・')}で、${it.dmg}ダメージ（もとは${it.n}）`); }
       for (const t of it.targets) {
         if (state.over) break;   // 反撃で敵が倒れたら、残りの攻撃は当たらない
         if (t.life) {
@@ -266,14 +270,14 @@
           damageHero(state, k, it.dmg, ename(state));
           // 反撃：攻撃を受けるたび、敵にダメージ（倒れたら反撃しない）
           const hh = state.heroes[k];
-          if (hh.counter && !hh.ko && !state.over) { state.log.push(`※${hname(state, k)}の反撃`); damageEnemy(state, hh.counter, hname(state, k)); if (state.over) state.log.push('※反撃で敵が倒れたので、残りの攻撃は当たらない'); }
+          if (hh.counter && !hh.ko && !state.over) { state.log.push(`※${hname(state, k)}の反撃`); damageEnemy(state, hh.counter, hname(state, k)); if (state.over && t !== it.targets[it.targets.length - 1]) state.log.push('※反撃で敵が倒れたので、残りの攻撃は当たらない'); }
           state._aim.push({ p: 0, k });
         }
       }
       e.charge = 0; e.weak = 0;
     }
     step(state, `敵の行動：${it.name}`, true, { p: 1, k: 'enemy' });
-    if (e.poison > 0) {
+    if (!state.over && e.poison > 0) {
       e.poison--;
       state.log.push(`※毒が回っている（あと${e.poison}回）`);
       damageEnemy(state, 2, '毒', true);
@@ -299,7 +303,7 @@
     if (h.hp <= 0) {
       h.ko = true; h.hp = 0; h.shield = 0; h.taunt = false; h.counter = 0; h.wait = REVIVE_WAIT;
       mark(state, { p: 0, k, label: '倒れた' });
-      state.log.push(`${hname(state, k)}は倒れた（ライフ−${KO_LIFE}。次のターンを休んでから復活）`);
+      state.log.push(`${hname(state, k)}は倒れた（ライフ−${KO_LIFE}。次の自分のターンを休んでから復活）`);
       hitLife(state, KO_LIFE, 'ヒーローが倒れた');
     }
   }
@@ -398,7 +402,7 @@
     if (kind === 'none') return t == null ? null : '対象が不正';
     if (kind === 'enemy') return t === 'enemy' ? null : '対象が不正';
     if (!(t === 0 || t === 1) || state.heroes[t].ko) return '対象が不正';
-    if (t === notSelf) return '自分はかばえない';
+    if (t === notSelf) return 'かばう相手がいない';
     return null;
   }
 
@@ -422,9 +426,9 @@
       h.skilled = true;
       state.log.push(`${hname(state, a.k)}の「${sk.name}」`);
       switch (h.id) {
-        case 'sword': attack(state, a.k, 2); break;
-        case 'mage': attack(state, a.k, h.up ? 3 : 2); break;
-        case 'rogue': attack(state, a.k, h.up ? 3 : 2); if (!state.over) { h.moves++; mark(state, { p: 0, k: a.k, label: '移動+1回' }); state.log.push('このターン、もう1回移動できる'); } break;
+        case 'sword': attack(state, a.k, h.up ? 3 : 2); if (h.up && !state.over) shield(state, a.k, 3, sk.name); break;
+        case 'mage': attack(state, a.k, h.up ? 4 : 2); break;
+        case 'rogue': attack(state, a.k, h.up ? 3 : 2); if (!state.over) { h.moves++; mark(state, { p: 0, k: a.k, label: '移動+1回' }); state.log.push(`このターン、${hname(state, a.k)}はもう1回移動できる`); } break;
         case 'saint': attack(state, a.k, h.up ? 3 : 2); if (!state.over) heal(state, a.target, h.up ? 3 : 2, sk.name); break;
         case 'knight': state.heroes[a.target].guard = a.k; mark(state, { p: 0, k: a.target, label: 'かばわれ中' }); state.log.push(`次の自分のターンまで、${hname(state, a.k)}が${hname(state, a.target)}への敵の攻撃を代わりに受ける`); if (h.up) shield(state, a.k, 5, sk.name); break;
       }
@@ -438,7 +442,7 @@
     state.log.push(`${hname(state, k)}の「${def.name}」`);
     switch (def.id) {
       case 'sw_slash': attack(state, k, 3); break;
-      case 'sw_focus': h.focus += 2; mark(state, { p: 0, k, label: '次の攻撃+2' }); break;
+      case 'sw_focus': h.focus += 2; mark(state, { p: 0, k, label: '次の攻撃+2' }); state.log.push('このターン、次の攻撃1回のダメージ+2'); break;
       case 'sw_lunge': attack(state, k, 5); if (!state.over) damageHero(state, k, 1, '反動'); break;
       case 'sw_double': attack(state, k, 3); attack(state, k, 3); break;
       case 'st_heal': heal(state, a.target, 3, def.name); shield(state, a.target, 2, def.name); break;
@@ -454,15 +458,15 @@
       case 'mg_meditate': shield(state, k, 3, def.name); break;
       case 'mg_thunder': attack(state, k, 8); break;
       case 'rg_dagger': attack(state, k, 2); break;
-      case 'rg_trip': attack(state, k, 1); e.weak += 3; mark(state, { p: 1, k: 'enemy', label: '次の攻撃−3' }); state.log.push('敵の次の攻撃のダメージ−3'); break;
+      case 'rg_trip': attack(state, k, 1); e.weak += 3; mark(state, { p: 1, k: 'enemy', label: '次の攻撃−3' }); state.log.push('敵の次の攻撃1回のダメージ−3'); break;
       case 'rg_jam': e.step++; mark(state, { p: 1, k: 'enemy', label: '予告が変わった' }); state.log.push(`敵の予告が「${intent(state).name}」に変わった`); break;
       case 'sw_cleave': if (e.shield) { e.shield = 0; mark(state, { p: 1, k: 'enemy', label: '盾が消えた' }); state.log.push('敵の盾が消えた'); } attack(state, k, 4); break;
       case 'sw_parry': shield(state, k, 4, def.name); h.focus += 2; mark(state, { p: 0, k, label: '次の攻撃+2' }); break;
       case 'st_sanctum': for (let x = 0; x < 2; x++) { heal(state, x, 2, def.name); shield(state, x, 3, def.name); } break;
       case 'st_judge': attack(state, k, 6); break;
       case 'kn_charge': attack(state, k, 1 + h.shield); break;
-      case 'kn_stand': shield(state, k, 4, def.name); h.counter += 3; mark(state, { p: 0, k, label: '反撃' }); break;
-      case 'mg_frost': attack(state, k, 2); e.weak += 3; mark(state, { p: 1, k: 'enemy', label: '次の攻撃−3' }); state.log.push('敵の次の攻撃のダメージ−3'); break;
+      case 'kn_stand': shield(state, k, 4, def.name); h.counter += 3; mark(state, { p: 0, k, label: '反撃' }); state.log.push('次の自分のターンまで、攻撃を受けるたび3ダメージで反撃する'); break;
+      case 'mg_frost': attack(state, k, 1); e.weak += 2; mark(state, { p: 1, k: 'enemy', label: '次の攻撃−2' }); state.log.push('敵の次の攻撃1回のダメージ−2'); break;
       case 'mg_meteor': attack(state, k, 10); break;
       case 'rg_poison': attack(state, k, 1); e.poison += 3; mark(state, { p: 1, k: 'enemy', label: '毒3' }); state.log.push('敵に毒（行動するたびに2ダメージ、3回）'); break;
       case 'rg_pick': if (e.shield) { e.shield = 0; mark(state, { p: 1, k: 'enemy', label: '盾が消えた' }); state.log.push('敵の盾が消えた'); } attack(state, k, 2); break;
@@ -475,6 +479,7 @@
   function attack(state, k, n) {
     const h = state.heroes[k];
     const bonus = h.focus; h.focus = 0;
+    if (bonus) state.log.push(`※気合いで、ダメージ+${bonus}`);
     state._aim.push({ p: 1, k: 'enemy' });
     damageEnemy(state, n + bonus, HERO[h.id].name);
   }
@@ -557,6 +562,7 @@
   }
   // 報酬の候補を3つ。{ type:'card', k, card } / { type:'up', k, what:'skill'|'hp' } / { type:'heal' }
   function rewardOptions(run, rng) {
+    if (run.offer && run.offer.stage === run.stage) return run.offer.opts;   // 引き直せない
     rng = rng || Math.random;
     const pickOf = (arr) => arr[Math.floor(rng() * arr.length)];
     const out = [];
@@ -567,6 +573,7 @@
     const k2 = out.length ? 1 - out[0].k : ks[0];
     out.push({ type: 'up', k: k2, what: run.mods[k2].up ? 'hp' : 'skill' });
     out.push({ type: 'heal', n: Math.min(RUN_LIFE_HEAL, LIFE - run.life) });
+    run.offer = { stage: run.stage, opts: out };
     return out;
   }
   // replace = カードの報酬で、入れ替える元のカード id
