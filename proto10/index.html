@@ -230,6 +230,37 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .sheet p { margin: 0; }
 .sheet .foot { flex-wrap: wrap; }
 
+/* 戦闘画面の配置：盤面・手札・説明欄の高さを固定し、タップや再生で配置が動かないようにする */
+.battle { --dh: clamp(88px, calc(100vh - 566px), 230px); --hand-h: 97px; }
+.battle .field { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 5px; }
+.battle .field > .enemy, .battle .field > .turnline, .battle .field > .life { flex: 0 0 auto; }
+.battle .frow { flex: 1 1 0; min-height: 54px; grid-template-columns: 16px 1fr 1fr; gap: 5px; }
+.rlab { writing-mode: vertical-rl; text-align: center; font-size: 11px; font-weight: 700; letter-spacing: .2em; color: var(--muted); align-self: center; }
+.cell .slot { color: var(--muted); opacity: .55; font-size: 11px; }
+.battle .hand { flex: 0 0 var(--hand-h); }
+.battle .hrow { height: 46px; }
+.battle .detail { flex: 0 0 var(--dh); height: var(--dh); min-height: 0; max-height: none; box-sizing: border-box; }
+.battle.play .hand { display: none; }
+.battle.play .detail { flex-basis: calc(var(--dh) + var(--hand-h) + 5px); height: calc(var(--dh) + var(--hand-h) + 5px); }
+.einfo { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.einfo .upnext { margin-left: auto; font-size: 11px; }
+.estat i { font-size: 11px; line-height: 16px; }
+.hero { justify-content: center; }
+.hero .nm { align-items: center; }
+.hero .nm .aim { position: static; margin-left: auto; max-width: none; font-size: 12px; padding: 1px 6px; flex: 0 0 auto; }
+.hero .nm .aim + .aim { margin-left: 3px; }
+.hero .nums { flex-wrap: wrap; row-gap: 2px; }
+.hero .flags { flex-wrap: wrap; row-gap: 2px; }
+.hero.ko { opacity: 1; }
+.hero.ko > :not(.pops) { opacity: .45; }
+.life .aim { position: static; font-size: 12px; padding: 1px 6px; max-width: none; }
+.life { grid-template-columns: auto 1fr auto auto; }
+.card .tag.up { margin-left: auto; font-size: 9px; }
+.hr-name span { font-size: 10px; }
+.tag { font-size: 10px; }
+.sub { font-size: 11px; letter-spacing: .12em; color: var(--muted); margin: 4px 0 -4px; }
+.reward[aria-pressed="true"] { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass) inset; background: var(--panel-2); }
+
 /* 道のり・報酬 */
 .route { display: flex; gap: 6px; }
 .route .st { flex: 1; border: 1px solid var(--line); border-radius: 10px; padding: 8px 6px; text-align: center; background: var(--panel); display: grid; gap: 2px; }
@@ -361,7 +392,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         ])}
         ${sec('カードの巡回', [
           `各ヒーローは4枚のカードを決まった順番で巡回させる。手札は各ヒーロー${E.HAND_SIZE}枚。順番は戦闘ごとにランダムに決まる`,
-          '使ったカードは順番の最後へ回り、同じ場所に次のカードが入る。次に来るカードは、手札の左のヒーロー名の下に見えている',
+          '使ったカードは順番の最後へ回り、同じ場所に次のカードが入る（入ったばかりのカードには NEW の印が付く）。次に来るカードは、手札の左のヒーロー名の下に見えている',
         ])}
       </div>
       <div class="foot"><button class="btn" id="back">戻る</button></div>
@@ -444,48 +475,55 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     document.getElementById('swapPos').onclick = () => { run.front = 1 - run.front; route(); };
   }
   function start() {
-    flash = null;
+    flash = null; lastFoe = null;
     game = E.runFight(run);
     playback(game.steps.slice(), beginMine);
   }
 
   // 報酬：3つから1つ
-  function reward() {
+  function reward(pick) {
     const opts = E.rewardOptions(run);
     const label = (o) => {
-      if (o.type === 'card') { const c = C[o.card]; return ['新しいカード', `${H[run.heroes[o.k]].name}：${c.name}`, `【${c.cost}${c.pos === 'front' ? '・前衛' : ''}】${c.text}<br><span class="muted">今のカード1枚と入れ替える（4枚のまま）</span>`, H[run.heroes[o.k]].color]; }
+      if (o.type === 'card') { const c = C[o.card]; return ['新しいカード', `${H[run.heroes[o.k]].name}：${c.name}`, `【${c.cost}${c.pos === 'front' ? '・前衛' : ''}】${c.text}<br><span class="muted">今のカード1枚と入れ替える（4枚のまま）。次の画面で外すカードを選ぶ</span>`, H[run.heroes[o.k]].color]; }
       if (o.type === 'up') { const id = run.heroes[o.k]; return o.what === 'skill'
         ? ['強化', `${H[id].name}：固有スキル強化`, `「${H[id].skill.name}」${H[id].skill.text} → <b>${E.SKILL_UP[id]}</b>`, H[id].color]
         : ['強化', `${H[id].name}：最大HP+3`, `HP ${H[id].hp + run.mods[o.k].hp} → ${H[id].hp + run.mods[o.k].hp + 3}`, H[id].color]; }
-      return ['回復', `ライフ+${E.RUN_LIFE_HEAL}`, `ライフ ${run.life} → ${Math.min(E.LIFE, run.life + E.RUN_LIFE_HEAL)}`, null];
+      const n = Math.min(E.LIFE, run.life + E.RUN_LIFE_HEAL) - run.life;
+      return ['回復', `ライフ+${n}`, `ライフ ${run.life} → ${run.life + n}`, null];
     };
     app.innerHTML = `<section class="screen">
       <div class="row"><h2 style="font-size:24px">報酬を1つ選ぶ</h2></div>
       ${routeHTML()}${lifeBoxHTML()}
-      <div class="scroll">${opts.map((o, i) => { const [kind, head, body, color] = label(o); return `<button class="reward${color ? ` c-${color}` : ''}" data-opt="${i}" ${o.type === 'heal' && run.life >= E.LIFE ? 'disabled' : ''}>
+      <div class="scroll">${opts.map((o, i) => { const [kind, head, body, color] = label(o); return `<button class="reward${color ? ` c-${color}` : ''}" data-opt="${i}" aria-pressed="${pick === i}" ${o.type === 'heal' && run.life >= E.LIFE ? 'disabled' : ''}>
         <span class="rk">${kind}</span><b>${esc(head)}</b><p>${body}</p></button>`; }).join('')}
-        ${partyHTML()}</div>
+        <div class="sub">今の手持ち（見るだけ）</div>${partyHTML()}</div>
+      <div class="foot"><button class="btn" id="take" ${pick == null ? 'disabled' : ''}>${pick == null ? '報酬を選ぶ' : opts[pick].type === 'card' ? '外すカードを選ぶ' : 'これにする'}</button></div>
     </section>`;
     app.querySelectorAll('[data-opt]').forEach((b) => b.onclick = () => {
-      const o = opts[+b.dataset.opt];
+      const y = app.querySelector('.scroll').scrollTop;
+      reward(+b.dataset.opt);
+      app.querySelector('.scroll').scrollTop = y;
+    });
+    document.getElementById('take').onclick = () => {
+      const o = opts[pick];
       if (o.type === 'card') return swap(o);
       E.applyReward(run, o);
       route();
-    });
+    };
   }
   // 新しいカードと入れ替えるカードを選ぶ
-  function swap(o) {
+  function swap(o, pick) {
     const m = run.mods[o.k], id = run.heroes[o.k];
     app.innerHTML = `<section class="screen">
-      <h2 style="font-size:24px">入れ替えるカードを選ぶ</h2>
+      <h2 style="font-size:24px">外すカードを選ぶ</h2>
       <div class="swapnew">新しく入る：${cardLine(o.card)}</div>
-      <div class="scroll">${m.cards.map((cid, i) => `<button class="reward c-${H[id].color}" data-rep="${i}"><span class="rk">${H[id].name}・外す</span><p>${cardLine(cid)}</p></button>`).join('')}</div>
-      <div class="foot"><button class="btn ghost" id="back">報酬を選び直す</button></div>
+      <div class="scroll">${m.cards.map((cid, i) => `<button class="reward c-${H[id].color}" data-rep="${i}" aria-pressed="${pick === i}"><span class="rk">${H[id].name}・外す</span><p>${cardLine(cid)}</p></button>`).join('')}</div>
+      <div class="foot"><button class="btn ghost" id="back">戻る</button><button class="btn" id="take" ${pick == null ? 'disabled' : ''}>入れ替える</button></div>
     </section>`;
-    app.querySelectorAll('[data-rep]').forEach((b) => b.onclick = () => { E.applyReward(run, o, m.cards[+b.dataset.rep]); route(); });
-    document.getElementById('back').onclick = reward;
+    app.querySelectorAll('[data-rep]').forEach((b) => b.onclick = () => swap(o, +b.dataset.rep));
+    document.getElementById('take').onclick = () => { E.applyReward(run, o, m.cards[pick]); route(); };
+    document.getElementById('back').onclick = () => reward();
   }
-
   function beginMine() {
     if (game.over) return finish();
     phase = 'mine'; clearPick();
@@ -497,6 +535,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   }
   // flash = 直前の自分の行動の結果（盤面の数字と説明欄に出す。次に何かタップしたら消える）
   let flash = null;
+  // lastFoe = 直前の敵の行動（次の自分のターンの最初に、説明欄に残す）
+  let lastFoe = null;
   function doAct(a) {
     const r = E.act(game, a);
     if (r.error) return;
@@ -509,15 +549,17 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   function endTurn(auto) {
     if (phase !== 'mine') return;
     const mine = auto === true && flash ? flash : [];   // 自動で終わるときは、最後の自分の行動も再生に含める
-    flash = null;
+    flash = null; lastFoe = null;
     const steps = E.endTurn(game).slice();
     if (auto === true && steps.length) steps[0] = { ...steps[0], lines: ['※マナも移動も使い切ったので、自動でターンを終えた'].concat(steps[0].lines) };
-    playback(mine.concat(steps), beginMine);
+    playback(mine.concat(steps), () => { lastFoe = steps.filter((x) => !x.title.startsWith('ターン')); beginMine(); });
   }
 
   // ── 処理の再生 ──
+  let paused = false;
   function playback(steps, after) {
     clearTimeout(autoTimer);
+    paused = false;
     phase = 'play';
     play = { steps, i: 0, after };
     if (!steps.length) { play = null; return after(); }
@@ -528,9 +570,10 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     render();
     clearTimeout(autoTimer);
     if (!settings.auto) return;
+    if (paused) return;
+    // 読む時間は行数で決める
     const whys = st.lines.filter((l) => l.startsWith('※')).length;
-    const base = st.title.startsWith('敵の行動') ? 1600 : st.title.startsWith('ターン') ? 1000 : 1100;
-    autoTimer = setTimeout(advance, base + whys * 1300);
+    autoTimer = setTimeout(advance, 900 + (st.lines.length - whys) * 500 + whys * 1500);
   }
   function advance() {
     clearTimeout(autoTimer);
@@ -580,7 +623,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   }
 
   function enemyHTML(v, ctx) {
-    const e = v.enemy, def = E.ENEMY[e.id], it = v.intent;
+    const e = v.enemy, def = E.ENEMY[e.id], it = ctx.did || v.intent;
     const pct = Math.max(0, e.hp / e.maxHp * 100);
     const hits = ctx.hits.filter((x) => x.p === 1);
     const stat = [];
@@ -588,23 +631,23 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     if (e.charge) stat.push(['hot', `溜め +${e.charge}`]);
     if (e.weak) stat.push(['good', `弱体 −${e.weak}`]);
     const toRage = E.RAGE_EVERY - e.acted % E.RAGE_EVERY;
-    stat.push([e.rage ? 'hot' : '', `${e.rage ? `怒り +${e.rage}・` : ''}あと${toRage}回行動で怒り+${E.ENRAGE}`]);
+    stat.push([e.rage ? 'hot' : '', `${e.rage ? `怒り+${e.rage}・` : ''}あと${toRage}回で怒り+${E.ENRAGE}`]);
     if (e.poison) stat.push(['good', `毒 あと${e.poison}回`]);
-    if (ctx.fore > 0) stat.push(['good', `次の敵の行動で −${ctx.fore}（反撃・毒）`]);
+    if (ctx.fore > 0) stat.push(['good', `反撃・毒で−${ctx.fore}`]);
     if (e.phase) stat.push(['hot', '本気']);
     const atk = it.dmg != null;
-    const who = atk ? (it.targets.length ? it.targets.map((t) => t.life ? 'あなたのライフ' : `${H[v.heroes[t.k].id].name}${t.why ? `（${t.why}）` : ''}`).join('・') : 'なし') : '';
+    const aimed = [...new Set((ctx.aim || []).filter((a) => a.p === 0).map((a) => a.k === 'life' ? 'あなたのライフ' : H[v.heroes[a.k].id].name))];
+    const who = ctx.did ? (aimed.join('・') || 'なし') : atk ? (it.targets.length ? it.targets.map((t) => t.life ? 'あなたのライフ' : `${H[v.heroes[t.k].id].name}${t.why ? `（${t.why}）` : ''}`).join('・') : 'なし') : '';
     const pat = E.patternOf(e);
     const up = [1, 2].map((d) => pat[(e.step + d) % pat.length]).map(actShort).join(' → ');
     const cls = ['enemy', ctx.targets.some((t) => t === 'enemy') ? 'target' : '', hits.some((x) => x.hit) ? 'shake' : '', ctx.actor && ctx.actor.p === 1 ? 'lunge-down' : ''].filter(Boolean);
     return `<div class="${cls.join(' ')}" data-target="enemy" role="button" tabindex="0" aria-label="${def.name}">
       <div class="eh"><span class="stage${def.boss ? ' boss' : ''}">${run ? stageName(run.stage) : ''}</span><b>${def.name}</b><span class="hpn">${e.hp}<small>/${e.maxHp}</small></span></div>
       <span class="hpbar"><i style="width:${pct}%"></i></span>
-      <div class="estat">${stat.map(([c, t]) => `<i class="${c}">${t}</i>`).join('')}</div>
       <div class="intent${atk ? '' : ' calm'}${ctx.actor && ctx.actor.p === 1 ? ' now' : ''}"><span class="il">${ctx.actor && ctx.actor.p === 1 ? '行動中' : '次の行動'}</span>
         <span class="iw">${it.name}${atk ? `<span class="dmg">${it.dmg}</span>` : `<span class="dmg">+${it.n}</span>`}</span>
         <span class="it">${atk ? `→ ${esc(who)}` : it.type === 'charge' ? '次の攻撃が強くなる' : '敵に盾が付く'}</span></div>
-      <div class="upnext">その先：${up}</div>
+      <div class="einfo"><div class="estat">${stat.map(([c, t]) => `<i class="${c}">${t}</i>`).join('')}</div><div class="upnext">その先：${up}</div></div>
       ${popsHTML(hits)}</div>`;
   }
 
@@ -626,10 +669,10 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const pct = Math.max(0, h.hp / h.maxHp * 100);
     const marks = threat.map((t) => `<span class="aim${t === SAFE ? ' safe' : ''}">${esc(t)}</span>`).join('') + (ptarget === k && (sel || mode) ? '<span class="aim mine">ここに使う</span>' : '');
     return `<div class="${cls.join(' ')}" data-hero="${k}" role="button" tabindex="0" aria-label="${def.name}">
-      <span class="nm"><b>${def.name}</b><span class="sk">${esc(E.skillOf(h).name)}${h.up ? '+' : ''}</span></span>
+      <span class="nm"><b>${def.name}</b>${marks}</span>
       <span class="hpbar"><i class="${pct <= 50 ? 'low' : ''}" style="width:${pct}%"></i></span>
       <span class="nums"><span>HP <b>${h.hp}</b>/${h.maxHp}</span>${h.shield ? `<span>盾 <b>${h.shield}</b></span>` : ''}${flags.length ? `<span class="flags">${flags.map(([c, t]) => `<i class="${c}">${t}</i>`).join('')}</span>` : ''}</span>
-      ${marks}${popsHTML(hits)}</div>`;
+      ${popsHTML(hits)}</div>`;
   }
 
   function lifeHTML(v, ctx, threat) {
@@ -637,8 +680,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const pct = Math.max(0, v.life / E.LIFE * 100);
     return `<div class="life${threat.length ? ' danger' : ''}${hits.some((x) => x.hit) ? ' shake' : ''}" data-life="1">
       <b>あなたのライフ</b><span class="hpbar"><i class="${pct <= 40 ? 'low' : ''}" style="width:${pct}%"></i></span>
-      <span class="tn">${v.life}<small>/${E.LIFE}</small></span>
-      ${threat.map((t) => `<span class="aim">${esc(t)}</span>`).join('')}${popsHTML(hits)}</div>`;
+      <span>${threat.map((t) => `<span class="aim">${esc(t)}</span>`).join('')}</span><span class="tn">${v.life}<small>/${E.LIFE}</small></span>
+      ${popsHTML(hits)}</div>`;
   }
 
   // 今の選択で狙える相手（'enemy' かヒーローの番号）
@@ -647,7 +690,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const allies = (except) => [0, 1].filter((k) => !game.heroes[k].ko && k !== except);
     let kind = null, self = null;
     if (mode === 'skill' && focus != null && focus !== 'enemy') { kind = E.skillOf(game.heroes[focus]).target; if (game.heroes[focus].id === 'knight') self = focus; }
-    else if (sel) kind = C[myCard(sel).id].target;
+    else if (sel) { kind = C[myCard(sel).id].target; if (['enemy', 0, 1, null].every((t) => E.check(game, { type: 'card', uid: sel, target: t }))) kind = null; }
     if (kind === 'enemy') return ['enemy'];
     if (kind === 'ally') return allies(self);
     return [];
@@ -723,7 +766,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         <span class="hr-name"><b>${H[h.id].name}</b><span>次：${esc(C[d.queue[0]].name)}</span></span>
         ${d.hand.map(card).join('')}
         <button class="card skill c-${H[h.id].color}${skOk ? '' : ' off'}" aria-pressed="${mode === 'skill' && focus === k}" data-skill="${k}">
-          <span class="ch"><span class="cost">${sk.cost}</span>${sk.pos === 'front' ? '<span class="tag front">前衛</span>' : ''}</span><b>${esc(sk.name)}${h.up ? '+' : ''}</b><span class="kind">固有スキル</span></button>
+          <span class="ch"><span class="cost">${sk.cost}</span>${sk.pos === 'front' ? '<span class="tag front">前衛</span>' : ''}${h.up ? '<span class="tag up">強化</span>' : ''}</span><b>${esc(sk.name)}</b></button>
         <button class="card move${mvOk ? '' : ' off'}" aria-pressed="${mode === 'move' && focus === k}" data-move="${k}" aria-label="${H[h.id].name}を${h.pos === 'front' ? '後衛' : '前衛'}へ移動">
           <span class="arw">${h.pos === 'front' ? '▼' : '▲'}</span><b>${h.pos === 'front' ? '後衛へ' : '前衛へ'}</b></button></div>`;
     }).join('');
@@ -759,10 +802,11 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       d = `<b class="h">${en.name}</b>　<span class="muted">${esc(en.text)}</span>${chainHTML(E.patternOf(game.enemy))}${en.phase2 && !game.enemy.phase ? `<span class="muted">本気になると：</span>${chainHTML(en.phase2.pattern)}` : ''}<span class="muted">${E.RAGE_EVERY}回行動するたびに怒り、攻撃が${E.ENRAGE}強くなる</span>`;
     } else if (focus != null) {
       d = focusHTML();
-    } else if (flash) {
-      d = flash.map((x) => `<div class="dh"><b>${esc(x.title)}</b></div><ul>${x.lines.map((l) => l.startsWith('※') ? `<li class="why"><span class="whytag">なぜ</span>${esc(l.slice(1))}</li>` : `<li>${esc(l)}</li>`).join('')}</ul>`).join('');
+    } else if (flash || lastFoe) {
+      d = (flash ? '' : '<div class="sub" style="margin:0 0 2px">前の敵の行動</div>') + (flash || lastFoe).map((x) => `<div class="dh"><b>${esc(x.title)}</b></div><ul>${x.lines.map((l) => l.startsWith('※') ? `<li class="why"><span class="whytag">なぜ</span>${esc(l.slice(1))}</li>` : `<li>${esc(l)}</li>`).join('')}</ul>`).join('');
     } else {
-      d = '<span class="muted">赤い矢印と数字は、このままターンを終えたときに受けるダメージ。下のカード・スキル・移動を選んで「使う」。終わったら「ターン終了」で敵が動く。</span>';
+      d = game.heroes.every((h) => h.ko) ? '<span class="muted">2人とも倒れているので、できることがない。「ターン終了」を押す。</span>'
+        : '<span class="muted">赤い矢印と数字は、このままターンを終えたときに受けるダメージ。下のカード・スキル・移動を選んで「使う」。終わったら「ターン終了」で敵が動く。</span>';
     }
     return {
       panel: `<div class="detail">${d}</div>`,
@@ -782,7 +826,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     return {
       panel: `<div class="detail log"><div class="dh"><b>${esc(st ? st.title : '')}</b>${play ? `<span class="muted">${play.i + 1} / ${play.steps.length}</span>` : ''}</div>
         ${lines.length ? `<ul>${lines.map((s) => s.startsWith('※') ? `<li class="why"><span class="whytag">なぜ</span>${esc(s.slice(1))}</li>` : `<li>${esc(s)}</li>`).join('')}</ul>` : ''}</div>`,
-      buttons: `<button class="btn ghost" id="skip" ${lastStep ? 'disabled' : ''}>最後まで</button><button class="btn" id="next">${lastStep ? (game.over ? '結果を見る' : '続ける') : '次へ'}</button>`,
+      buttons: `${settings.auto ? `<button class="btn ghost" id="pause">${paused ? '再開' : '止める'}</button>` : `<button class="btn ghost" id="skip" ${lastStep ? 'disabled' : ''}>最後まで</button>`}<button class="btn" id="next">${lastStep ? (game.over ? '結果を見る' : '続ける') : '次へ'}</button>`,
     };
   }
 
@@ -791,19 +835,19 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const st = play ? play.steps[play.i] : null;
     const v = st ? st.view : E.view(game);
     const fl = !st && flash ? flash[flash.length - 1] : null;
-    const ctx = { hits: st ? st.hits : fl ? fl.hits : [], actor: st ? st.actor : fl ? fl.actor : null, targets: currentTargets() };
+    const ctx = { hits: st ? st.hits : fl ? fl.hits : [], actor: st ? st.actor : fl ? fl.actor : null, targets: currentTargets(), did: st ? st.did : null, aim: st ? st.aim : [] };
     const th = threats(v);
     ctx.fore = th.enemy || 0;
-    const row = (pos) => `<div class="frow">${[0, 1].map((k) => `<div class="cell">${v.heroes[k].pos === pos ? heroHTML(v, k, ctx, th.heroes[k]) : `<span class="slot">${E.POS_NAME[pos]}</span>`}</div>`).join('')}</div>`;
+    const row = (pos) => `<div class="frow"><span class="rlab">${E.POS_NAME[pos]}</span>${[0, 1].map((k) => `<div class="cell">${v.heroes[k].pos === pos ? heroHTML(v, k, ctx, th.heroes[k]) : '<span class="slot">空き</span>'}</div>`).join('')}</div>`;
     const { panel, buttons } = phase === 'mine' ? minePanel() : playPanel(st);
-    app.innerHTML = `<section class="screen battle" style="gap:5px">
+    app.innerHTML = `<section class="screen battle${phase === 'mine' ? '' : ' play'}" style="gap:5px">
       <div class="field">
         ${enemyHTML(v, ctx)}
         ${turnLine(v, st)}
         ${row('front')}${row('back')}
         ${lifeHTML(v, ctx, th.life)}
       </div>
-      <div class="hand" ${phase === 'mine' ? '' : 'hidden'}>${handHTML()}</div>
+      <div class="hand">${handHTML()}</div>
       ${panel}
       <div class="act">${buttons}</div>
     </section>`;
@@ -815,9 +859,10 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const on = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
     on('next', advance);
     on('skip', skipAll);
+    on('pause', () => { paused = !paused; clearTimeout(autoTimer); if (paused) render(); else showStep(); });
     if (phase !== 'mine') return;
     // 何かタップしたら、直前の行動の結果表示を消す
-    app.querySelector('.battle').addEventListener('click', () => { flash = null; }, true);
+    app.querySelector('.battle').addEventListener('click', () => { flash = null; lastFoe = null; }, true);
     const tapTarget = (t) => {
       if (currentTargets().includes(t) && (sel || mode === 'skill')) { ptarget = t; return render(); }
       sel = null; mode = null; ptarget = null;
@@ -877,7 +922,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         : '<button class="btn ghost" id="totitle">タイトルへ</button><button class="btn" id="again">もう一度冒険する</button>'}</div></div>`;
     document.body.appendChild(o);
     const b = (id, fn) => { const el = o.querySelector('#' + id); if (el) el.onclick = () => { o.remove(); fn(); }; };
-    b('next-r', reward); b('again', startRun); b('totitle', title);
+    b('next-r', () => reward()); b('again', startRun); b('totitle', title);
     o.querySelector('.btn').focus();
   }
 

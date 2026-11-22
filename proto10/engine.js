@@ -151,7 +151,7 @@
 
   // ── 演出用の記録 ──
   // step = { title, lines, hits, actor, aim, view }。actor/aim の p は 0 = 味方、1 = 敵。k = ヒーローの番号、'life' = ライフ
-  function begin(state) { state.log = []; state.steps = []; state._hits = []; state._aim = []; state._logAt = 0; }
+  function begin(state) { state.log = []; state.steps = []; state._hits = []; state._aim = []; state._logAt = 0; state._phase = null; }
   function mark(state, hit) { state._hits.push(hit); }
   function view(state) {
     return { round: state.round, mana: state.mana, life: state.life, enemy: { ...state.enemy, rage: rage(state) }, heroes: state.heroes.map((h) => ({ ...h })), intent: intent(state) };
@@ -160,9 +160,16 @@
     const lines = state.log.slice(state._logAt);
     if (!lines.length && !state._hits.length && !force) return;
     state._logAt = state.log.length;
-    state.steps.push({ title, lines, hits: state._hits, actor: actor || null, aim: state._aim, view: view(state) });
+    const st = { title, lines, hits: state._hits, actor: actor || null, aim: state._aim, view: view(state) };
+    state.steps.push(st);
     state._hits = [];
     state._aim = [];
+    if (state._phase) {
+      state.log.push(state._phase); state._phase = null;
+      mark(state, { p: 1, k: 'enemy', label: '本気' });
+      step(state, 'ボスの本気', true);
+    }
+    return st;
   }
   const hname = (state, k) => HERO[state.heroes[k].id].name;
   const ename = (state) => ENEMY[state.enemy.id].name;
@@ -276,7 +283,8 @@
       }
       e.charge = 0; e.weak = 0;
     }
-    step(state, `敵の行動：${it.name}`, true, { p: 1, k: 'enemy' });
+    const acted = step(state, `敵の行動：${it.name}`, true, { p: 1, k: 'enemy' });
+    if (acted) acted.did = { name: it.name, type: it.type, n: it.n, dmg: it.dmg };
     if (!state.over && e.poison > 0) {
       e.poison--;
       state.log.push(`※毒が回っている（あと${e.poison}回）`);
@@ -327,8 +335,7 @@
     if (d.phase2 && !e.phase && e.hp * 2 <= e.maxHp) {
       const lost = e.charge;
       e.phase = 1; e.step = 0; e.charge = 0; e.phased = true;
-      mark(state, { p: 1, k: 'enemy', label: '本気' });
-      state.log.push(`※HPが半分以下になり、${ename(state)}は${d.phase2.text}予告の巡回が変わり、次は「${intent(state).name}」${lost ? '。溜めていたぶんは消えた' : ''}`);
+      state._phase = (`※HPが半分以下になり、${ename(state)}は${d.phase2.text}予告の巡回が変わり、次は「${intent(state).name}」${lost ? '。溜めていたぶんは消えた' : ''}`);
     }
   }
   function heal(state, k, n, src) {

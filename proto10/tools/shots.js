@@ -57,6 +57,12 @@ fs.copyFileSync(path.join(root, 'tools', 'bot.js'), path.join(out, 'bot.js'));
           if (cs.textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth + 1) out.push(`文字切れ ${el.className}「${el.textContent.trim().slice(0, 20)}」`);
           if ((el.tagName === 'BUTTON' || el.getAttribute('role') === 'button') && r.height < 40 && !el.disabled) out.push(`押す場所が低い ${el.className || el.id} ${Math.round(r.height)}px「${el.textContent.trim().slice(0, 12)}」`);
         }
+        const box = (q) => { const el = document.querySelector(q); return el && getComputedStyle(el).display !== 'none' ? el.getBoundingClientRect() : null; };
+        const life = box('.life'), hand = box('.hand'), detail = box('.detail'), act = box('.act');
+        if (life && hand && life.bottom > hand.top + 1) out.push(`ライフの帯が手札に重なる ${Math.round(life.bottom - hand.top)}px`);
+        if (life && detail && !hand && life.bottom > detail.top + 1) out.push('ライフの帯が説明欄に重なる');
+        if (detail && act && detail.bottom > act.top + 1) out.push('説明欄がボタンに重なる');
+        for (const el of document.querySelectorAll('.hero')) { if (el.scrollHeight > el.clientHeight + 1) out.push(`ヒーロー枠の中身がはみ出す ${el.scrollHeight}>${el.clientHeight}`); }
         return [...new Set(out)];
       });
       for (const x of r) issues.push(`${name}: ${x}`);
@@ -120,7 +126,8 @@ fs.copyFileSync(path.join(root, 'tools', 'bot.js'), path.join(out, 'bot.js'));
       await p.click('#next-r');
       await shot(`21-reward-${fight}`);
       await p.click(`[data-opt="${fight === 0 ? 0 : 1}"]`);
-      if (await p.$('[data-rep]')) { await shot('22-swap'); await p.click('[data-rep="1"]'); }
+      await p.click('#take');
+      if (await p.$('[data-rep]')) { await p.click('[data-rep="1"]'); await shot('22-swap'); await p.click('#take'); }
       await shot(`23-route-${fight + 1}`);
     }
     console.log(`■ ${size}`);
