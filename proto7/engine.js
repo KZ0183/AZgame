@@ -8,8 +8,9 @@
   const HAND_SIZE = 2; // 各ヒーローの手札の枚数。カードは決まった順番で巡回する（使うと列の最後へ回り、先頭が手札に入る）
   const MANA_MAX = 6;
   const TOWER = 2; // 攻撃の対象としてのタワーの番号
-  const TOWER_HP = 25;
-  const TOWER_COUNTER = 4;
+  const TOWER_HP = 20;
+  const TOWER_COUNTER = 0; // タワーの自動の反撃（v0.6 でブロックに置き換えたので 0）
+  const BLOCK_COUNTER = false; // true なら、ブロックしたヒーローが攻撃してきた相手に攻撃力ぶん反撃する
   const SKILL_COST = 1; // 固有スキルのマナ（1ターン1回）
   const REVIVE_WAIT = 1; // 倒されたヒーローが、復活するまでに休む自分のターンの数
   const MOVE_COST = 0; // 移動のマナ
@@ -78,7 +79,7 @@
   function makeHero(id, pos) {
     const h = HERO[id];
     return { id, hp: h.hp, maxHp: h.hp, atk: h.atk, pos, shield: 0, ko: false, revealed: pos === 'front',
-      focus: 0, taunt: false, attacked: false, moved: false, note: null, guard: null }; // attacked = 固有スキルを使った
+      focus: 0, taunt: false, attacked: false, moved: false, note: null, guard: null, blocked: false }; // attacked = 固有スキルを使った
   }
 
   // ── 状態 ──
@@ -116,7 +117,8 @@
   function view(state) {
     return {
       round: state.round, active: state.active, countered: !!state.countered,
-      players: state.players.map((pl, p) => ({ tower: pl.tower, mana: pl.mana, defended: towerDefended(state, p), heroes: pl.heroes.map((h) => ({ ...h })) })),
+      players: state.players.map((pl, p) => ({ tower: pl.tower, mana: pl.mana, defended: towerDefended(state, p),
+        blockers: pl.heroes.filter((h) => !h.ko && h.hp > 0 && h.pos === 'front' && !h.blocked).length, heroes: pl.heroes.map((h) => ({ ...h })) })),
     };
   }
   // aim：その段階で攻撃が向かった先（矢印の表示用）。{ p, k } の配列
@@ -166,7 +168,7 @@
         mark(state, { p, k, label: '復活' });
         state.log.push(`${heroName(state, p, k)}が後衛で復活した`);
       }
-      h.shield = 0; h.taunt = false; h.focus = 0; h.attacked = false; h.moved = false; h.note = null; h.guard = null;
+      h.shield = 0; h.taunt = false; h.focus = 0; h.attacked = false; h.moved = false; h.note = null; h.guard = null; h.blocked = false;
     });
     step(state, `${pl.name}のターン`, true);
   }
@@ -245,6 +247,14 @@
   function checkResponse(state, q, resp) {
     const pd = state.pending;
     if (!pd || pd.p === q) return '対応できる攻撃がない';
+    if (resp.block != null) {
+      const h = state.players[q].heroes[resp.block];
+      if (!h || h.ko) return '倒れている';
+      if (h.pos !== 'front') return 'ブロックできるのは前衛だけ';
+      if (h.blocked) return 'このターンはもうブロックした';
+      if (pd.target !== TOWER) return 'ブロックできるのはタワーへの攻撃だけ';
+      return null;
+    }
     if (resp.skill != null) {
       const h = state.players[q].heroes[resp.skill];
       if (!h || h.ko || !HERO[h.id].skill.resp) return '対応できる固有スキルではない';
@@ -317,13 +327,11 @@
     const defended = towerDefended(state, o);
     pl.tower -= n;
     mark(state, { p: o, k: TOWER, n: -n, hit: true });
-    const guards = pl.heroes.filter((h) => !h.ko && h.hp > 0 && h.pos === 'front').map((h) => HERO[h.id].name).join('と');
-    const spent = COUNTER_ONCE && state.countered;
-    state.log.push(!defended ? `※${pl.name}の前衛が空なので、タワーは無防備（反撃なし）`
-      : spent ? `※${pl.name}の前衛に${guards}がいてタワーは守られているが、反撃はこのターンもう使った（反撃は1ターンに1回）`
-      : `※${pl.name}の前衛に${guards}がいるので、タワーは守られている（殴ると反撃${TOWER_COUNTER}。反撃は1ターンに1回）`);
     state.log.push(`${src} → ${pl.name}のタワーに${n}ダメージ`);
-    if (defended && k != null && !spent) { state.countered = true; state.log.push('タワーの反撃！'); damage(state, p, k, TOWER_COUNTER, 'タワーの反撃'); }
+    if (TOWER_COUNTER > 0) {
+      const spent = COUNTER_ONCE && state.countered;
+      if (defended && k != null && !spent) { state.countered = true; state.log.push('タワーの反撃！'); damage(state, p, k, TOWER_COUNTER, 'タワーの反撃'); }
+    }
     if (pl.tower <= 0) finish(state, 'タワー破壊');
   }
 
@@ -510,7 +518,19 @@
     const pd = state.pending;
     if (!pd) return { error: '対応できる攻撃がない' };
     const P = state.players, p = pd.p;
-    if (resp && resp.skill != null) {
+    let blocker = null;
+    if (resp && resp.block != null) {
+      const err = checkResponse(state, q, resp);
+      if (err) return { error: err };
+      const bh = P[q].heroes[resp.block];
+      bh.blocked = true;
+      bh.revealed = true;
+      blocker = resp.block;
+      pd.target = resp.block;
+      mark(state, { p: q, k: resp.block, label: 'ブロック' });
+      state.log.push(`${heroName(state, q, resp.block)}がブロック`, `※${HERO[bh.id].name}が、タワーへの攻撃を代わりに受け止める（前衛1人につき、相手のターンに1回）`);
+      step(state, `ブロック：${HERO[bh.id].name}`, true, { p: q, k: resp.block });
+    } else if (resp && resp.skill != null) {
       const err = checkResponse(state, q, resp);
       if (err) return { error: err };
       const kh = P[q].heroes[resp.skill];
@@ -555,6 +575,11 @@
     }
     if (def) applyCard(state, p, def, pd.target);
     else applySkill(state, p, pd.k, pd.target);
+    // ブロックの反撃（設定があるときだけ）
+    if (BLOCK_COUNTER && blocker != null && !state.over) {
+      const bh = P[q].heroes[blocker];
+      if (!bh.ko && !h.ko) { state.log.push('ブロックからの反撃'); damage(state, p, pd.k, bh.atk, `${HERO[bh.id].name}の反撃`); }
+    }
     step(state, title, true, { p, k: pd.k });
     return { done: true };
   }
@@ -592,6 +617,7 @@
       for (const t of def.target === 'ally' ? [0, 1] : [null]) { const r = { uid: c.uid, target: t }; if (!checkResponse(state, q, r)) out.push(r); }
     }
     for (let k = 0; k < 2; k++) { const r = { skill: k }; if (!checkResponse(state, q, r)) out.push(r); }
+    for (let k = 0; k < 2; k++) { const r = { block: k }; if (!checkResponse(state, q, r)) out.push(r); }
     return out;
   }
 
@@ -673,7 +699,7 @@
 
   const api = {
     MAX_ROUND, HAND_SIZE, MANA_MAX, SKILL_COST, TOWER, TOWER_HP, TOWER_COUNTER, HEROES, HERO, CARDS, CARD, POS_NAME, CPU_TEAMS,
-    REVIVE_WAIT, MOVE_COST, KO_TOWER, COUNTER_ONCE, validateTeam, newGame, view, towerDefended, check, checkCard, checkResponse, act, respond, endTurn, actions, responses,
+    REVIVE_WAIT, MOVE_COST, KO_TOWER, COUNTER_ONCE, BLOCK_COUNTER, validateTeam, newGame, view, towerDefended, check, checkCard, checkResponse, act, respond, endTurn, actions, responses,
     cpuAction, cpuResponse, cardHero, findCard,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

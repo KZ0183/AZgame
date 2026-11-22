@@ -275,7 +275,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     app.innerHTML = `<section class="screen title">
       <header><h1>ふたりの英雄</h1><p class="muted">二人を選び、前と後ろに立たせて戦う。</p></header>
       <ul class="points">
-        <li><b>相手のタワーを壊したら勝ち。</b>前衛に誰かいるあいだ、タワーは殴ると反撃してくる</li>
+        <li><b>相手のタワーを壊したら勝ち。</b>タワーへの攻撃は、前衛のヒーローが<b>ブロック</b>して代わりに受けられる</li>
         <li>自分のターンに<b>カード・固有スキル・移動</b>を1つずつ使う。カードは各ヒーロー2枚ずつ、決まった順番で巡回する</li>
         <li>相手が攻撃してきたら、残したマナで<b>対応</b>カードを割り込ませられる</li>
       </ul>
@@ -303,8 +303,9 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       <div class="rules-scroll">
         ${sec('勝ち方', [
           `お互いの陣地にタワー（HP${E.TOWER_HP}）がある。<b>相手のタワーを壊したら勝ち</b>`,
-          `前衛に誰かいるあいだにタワーを殴ると、殴ったヒーローに<b>${E.TOWER_COUNTER}ダメージの反撃</b>。反撃は1ターンに1回だけ`,
-          '前衛が空のタワーは無防備で、反撃しない',
+          'タワーへの攻撃は、前衛のヒーローが<b>ブロック</b>できる。その攻撃はタワーではなく、ブロックしたヒーローに当たる',
+          'ブロックはマナ不要。前衛1人につき、相手のターンに1回まで。ブロックしたヒーローは反撃しない',
+          '前衛が空のタワーは無防備で、ブロックできない',
           `相手のヒーローを倒すと、相手のタワーにも${E.KO_TOWER}ダメージ`,
           `${E.MAX_ROUND}ラウンドで決まらなければ、タワーの残りHPで判定`,
         ])}
@@ -328,8 +329,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
           `巡回とは別に、各ヒーローが1ターン1回使える（${E.SKILL_COST}マナ）`,
           ...E.HEROES.map((h) => `${h.name}「${esc(h.skill.name)}」：${esc(h.skill.text)}`),
         ])}
-        ${sec('対応', [
-          '相手が攻撃してきたら、<span class="tag resp">対応</span>の付いたカードかスキルを1つ割り込ませられる。対応が先に処理される',
+        ${sec('対応とブロック', [
+          '相手が攻撃してきたら、<span class="tag resp">対応</span>の付いたカードかスキル、またはタワーへの攻撃なら<b>ブロック</b>を1つ割り込ませられる。対応が先に処理される',
           '受付は5秒。対応できなくても同じだけ待つ（手札を読まれないように）',
           '対応への対応はない',
         ])}
@@ -542,6 +543,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     if (h.guard != null) flags.push(['hot', 'かばわれ中']);
     if (h.focus) flags.push(['hot', `次の攻撃+${h.focus}`]);
     if (p === v.active && !h.ko) { if (h.attacked) flags.push(['', 'スキル済']); if (h.moved) flags.push(['', '移動済']); }
+    if (p !== v.active && h.blocked) flags.push(['', 'ブロック済']);
     const pct = Math.max(0, h.hp / h.maxHp * 100);
     return `<div class="${cls.join(' ')}" data-hero="${p}-${k}" role="button" tabindex="0" aria-label="${p === 0 ? 'あなた' : '相手'}の${def.name}">
       <span class="nm"><b>${def.name}</b><span class="sk">${esc(def.skill.name)}</span></span>
@@ -555,7 +557,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const hits = ctx.hits.filter((x) => x.p === p && x.k === E.TOWER);
     const marks = ctx.marks[p][E.TOWER];
     const pct = Math.max(0, pl.tower / E.TOWER_HP * 100);
-    const state = !pl.defended ? '無防備！' : E.COUNTER_ONCE && v.countered && p !== v.active ? '反撃済み' : `守り・反撃${E.TOWER_COUNTER}`;
+    const state = !pl.defended ? '無防備！' : `ブロック${pl.blockers}`;
     const cls = ['tower', pl.defended ? '' : 'open',
       ctx.targets.some((t) => t.p === p && t.k === E.TOWER) ? 'target' : '',
       focus && focus.p === p && focus.k === E.TOWER ? 'focus' : '', hits.some((x) => x.hit) ? 'shake' : ''].filter(Boolean);
@@ -705,10 +707,15 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       const def = C[myCard(rsel).id];
       d += `<br><b class="h">${esc(def.name)}</b>【${def.cost}】${esc(def.text)}${def.target === 'ally' ? `<br>対象：${rtarget != null ? `<b>${H[me().heroes[rtarget].id].name}</b>` : '<span class="muted">緑に光っている味方をタップ</span>'}` : ''}`;
     } else {
-      d += `<br><span class="muted">${opts.length ? '光っているカードかスキルで対応できる' : '対応できるものがない'}</span>`;
+      d += `<br><span class="muted">${opts.length ? '光っているカードか、下のボタンで対応できる' : '対応できるものがない'}</span>`;
     }
-    const guards = opts.filter((r) => r.skill != null);
-    if (guards.length) d += `<div class="acts">${guards.map((r) => { const h = me().heroes[r.skill]; return `<button class="mini solid resp" data-respskill="${r.skill}">${H[h.id].name}の「${esc(H[h.id].skill.name)}」で対応</button>`; }).join('')}</div>`;
+    const extra = opts.filter((r) => r.skill != null || r.block != null);
+    // ブロックや「かばう」のボタンは、5秒の受付中に見落とさないよう一番上に出す
+    if (extra.length) d = `<div class="acts" style="margin-top:0">${extra.map((r) => {
+      if (r.block != null) return `<button class="mini solid" data-block="${r.block}">${H[me().heroes[r.block].id].name}でブロック</button>`;
+      const h = me().heroes[r.skill];
+      return `<button class="mini solid resp" data-respskill="${r.skill}">${H[h.id].name}の「${esc(H[h.id].skill.name)}」で対応</button>`;
+    }).join('')}</div>` + d;
     const ready = rsel && (C[myCard(rsel).id].target !== 'ally' || rtarget != null);
     return {
       panel: `<div class="detail">${d}</div>`,
@@ -747,7 +754,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   // ヒーローかタワーの詳細（自分のヒーローならスキルと移動のボタン）
   function focusHTML(v) {
     if (focus.k === E.TOWER) {
-      return `<b class="h">${focus.p === 0 ? 'あなた' : '相手'}のタワー</b>　HP ${Math.max(0, v.players[focus.p].tower)}/${E.TOWER_HP}<br><span class="muted">壊されたら負け。前衛に誰かいるあいだは、殴ったヒーローに${E.TOWER_COUNTER}ダメージの反撃（1ターンに1回）。</span>`;
+      return `<b class="h">${focus.p === 0 ? 'あなた' : '相手'}のタワー</b>　HP ${Math.max(0, v.players[focus.p].tower)}/${E.TOWER_HP}<br><span class="muted">壊されたら負け。タワーへの攻撃は、前衛のヒーローがブロックして代わりに受けられる（前衛1人につき、相手のターンに1回）。前衛が空なら無防備。</span>`;
     }
     const h = v.players[focus.p].heroes[focus.k];
     if (focus.p === 1 && !h.revealed) return '<b class="h">正体不明の後衛</b><br><span class="muted">前衛に出るか、行動するか、ダメージを受けると正体が分かる。</span>';
@@ -840,6 +847,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       render();
     });
     app.querySelectorAll('[data-respskill]').forEach((b) => b.onclick = () => sendResponse({ skill: +b.dataset.respskill }));
+    app.querySelectorAll('[data-block]').forEach((b) => b.onclick = () => sendResponse({ block: +b.dataset.block }));
     on('skill', () => { mode = 'skill'; ptarget = null; render(); });
     on('move', () => doMine({ type: 'move', k: focus.k }));
     on('use', () => {
