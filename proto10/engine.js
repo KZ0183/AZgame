@@ -138,7 +138,6 @@
       log: [], steps: [],
       uid: 1,
       nextUid() { return this.uid++; },
-      rng,
     };
     state.decks = state.heroes.map((h, k) => {
       const order = ((mods[k] && mods[k].cards) || HERO[h.id].cards).slice();
@@ -230,6 +229,7 @@
   // ── ターン ──
   function startTurn(state) {
     state.mana = MANA;
+    state.decks.forEach((d) => d.hand.forEach((c) => { if (c) delete c.fresh; }));   // NEW の印は、引いたターンの間だけ
     state.log.push(`ターン${state.round}（マナ${state.mana}）`);
     state.heroes.forEach((h, k) => {
       if (h.ko && h.wait > 0) { h.wait--; state.log.push(`${hname(state, k)}は休んでいる（復活まで、あと${h.wait + 1}ターン）`); }
@@ -505,9 +505,8 @@
   // ── 自動プレイ（調整用） ──
   // 自分の行動のあと、敵の予告まで処理した盤面で評価し、良くなる限り行動を重ねる
   function clone(state) {
-    const s = JSON.parse(JSON.stringify({ ...state, nextUid: undefined, rng: undefined, steps: undefined, log: undefined, _hits: undefined, _aim: undefined }));
+    const s = JSON.parse(JSON.stringify({ ...state, nextUid: undefined, steps: undefined, log: undefined, _hits: undefined, _aim: undefined }));
     s.nextUid = function () { return this.uid++; };
-    s.rng = () => 0.5;
     begin(s);
     return s;
   }
@@ -583,7 +582,7 @@
   }
   // replace = カードの報酬で、入れ替える元のカード id
   function applyReward(run, opt, replace) {
-    const m = opt.k != null ? run.mods[opt.k] : null;
+    const m = run.mods[opt.k];
     if (opt.type === 'card') { const i = m.cards.indexOf(replace); if (i >= 0) m.cards[i] = opt.card; }
     else if (opt.type === 'up') { if (opt.what === 'skill') m.up = true; else m.hp += HP_UP; }
   }

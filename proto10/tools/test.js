@@ -33,7 +33,7 @@ const tough = (g) => g.heroes.forEach((h) => { h.hp = h.maxHp = 50; });
 
 // ── 予告の当たり先 ──
 {
-  const g = setup(['knight', 'mage'], 0, 'golem');           // 騎士が前衛、魔術師が後衛。予告は「前衛へ6」
+  const g = setup(['knight', 'mage'], 0, 'golem');           // 騎士が前衛、魔術師が後衛。最初の予告は前衛への攻撃
   eq('前衛へ攻撃は前衛だけ', E.intent(g).targets, [{ k: 0 }]);
   E.endTurn(g);
   eq('前衛へ攻撃のダメージ', [g.heroes[0].hp, g.heroes[1].hp], [KN - N('golem', 0), E.HERO.mage.hp]);
@@ -46,13 +46,13 @@ const tough = (g) => g.heroes.forEach((h) => { h.hp = h.maxHp = 50; });
   eq('ライフに当たる', g.life, 20 - N('golem', 0));
 }
 {
-  const g = setup(['knight', 'mage'], 0, 'spider');          // 後衛へ7
+  const g = setup(['knight', 'mage'], 0, 'spider');          // 最初の予告は後衛への攻撃
   eq('後衛へ攻撃は後衛だけ', E.intent(g).targets, [{ k: 1 }]);
   E.act(g, { type: 'move', k: 1 });
   eq('後衛が空ならライフ', E.intent(g).targets, [{ life: true }]);
 }
 {
-  const g = setup(['knight', 'sword'], 0, 'dragon');         // 強打8
+  const g = setup(['knight', 'sword'], 0, 'dragon');         // 最初の予告は強打
   E.act(g, { type: 'move', k: 1 });                          // 2人とも前衛。HPが高いのは騎士
   eq('強打はHPが高い前衛', E.intent(g).targets.map((t) => t.k), [0]);
   g.heroes[0].hp = 5;
@@ -79,7 +79,7 @@ const tough = (g) => g.heroes.forEach((h) => { h.hp = h.maxHp = 50; });
   eq('反撃は次のターンに消える', g.heroes[0].counter, 0);
 }
 {
-  const g = setup(['knight', 'mage'], 0, 'spider');          // 後衛へ7 → 魔術師
+  const g = setup(['knight', 'mage'], 0, 'spider');          // 後衛への攻撃 → 魔術師
   tough(g);
   E.act(g, { type: 'skill', k: 0, target: 1 });              // かばう
   eq('かばうで後衛への攻撃も騎士へ', E.intent(g).targets, [{ k: 0, why: 'かばう', from: 1 }]);
@@ -110,7 +110,7 @@ ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), 
 // ── 盾・溜め・弱体・身を固める ──
 {
   const g = setup(['knight', 'saint'], 0, 'golem', [['kn_guard', 'kn_bash'], null]);
-  play(g, 'kn_guard', 0);                                    // 盾4、予告は前衛へ6
+  play(g, 'kn_guard', 0);                                    // 盾4、予告は前衛への攻撃
   E.endTurn(g);
   eq('盾が先に減る', [g.heroes[0].hp, g.heroes[0].shield], [KN - (N('golem', 0) - 4), 0]);
 }
@@ -310,7 +310,7 @@ ok('自分はかばえない', !!E.check(setup(['knight', 'mage'], 0, 'golem'), 
     const a = ids[Math.floor(r() * 5)]; let b = ids[Math.floor(r() * 5)]; if (a === b) b = ids[(ids.indexOf(a) + 1) % 5];
     const run = E.newRun({ heroes: [a, b], front: Math.floor(r() * 2) }, r);
     // 報酬を先に適当に入れておく
-    for (let i = 0; i < 2; i++) { const o = E.rewardOptions(run, r)[Math.floor(r() * 2)]; E.applyReward(run, o, o.type === 'card' ? run.mods[o.k].cards[Math.floor(r() * 4)] : null); }
+    for (let i = 0; i < 2; i++) { run.offer = null; const o = E.rewardOptions(run, r)[Math.floor(r() * 3)]; E.applyReward(run, o, o.type === 'card' ? run.mods[o.k].cards[Math.floor(r() * 4)] : null); }
     while (!run.over) {
       const g = E.runFight(run, r);
       const deck0 = g.decks.map((d) => d.hand.map((c) => c.id).concat(d.queue).sort().join());

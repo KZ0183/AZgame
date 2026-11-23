@@ -74,4 +74,4 @@ function playFight(E, g, stats, opt) {
   return g;
 }
 
-module.exports = { planTurn, playFight, greedyTurn };
+module.exports = { planTurn, playFight };

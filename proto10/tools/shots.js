@@ -90,6 +90,9 @@ fs.copyFileSync(path.join(root, 'tools', 'bot.js'), path.join(out, 'bot.js'));
     await shot('01-title');
     await p.click('#rules'); await shot('02-rules'); await p.click('#back');
     await p.click('#pick'); await shot('03-pick'); await p.click('#back');
+    // 1人外したまま「戻る」でも、タイトルに戻れる（選ぶ前の組のまま）
+    await p.click('#pick'); await p.click('[data-hero][aria-pressed="true"]'); await p.click('#back');
+    if (!(await p.$('#go'))) errs.push('ヒーローを1人外して「戻る」でタイトルに戻れない');
     await p.click('#go'); await shot('04-route');
     const log = [];
     for (let fight = 0; fight < 3; fight++) {
@@ -102,6 +105,7 @@ fs.copyFileSync(path.join(root, 'tools', 'bot.js'), path.join(out, 'bot.js'));
         if (fight === 0 && turn === 1) await shot('06-my-turn');
         const seq = await p.evaluate(() => window.Bot.planTurn(window.Engine, window.__dbg.game));
         let auto = false;
+        const round0 = await p.evaluate(() => window.__dbg.game.round);
         for (const a of seq) {
           if (await p.$('.overlay')) break;
           if (await p.$('#next')) { auto = true; break; }      // マナ0で自動的にターンが終わった
@@ -125,7 +129,7 @@ fs.copyFileSync(path.join(root, 'tools', 'bot.js'), path.join(out, 'bot.js'));
           await skipPlay(null);
         }
         if (await p.$('.overlay')) break;
-        if (!auto && await p.$('#endturn')) {
+        if (!auto && await p.$('#endturn') && round0 === await p.evaluate(() => window.__dbg.game.round)) {   // 自動でターンが終わっていたら押さない
           if (!did.enemy) { did.enemy = 1; await p.click('[data-target="enemy"]'); await shot('12-enemy-focus'); await p.click('#cancel'); }
           await p.click('#endturn');
         }

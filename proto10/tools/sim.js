@@ -40,7 +40,7 @@ pairs.forEach((team, idx) => {
       const g = E.runFight(run);
       fight(g, rec.stats);
       const more = E.endFight(run, g);
-      rec.fights.push({ stage: st, foe: g.enemy.id, rounds: g.round, win: g.winner === 0, life: run.life, kos: g.kos || 0 });
+      rec.fights.push({ stage: st, foe: g.enemy.id, rounds: g.round, win: g.winner === 0, life: run.life });
       if (more) {
         const opts = E.rewardOptions(run);
         // 報酬はランダム。REWARD=card|up|hp で取り方を固定できる。あとで「選んだ報酬ごとのクリア率」を見る
@@ -52,7 +52,7 @@ pairs.forEach((team, idx) => {
         const OUT = { sw_cleave: ['sw_lunge', 'sw_double'], sw_parry: ['sw_double', 'sw_lunge'], st_sanctum: ['st_bless', 'st_heal'], st_judge: ['st_heal', 'st_bless'], kn_charge: ['kn_taunt', 'kn_wall'], kn_stand: ['kn_taunt', 'kn_wall'], mg_frost: ['mg_thunder', 'mg_flame'], mg_meteor: ['mg_thunder', 'mg_flame'], rg_poison: ['rg_backstab', 'rg_trip'], rg_pick: ['rg_dagger', 'rg_trip'] };
         const rep = o.type === 'card' ? (OUT[o.card].find((c) => run.mods[o.k].cards.includes(c)) || run.mods[o.k].cards[0]) : null;
         E.applyReward(run, o, rep);
-        rec.rewards.push({ type: kind(o), what: o.what || null, card: o.card || null, rep, hero: o.k != null ? run.heroes[o.k] : null });
+        rec.rewards.push({ type: kind(o), what: o.what || null, card: o.card || null, rep, hero: run.heroes[o.k] });
       }
     }
     rec.won = run.won; rec.life = run.life;

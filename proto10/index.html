@@ -46,7 +46,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .btn.ghost { background: transparent; color: var(--brass); }
 .btn:disabled { opacity: .4; cursor: default; }
 .mini { border: 1px solid var(--brass); background: transparent; color: var(--brass); border-radius: 8px; min-height: 40px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
-.mini.on, .mini.solid { background: var(--brass); color: var(--bg); font-weight: 700; }
+.mini.on { background: var(--brass); color: var(--bg); font-weight: 700; }
 .mini:disabled { border-color: var(--line); background: transparent; color: var(--muted); font-weight: 400; cursor: default; }
 .seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .seg button { background: transparent; border: 0; min-height: 40px; padding: 7px 12px; cursor: pointer; color: var(--muted); font-size: 12px; }
@@ -137,7 +137,6 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .flags i { font-style: normal; font-size: 10px; padding: 0 5px; border-radius: 4px; line-height: 15px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .flags i.hot { border-color: var(--brass); color: var(--brass); }
 .aim { position: absolute; right: 4px; bottom: 4px; max-width: 75%; font-size: 10px; border-radius: 5px; padding: 1px 5px; background: var(--bad); color: var(--bg); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 1; }
-.aim.mine { background: var(--brass); }
 .aim.safe { background: var(--good); }
 
 /* ライフ */
@@ -164,8 +163,6 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 @keyframes march { to { stroke-dashoffset: -16; } }
 
 /* マナ・手札・説明・ボタン */
-.bar { display: flex; align-items: center; gap: 8px; background: var(--panel); border-radius: 10px; padding: 4px 12px; min-height: 26px; }
-.bar .who { font-weight: 700; font-size: 13px; }
 .mana { display: inline-flex; align-items: center; gap: 8px; }
 .gems { display: inline-flex; gap: 5px; align-items: center; }
 .gem { width: 11px; height: 11px; transform: rotate(45deg); border: 1.5px solid var(--brass); border-radius: 2px; box-sizing: border-box; background: var(--brass); box-shadow: 0 0 6px color-mix(in srgb, var(--brass) 55%, transparent); }
@@ -189,7 +186,6 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .card.move { align-items: center; justify-content: center; text-align: center; border-top-color: var(--line); padding: 2px; }
 .card.move b { font-size: 10.5px; }
 .card.move .arw { font-size: 13px; color: var(--brass); line-height: 1; }
-.card .kind { font-size: 8.5px; color: var(--muted); line-height: 1.1; }
 .turnline .mana b { font-size: 15px; }
 .turnline .gem { width: 9px; height: 9px; }
 .intent.now { border-style: dashed; }
@@ -204,7 +200,6 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .detail ul { margin: 3px 0 0; padding-left: 1.1em; }
 .detail li.why { list-style: none; margin-left: -1.1em; padding: 4px 8px; margin-block: 3px; border-radius: 6px; background: color-mix(in srgb, var(--brass) 12%, transparent); }
 .whytag { display: inline-block; font-size: 10px; font-weight: 700; color: var(--bg); background: var(--brass); border-radius: 4px; padding: 0 5px; margin-right: 6px; letter-spacing: .1em; }
-.detail .acts { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 2px; }
 .act { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
 
 /* 演出 */
@@ -380,7 +375,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     get(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
     set(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch {} },
   };
-  let team = (() => { const t = store.get('futari-pve-team'); return t && !E.validateTeam(t).length ? t : { heroes: ['knight', 'sword'], front: 1 }; })();
+  const loadTeam = () => { const t = store.get('futari-pve-team'); return t && !E.validateTeam(t).length ? t : { heroes: ['knight', 'sword'], front: 1 }; };
+  let team = loadTeam();
   let settings = (() => { const v = store.get('futari-pve-settings'); return { auto: !(v && v.auto === false) }; })();
 
   // ── 共通の部品 ──
@@ -395,7 +391,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     </div>`;
   };
   // 敵の行動の短い名前（「強打9」など）
-  const actShort = (a) => ['front', 'back', 'strong', 'all'].includes(a.type) ? `${E.ACT_NAME[a.type]}${a.n}` : `${E.ACT_NAME[a.type]}${a.n}`;
+  const actShort = (a) => `${E.ACT_NAME[a.type]}${a.n}`;
   const chainHTML = (pattern) => `<div class="chain">${pattern.map((a) => `<span class="${a.type === 'charge' || a.type === 'guard' ? '' : 'atk'}">${actShort(a)}</span>`).join('<span style="border:0;padding:0;color:var(--muted)">→</span>')}</div>`;
 
   // ── タイトル ──
@@ -434,7 +430,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         ${sec('冒険', [
           '<b>3連戦</b>：普通の敵2体（3体の中からランダム。HPは第1戦' + E.RUN_HP[0] + '、第2戦' + E.RUN_HP[1] + '）のあと、ボス「' + E.BOSS.name + '」（HP' + E.BOSS.hp + '）と戦う',
           'ライフは戦闘をまたいで持ち越す。ヒーローのHPは戦闘ごとに全快する。どの戦闘も、前衛1人・後衛1人の並びで始まる（戦闘の前に入れ替えられる）',
-          '勝つたびに報酬を1つ選ぶ：<b>新しいカード</b>（片方のヒーローの新カード。今のカード1枚と入れ替える。4枚のまま）／<b>固有スキルの強化</b>（もう片方のヒーロー。強化済みなら最大HP+2）／<b>最大HP+2</b>（新カードと同じ側のヒーロー）。ライフを回復する手段はない',
+          '勝つたびに報酬を1つ選ぶ：<b>新しいカード</b>（片方のヒーローの新カード。今のカード1枚と入れ替える。4枚のまま）／<b>固有スキルの強化</b>（もう片方のヒーロー。強化済みなら最大HP+' + E.HP_UP + '）／<b>最大HP+' + E.HP_UP + '</b>（新カードと同じ側のヒーロー）。ライフを回復する手段はない',
           'ボスはHPが半分以下になると本気を出し、予告の巡回が別のものに変わって最初から始まる。溜めていたぶんは消える。怒り・毒・弱体はそのまま続く',
         ])}
         ${sec('敵の予告', [
@@ -466,7 +462,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         ])}
         ${sec('カードの巡回', [
           `各ヒーローは4枚のカードを決まった順番で巡回させる。手札は各ヒーロー${E.HAND_SIZE}枚。順番は戦闘ごとにランダムに決まる`,
-          '使ったカードは順番の最後へ回り、同じ場所に次のカードが入る（入ったばかりのカードには NEW の印が付く）。次に来るカードは、手札の左のヒーロー名の下に見えている',
+          '使ったカードは順番の最後へ回り、同じ場所に次のカードが入る（入ったカードには、そのターンの間 NEW の印が付く）。次に来るカードは、手札の左のヒーロー名の下に見えている',
         ])}
       </div>
       <div class="foot"><button class="btn" id="back">戻る</button></div>
@@ -499,7 +495,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       app.querySelector('.scroll').scrollTop = y;
     });
     app.querySelectorAll('[data-front]').forEach((b) => b.onclick = () => { team.front = +b.dataset.front; pick(); });
-    document.getElementById('back').onclick = () => { if (!E.validateTeam(team).length) store.set('futari-pve-team', team); title(); };
+    // 2人そろっていないまま戻ったら、選ぶ前の組に戻す
+    document.getElementById('back').onclick = () => { if (!E.validateTeam(team).length) store.set('futari-pve-team', team); else team = loadTeam(); title(); };
     document.getElementById('ok').onclick = () => { store.set('futari-pve-team', team); title(); };
   }
 
@@ -559,15 +556,14 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const opts = E.rewardOptions(run);
     const label = (o) => {
       if (o.type === 'card') { const c = C[o.card]; return ['新しいカード', `${H[run.heroes[o.k]].name}：${c.name}`, `【${c.cost}${c.pos === 'front' ? '・前衛' : ''}】${c.text}<br><span class="muted">今のカード1枚と入れ替える（4枚のまま）。次の画面で外すカードを選ぶ</span>`, H[run.heroes[o.k]].color]; }
-      if (o.type === 'up') { const id = run.heroes[o.k]; return o.what === 'skill'
+      const id = run.heroes[o.k]; return o.what === 'skill'
         ? ['強化', `${H[id].name}：固有スキル強化`, `「${H[id].skill.name}」${H[id].skill.text} → <b>${E.SKILL_UP[id]}</b>`, H[id].color]
-        : ['強化', `${H[id].name}：最大HP+${E.HP_UP}`, `HP ${H[id].hp + run.mods[o.k].hp} → ${H[id].hp + run.mods[o.k].hp + E.HP_UP}`, H[id].color]; }
-      return ['', '', '', null];
+        : ['強化', `${H[id].name}：最大HP+${E.HP_UP}`, `HP ${H[id].hp + run.mods[o.k].hp} → ${H[id].hp + run.mods[o.k].hp + E.HP_UP}`, H[id].color];
     };
     app.innerHTML = `<section class="screen">
       <div class="row"><h2 style="font-size:24px">報酬を1つ選ぶ</h2></div>
       ${routeHTML()}${lifeBoxHTML()}
-      <div class="scroll">${opts.map((o, i) => { const [kind, head, body, color] = label(o); return `<button class="reward${color ? ` c-${color}` : ''}" data-opt="${i}" aria-pressed="${pick === i}">
+      <div class="scroll">${opts.map((o, i) => { const [kind, head, body, color] = label(o); return `<button class="reward c-${color}" data-opt="${i}" aria-pressed="${pick === i}">
         <span class="rk">${kind}</span><b>${esc(head)}</b><p>${body}</p></button>`; }).join('')}
         <div class="sub">今の手持ち（見るだけ）</div>${partyHTML()}</div>
       <div class="foot"><button class="btn" id="take" ${pick == null ? 'disabled' : ''}>${pick == null ? '報酬を選ぶ' : opts[pick].type === 'card' ? '外すカードを選ぶ' : 'これにする'}</button></div>
@@ -638,13 +634,13 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     if (!steps.length) { play = null; return after(); }
     showStep();
   }
-  function showStep(resumed) {
+  function showStep() {
     const st = play.steps[play.i];
     render();
     clearTimeout(autoTimer);
     if (!settings.auto) return;
     if (paused) return;
-    if (overflowed && !resumed) { paused = true; return render(); }   // 説明が入り切らない場面は、自動で止めて読めるようにする
+    if (overflowed) { paused = true; return render(); }   // 説明が入り切らない場面は、自動で止めて読めるようにする
     // 読む時間は行数で決める
     autoTimer = setTimeout(advance, Math.max(1300, 800 + st.lines.join('').length * 75));
   }
@@ -659,6 +655,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   }
   function skipAll() {
     clearTimeout(autoTimer);
+    if (!play) return;
     play.i = play.steps.length - 1;
     render();
     if (settings.auto) autoTimer = setTimeout(advance, 600);
@@ -788,7 +785,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     const field = app.querySelector('.field');
     if (!field || !list.length) return;
     const fr = field.getBoundingClientRect();
-    const color = { foe: 'var(--bad)', mine: 'var(--brass)', ally: 'var(--good)' };
+    const color = { foe: 'var(--bad)', mine: 'var(--brass)' };
     const find = (pt) => pt.p === 1 ? field.querySelector('[data-target="enemy"]') : pt.k === 'life' ? field.querySelector('[data-life]') : field.querySelector(`[data-hero="${pt.k}"]`);
     const defs = Object.entries(color).map(([kind, c]) => `<marker id="ah-${kind}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:${c}"/></marker>`).join('');
     let body = '';
@@ -878,7 +875,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     } else if (mode === 'skill' && focus != null) {
       const sk = E.skillOf(game.heroes[focus]);
       const blocked = [0, 1, 'enemy', null].map((t) => E.check(game, { type: 'skill', k: focus, target: t }));
-      const no = blocked.every(Boolean) ? blocked.find((x) => x && x !== '対象が不正' && x !== '自分はかばえない') || blocked[0] : null;
+      const no = blocked.every(Boolean) ? blocked.find((x) => x && x !== '対象が不正') || blocked[0] : null;
       const err = no || (ptarget != null ? E.check(game, { type: 'skill', k: focus, target: ptarget }) : '対象を選ぶ');
       d = `<b class="h">固有スキル「${esc(sk.name)}」</b>${skillTag(sk)}${esc(sk.text)}<br>`
         + (no ? `<span class="err">使えない：${esc(no)}</span>` : ptarget != null ? `→ <b>${tname(ptarget)}</b>` : `<span class="muted">${sk.target === 'ally' ? '緑に光っている味方' : '敵'}をタップ</span>`);
