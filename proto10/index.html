@@ -295,7 +295,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 .hero .pop { font-size: 20px; }
 .hero.target { box-shadow: none; border-style: dashed; border-color: var(--good); }
 .hero.picked { box-shadow: 0 0 0 2px var(--good) inset; border-style: solid; background: color-mix(in srgb, var(--good) 18%, var(--panel)); }
-.hero.picked .nm b::after { content: " ✓"; color: var(--good); }
+.hero.picked::after { content: "✓ 対象"; position: absolute; right: 6px; bottom: 8px; font-size: 11px; font-weight: 700; color: var(--good); }
 .hrow { grid-template-columns: 66px 1fr 1fr 1fr 46px; }
 .enemy .eh .fore { margin-left: auto; font-size: 11px; color: var(--good); border: 1px solid var(--good); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
 .enemy .eh .fore + .hpn { margin-left: 0; }
@@ -324,6 +324,15 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 @keyframes foreback { from { visibility: hidden; } to { visibility: visible; } }
 .detail.more::after { white-space: nowrap; overflow: hidden; background: linear-gradient(to bottom, transparent, var(--panel) 40%, var(--panel)); padding-top: 18px; }
 .sum .nw { white-space: nowrap; }
+
+/* 6回目の画面レビュー（合格）の軽微な指摘 */
+.battle:not(.play) .detail { padding: 5px 12px; line-height: 1.45; }
+.battle:not(.play) .detail li.why { padding: 1px 8px; margin-block: 1px; }
+.detail .fl { margin: 0; padding: 0; list-style: none; }
+.detail .fl li { padding: 0; }
+.detail .fl .t { color: var(--brass); font-weight: 700; margin-right: 6px; }
+.life .pops { inset: 2px 64px auto auto; flex-direction: row; }
+.life .pop { font-size: 20px; }
 
 /* 道のり・報酬 */
 .route { display: flex; gap: 6px; }
@@ -704,7 +713,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
 
     const atk = it.dmg != null;
     const aimed = [...new Set((ctx.aim || []).filter((a) => a.p === 0).map((a) => a.k === 'life' ? 'あなたのライフ' : H[v.heroes[a.k].id].name))];
-    const who = ctx.did ? (aimed.join('・') || 'なし') : atk ? (it.targets.length ? it.targets.map((t) => t.life ? 'あなたのライフ' : `${H[v.heroes[t.k].id].name}${t.why && t.why.length <= 4 ? `（${t.why}）` : ''}`).join('・') : 'なし') : '';
+    const who = ctx.did ? (aimed.join('・') || 'なし') : atk ? (it.targets.length ? it.targets.map((t) => t.life ? 'あなたのライフ' : `${H[v.heroes[t.k].id].name}${t.from != null ? `（${H[v.heroes[t.from].id].name}をかばう）` : t.why === '挑発' ? '（挑発）' : t.why && t.why.includes('同じ') ? '（同HP・左）' : t.why ? '（HP高）' : ''}`).join('・') : 'なし') : '';
     const pat = E.patternOf(e);
     const up = [1, 2].map((d) => pat[(e.step + d) % pat.length]).map(actShort).join(' → ');
     const cls = ['enemy', hits.length ? 'hit' : '', ctx.targets.some((t) => t === 'enemy') ? 'target' : '', hits.some((x) => x.hit) ? 'shake' : '', ctx.actor && ctx.actor.p === 1 ? 'lunge-down' : ''].filter(Boolean);
@@ -812,7 +821,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     return `<div class="turnline ${foe ? 'foe' : 'me'}" role="status" aria-live="polite">
       <span class="tl-round">ターン${v.round}</span>
       <span class="tl-who">${foe ? '▼ 敵の行動' : '▲ あなたのターン'}</span>
-      ${phase === 'mine' ? manaHTML(v.mana) : `<span class="tl-phase">${ph}</span>`}</div>`;
+      ${phase === 'mine' ? manaHTML(v.mana) : `<span class="tl-phase">${paused ? '停止中' : ph}</span>`}</div>`;
   }
 
   function manaHTML(n) {
@@ -851,7 +860,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         if (!hs.length) continue;
         const n = hs.reduce((a, h) => a + h.n, 0);
         const ko = x.hits.some((h) => h.p === 0 && h.k === k && h.label === '倒れた');
-        parts.push(`${k === 'life' ? 'ライフ' : H[x.view.heroes[k].id].name} ${n === 0 ? '防いだ' : '−' + -n}${ko ? ' 倒れた' : ''}`);
+        parts.push(`${k === 'life' ? 'ライフ' : H[x.view.heroes[k].id].name} ${ko ? `倒れた（HP${-n}→0）` : n === 0 ? '防いだ' : '−' + -n}`);
       }
       const back = x.hits.filter((h) => h.p === 1 && h.n != null).reduce((a, h) => a + h.n, 0);
       if (back) parts.push(`反撃 −${-back}`);
@@ -894,7 +903,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     } else if (!flash && lastFoe) {
       d = foeSummary(lastFoe);
     } else if (flash) {
-      d = flash.map((x) => `<div class="dh"><b>${esc(x.title)}</b></div><ul>${x.lines.map((l) => l.startsWith('※') ? `<li class="why"><span class="whytag">なぜ</span>${esc(l.slice(1))}</li>` : `<li>${esc(l)}</li>`).join('')}</ul>`).join('');
+      d = flash.map((x) => `<ul class="fl">${(x.lines.length ? x.lines : ['']).map((l, i) => `<li${l.startsWith('※') ? ' class="why"' : ''}>${i === 0 ? `<span class="t">${esc(x.title)}</span>` : ''}${l.startsWith('※') ? `<span class="whytag">なぜ</span>${esc(l.slice(1))}` : esc(l)}</li>`).join('')}</ul>`).join('');
     } else {
       d = game.heroes.every((h) => h.ko) ? '<span class="muted">2人とも倒れているので、できることがない。「ターン終了」を押す。</span>'
         : '<span class="muted">赤い矢印と数字は、このままターンを終えたときに受けるダメージ。下のカード・スキル・移動を選んで「使う」。終わったら「ターン終了」で敵が動く。</span>';
