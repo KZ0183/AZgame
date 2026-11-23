@@ -229,7 +229,7 @@
   // ── ターン ──
   function startTurn(state) {
     state.mana = MANA;
-    state.decks.forEach((d) => d.hand.forEach((c) => { if (c) delete c.fresh; }));   // NEW の印は、引いたターンの間だけ
+    state.decks.forEach((d) => d.hand.forEach((c) => { delete c.fresh; }));   // NEW の印は、引いたターンの間だけ
     state.log.push(`ターン${state.round}（マナ${state.mana}）`);
     state.heroes.forEach((h, k) => {
       if (h.ko && h.wait > 0) { h.wait--; state.log.push(`${hname(state, k)}は休んでいる（復活まで、あと${h.wait + 1}ターン）`); }

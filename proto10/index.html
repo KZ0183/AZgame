@@ -375,8 +375,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     get(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
     set(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch {} },
   };
-  const loadTeam = () => { const t = store.get('futari-pve-team'); return t && !E.validateTeam(t).length ? t : { heroes: ['knight', 'sword'], front: 1 }; };
-  let team = loadTeam();
+  let team = (() => { const t = store.get('futari-pve-team'); return t && !E.validateTeam(t).length ? t : { heroes: ['knight', 'sword'], front: 1 }; })();
   let settings = (() => { const v = store.get('futari-pve-settings'); return { auto: !(v && v.auto === false) }; })();
 
   // ── 共通の部品 ──
@@ -471,7 +470,9 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
   }
 
   // ── ヒーロー選択 ──
+  let teamBefore = null;   // 選ぶ画面に入る前の組（そろえずに戻ったとき用）
   function pick() {
+    if (!teamBefore) teamBefore = { heroes: team.heroes.slice(), front: team.front };
     const ok = !E.validateTeam(team).length;
     app.innerHTML = `<section class="screen">
       <div class="row"><h2 style="font-size:24px">ヒーローを選ぶ</h2><span class="muted" style="margin-left:auto">${team.heroes.length} / 2</span></div>
@@ -496,8 +497,8 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     });
     app.querySelectorAll('[data-front]').forEach((b) => b.onclick = () => { team.front = +b.dataset.front; pick(); });
     // 2人そろっていないまま戻ったら、選ぶ前の組に戻す
-    document.getElementById('back').onclick = () => { if (!E.validateTeam(team).length) store.set('futari-pve-team', team); else team = loadTeam(); title(); };
-    document.getElementById('ok').onclick = () => { store.set('futari-pve-team', team); title(); };
+    document.getElementById('back').onclick = () => { if (!E.validateTeam(team).length) store.set('futari-pve-team', team); else team = teamBefore; teamBefore = null; title(); };
+    document.getElementById('ok').onclick = () => { store.set('futari-pve-team', team); teamBefore = null; title(); };
   }
 
   // ── 戦闘の状態 ──
@@ -658,7 +659,6 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
     if (!play) return;
     play.i = play.steps.length - 1;
     render();
-    if (settings.auto) autoTimer = setTimeout(advance, 600);
   }
   function finish() { phase = 'play'; render(); result(); }
 
