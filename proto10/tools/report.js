@@ -36,7 +36,7 @@ for (const [k, v] of Object.entries(pk)) {
 
 console.log('■ 報酬ごとのクリア率（その報酬を1回でも選んだ冒険）');
 const rw = {};
-for (const r of recs) for (const x of r.rewards) { const k = x.type === 'card' ? `カード:${E.CARD[x.card].name}` : x.type === 'up' ? `強化:${E.HERO[x.hero].name}${x.what === 'skill' ? 'スキル' : 'HP'}` : '回復'; rw[k] = rw[k] || [0, 0]; rw[k][1]++; if (r.won) rw[k][0]++; }
+for (const r of recs) for (const x of r.rewards) { const k = x.type === 'card' ? `カード:${E.CARD[x.card].name}` : `${x.type === 'up' ? 'スキル強化' : '最大HP+3'}:${E.HERO[x.hero].name}`; rw[k] = rw[k] || [0, 0]; rw[k][1]++; if (r.won) rw[k][0]++; }
 for (const [k, v] of Object.entries(rw).sort()) console.log(`  ${k} ${pct(v[0], v[1])}（${v[1]}）`);
 const typ = {};
 for (const r of recs) for (const x of r.rewards) { typ[x.type] = typ[x.type] || [0, 0]; typ[x.type][1]++; if (r.won) typ[x.type][0]++; }

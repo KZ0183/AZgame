@@ -16,13 +16,13 @@
   // ── ヒーロー ──
   // skill.target: enemy = 敵 / ally = 味方 / none。pos: front = 前衛にいるときだけ
   const HEROES = [
-    { id: 'sword', name: '剣士', color: 'red', hp: 10, cards: ['sw_slash', 'sw_focus', 'sw_lunge', 'sw_double'],
+    { id: 'sword', name: '剣士', color: 'red', hp: 11, cards: ['sw_slash', 'sw_focus', 'sw_lunge', 'sw_double'],
       skill: { name: '斬りかかる', pos: 'front', target: 'enemy', text: '敵に2ダメージ。' } },
     { id: 'saint', name: '聖女', color: 'gold', hp: 11, cards: ['st_heal', 'st_mace', 'st_bless', 'st_prayer'],
       skill: { name: '祈りの手', pos: 'back', target: 'ally', text: '敵に2ダメージ。味方1人のHPを1回復。' } },
     { id: 'knight', name: '守護騎士', color: 'grey', hp: 14, cards: ['kn_bash', 'kn_taunt', 'kn_guard', 'kn_wall'],
       skill: { name: 'かばう', pos: 'front', target: 'ally', text: '次の自分のターンまで、味方1人が受ける敵の攻撃を代わりに受ける。自分に盾3。' } },
-    { id: 'mage', name: '魔術師', color: 'blue', hp: 10, cards: ['mg_bolt', 'mg_flame', 'mg_meditate', 'mg_thunder'],
+    { id: 'mage', name: '魔術師', color: 'blue', hp: 11, cards: ['mg_bolt', 'mg_flame', 'mg_meditate', 'mg_thunder'],
       skill: { name: '魔弾', pos: 'back', target: 'enemy', text: '敵に3ダメージ。' } },
     { id: 'rogue', name: '盗賊', color: 'green', hp: 12, cards: ['rg_dagger', 'rg_trip', 'rg_jam', 'rg_backstab'],
       skill: { name: 'すり抜け', pos: 'front', target: 'enemy', text: '敵に2ダメージ。このターン、自分はもう1回移動できる。' } },
@@ -97,9 +97,9 @@
       pattern: [{ type: 'strong', n: 11 }, { type: 'charge', n: 5 }, { type: 'all', n: 9 }, { type: 'guard', n: 5 }, { type: 'strong', n: 11 }] },
   ];
   // ボス：HPが半分になると、予告の巡回が変わる
-  const BOSS = { id: 'lord', name: '黄昏の魔王', hp: 54, boss: true, text: 'HPが半分以下になると本気を出し、予告が変わる。',
-    pattern: [{ type: 'front', n: 11 }, { type: 'back', n: 11 }, { type: 'charge', n: 4 }, { type: 'strong', n: 14 }, { type: 'guard', n: 6 }],
-    phase2: { text: '本気を出した。', pattern: [{ type: 'all', n: 11 }, { type: 'charge', n: 5 }, { type: 'strong', n: 14 }, { type: 'back', n: 13 }] } };
+  const BOSS = { id: 'lord', name: '黄昏の魔王', hp: 52, boss: true, text: 'HPが半分以下になると本気を出し、予告が変わる。',
+    pattern: [{ type: 'front', n: 12 }, { type: 'back', n: 12 }, { type: 'charge', n: 4 }, { type: 'strong', n: 15 }, { type: 'guard', n: 6 }],
+    phase2: { text: '本気を出した。', pattern: [{ type: 'all', n: 12 }, { type: 'charge', n: 5 }, { type: 'strong', n: 15 }, { type: 'back', n: 14 }] } };
   ENEMIES.push(BOSS);
   const ENEMY = Object.fromEntries(ENEMIES.map((e) => [e.id, e]));
   // 敵の今の予告の巡回（ボスは本気になると変わる）
@@ -542,7 +542,6 @@
 
   // ── 連戦 ──
   // 3戦：普通の敵2体 → ボス。ライフは持ち越し、ヒーローのHPは戦闘ごとに全快
-  const RUN_LIFE_HEAL = 2;
   const RUN_HP = [36, 46, null];
   function newRun(team, rng) {
     rng = rng || Math.random;
@@ -565,7 +564,7 @@
     if (run.stage >= run.foes.length) { run.over = true; run.won = true; return false; }
     return true;
   }
-  // 報酬の候補を3つ。{ type:'card', k, card } / { type:'up', k, what:'skill'|'hp' } / { type:'heal' }
+  // 報酬の候補を3つ。{ type:'card', k, card } / { type:'up', k, what:'skill'|'hp' }。ライフの回復は報酬にしない（ライフは4ずつ減るので、少しの回復でも「もう1回倒れてよい」になり、常に正解になってしまう）
   function rewardOptions(run, rng) {
     if (run.offer && run.offer.stage === run.stage) return run.offer.opts;   // 引き直せない
     rng = rng || Math.random;
@@ -577,7 +576,7 @@
     if (newCards(k1).length) out.push({ type: 'card', k: k1, card: pickOf(newCards(k1)) });
     const k2 = out.length ? 1 - out[0].k : ks[0];
     out.push({ type: 'up', k: k2, what: run.mods[k2].up ? 'hp' : 'skill' });
-    out.push({ type: 'heal', n: Math.min(RUN_LIFE_HEAL, LIFE - run.life) });
+    out.push({ type: 'up', k: out[0].type === 'card' ? out[0].k : 1 - k2, what: 'hp' });
     run.offer = { stage: run.stage, opts: out };
     return out;
   }
@@ -586,12 +585,11 @@
     const m = opt.k != null ? run.mods[opt.k] : null;
     if (opt.type === 'card') { const i = m.cards.indexOf(replace); if (i >= 0) m.cards[i] = opt.card; }
     else if (opt.type === 'up') { if (opt.what === 'skill') m.up = true; else m.hp += 3; }
-    else if (opt.type === 'heal') run.life = Math.min(LIFE, run.life + RUN_LIFE_HEAL);
   }
 
   const api = {
     LIFE, HAND_SIZE, MANA, SKILL_COST, KO_LIFE, REVIVE_WAIT, ENRAGE, RAGE_EVERY, POS_NAME, HEROES, HERO, CARDS, CARD, ENEMIES, ENEMY, ACT_NAME,
-    SKILL_UP, BOSS, RUN_LIFE_HEAL, RUN_HP, skillOf, patternOf, newRun, runFight, endFight, rewardOptions, applyReward,
+    SKILL_UP, BOSS, RUN_HP, skillOf, patternOf, newRun, runFight, endFight, rewardOptions, applyReward,
     validateTeam, newGame, view, intent, check, act, endTurn, actions, findCard, botAction, clone, value, forecast,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

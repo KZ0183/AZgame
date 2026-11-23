@@ -434,7 +434,7 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
         ${sec('冒険', [
           '<b>3連戦</b>：普通の敵2体（3体の中からランダム。HPは第1戦' + E.RUN_HP[0] + '、第2戦' + E.RUN_HP[1] + '）のあと、ボス「' + E.BOSS.name + '」（HP' + E.BOSS.hp + '）と戦う',
           'ライフは戦闘をまたいで持ち越す。ヒーローのHPは戦闘ごとに全快する。どの戦闘も、前衛1人・後衛1人の並びで始まる（戦闘の前に入れ替えられる）',
-          '勝つたびに報酬を1つ選ぶ：<b>新しいカード</b>（今のカード1枚と入れ替える。4枚のまま）／<b>強化</b>（固有スキルの強化。強化済みなら最大HP+3）／<b>回復</b>（ライフ+' + E.RUN_LIFE_HEAL + '。上限' + E.LIFE + '）',
+          '勝つたびに報酬を1つ選ぶ：<b>新しいカード</b>（片方のヒーローの新カード。今のカード1枚と入れ替える。4枚のまま）／<b>固有スキルの強化</b>（もう片方のヒーロー。強化済みなら最大HP+3）／<b>最大HP+3</b>（新カードと同じ側のヒーロー）。ライフを回復する手段はない',
           'ボスはHPが半分以下になると本気を出し、予告の巡回が別のものに変わって最初から始まる。溜めていたぶんは消える。怒り・毒・弱体はそのまま続く',
         ])}
         ${sec('敵の予告', [
@@ -562,13 +562,12 @@ h1, h2 { font-family: var(--f-display); font-weight: 800; margin: 0; text-wrap: 
       if (o.type === 'up') { const id = run.heroes[o.k]; return o.what === 'skill'
         ? ['強化', `${H[id].name}：固有スキル強化`, `「${H[id].skill.name}」${H[id].skill.text} → <b>${E.SKILL_UP[id]}</b>`, H[id].color]
         : ['強化', `${H[id].name}：最大HP+3`, `HP ${H[id].hp + run.mods[o.k].hp} → ${H[id].hp + run.mods[o.k].hp + 3}`, H[id].color]; }
-      const n = Math.min(E.LIFE, run.life + E.RUN_LIFE_HEAL) - run.life;
-      return n > 0 ? ['回復', `ライフ+${n}`, `ライフ ${run.life} → ${run.life + n}`, null] : ['回復', 'ライフは満タン', '回復の必要はない', null];
+      return ['', '', '', null];
     };
     app.innerHTML = `<section class="screen">
       <div class="row"><h2 style="font-size:24px">報酬を1つ選ぶ</h2></div>
       ${routeHTML()}${lifeBoxHTML()}
-      <div class="scroll">${opts.map((o, i) => { const [kind, head, body, color] = label(o); return `<button class="reward${color ? ` c-${color}` : ''}" data-opt="${i}" aria-pressed="${pick === i}" ${o.type === 'heal' && run.life >= E.LIFE ? 'disabled' : ''}>
+      <div class="scroll">${opts.map((o, i) => { const [kind, head, body, color] = label(o); return `<button class="reward${color ? ` c-${color}` : ''}" data-opt="${i}" aria-pressed="${pick === i}">
         <span class="rk">${kind}</span><b>${esc(head)}</b><p>${body}</p></button>`; }).join('')}
         <div class="sub">今の手持ち（見るだけ）</div>${partyHTML()}</div>
       <div class="foot"><button class="btn" id="take" ${pick == null ? 'disabled' : ''}>${pick == null ? '報酬を選ぶ' : opts[pick].type === 'card' ? '外すカードを選ぶ' : 'これにする'}</button></div>
