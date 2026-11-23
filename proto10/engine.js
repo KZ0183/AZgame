@@ -29,11 +29,12 @@
   ];
   const HERO = Object.fromEntries(HEROES.map((h) => [h.id, h]));
   // 報酬で強化した固有スキル
+  const HP_UP = 2; // 報酬「最大HP+」の量
   const SKILL_UP = {
-    sword: '敵に3ダメージ。自分に盾3。',
+    sword: '敵に3ダメージ。自分に盾2。',
     saint: '敵に3ダメージ。味方1人のHPを2回復。',
     knight: '次の自分のターンまで、味方1人が受ける敵の攻撃を代わりに受ける。自分に盾4。',
-    mage: '敵に5ダメージ。',
+    mage: '敵に4ダメージ。',
     rogue: '敵に3ダメージ。このターン、自分はもう1回移動できる。',
   };
   // h = { id, up }
@@ -432,8 +433,8 @@
       state.mana -= sk.cost;
       h.skilled = true;
       switch (h.id) {
-        case 'sword': attack(state, a.k, h.up ? 3 : 2); if (h.up && !state.over) shield(state, a.k, 3, sk.name); break;
-        case 'mage': attack(state, a.k, h.up ? 5 : 3); break;
+        case 'sword': attack(state, a.k, h.up ? 3 : 2); if (h.up && !state.over) shield(state, a.k, 2, sk.name); break;
+        case 'mage': attack(state, a.k, h.up ? 4 : 3); break;
         case 'rogue': attack(state, a.k, h.up ? 3 : 2); if (!state.over) { h.moves++; mark(state, { p: 0, k: a.k, label: '移動+1回' }); state.log.push(`このターン、${hname(state, a.k)}はもう1回移動できる`); } break;
         case 'saint': attack(state, a.k, h.up ? 3 : 2); if (!state.over) heal(state, a.target, h.up ? 2 : 1, sk.name); break;
         case 'knight': state.heroes[a.target].guard = a.k; mark(state, { p: 0, k: a.target, label: 'かばわれ中' }); state.log.push(`次の自分のターンまで、${hname(state, a.k)}が${hname(state, a.target)}への敵の攻撃を代わりに受ける`); shield(state, a.k, h.up ? 4 : 3, sk.name); break;
@@ -584,12 +585,12 @@
   function applyReward(run, opt, replace) {
     const m = opt.k != null ? run.mods[opt.k] : null;
     if (opt.type === 'card') { const i = m.cards.indexOf(replace); if (i >= 0) m.cards[i] = opt.card; }
-    else if (opt.type === 'up') { if (opt.what === 'skill') m.up = true; else m.hp += 3; }
+    else if (opt.type === 'up') { if (opt.what === 'skill') m.up = true; else m.hp += HP_UP; }
   }
 
   const api = {
     LIFE, HAND_SIZE, MANA, SKILL_COST, KO_LIFE, REVIVE_WAIT, ENRAGE, RAGE_EVERY, POS_NAME, HEROES, HERO, CARDS, CARD, ENEMIES, ENEMY, ACT_NAME,
-    SKILL_UP, BOSS, RUN_HP, skillOf, patternOf, newRun, runFight, endFight, rewardOptions, applyReward,
+    SKILL_UP, HP_UP, BOSS, RUN_HP, skillOf, patternOf, newRun, runFight, endFight, rewardOptions, applyReward,
     validateTeam, newGame, view, intent, check, act, endTurn, actions, findCard, botAction, clone, value, forecast,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

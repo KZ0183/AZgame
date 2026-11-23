@@ -48,8 +48,9 @@ pairs.forEach((team, idx) => {
         const kind = (x) => x.type === 'card' ? 'card' : x.what === 'skill' ? 'up' : 'hp';
         const o = (want !== 'random' && opts.find((x) => kind(x) === want)) || opts[Math.floor(Math.random() * opts.length)];
         // 新カードの入れ替え先（rewards.sh で良かったもの）
-        const OUT = { sw_cleave: 'sw_double', sw_parry: 'sw_double', st_sanctum: 'st_bless', st_judge: 'st_bless', kn_charge: 'kn_wall', kn_stand: 'kn_wall', mg_frost: 'mg_thunder', mg_meteor: 'mg_thunder', rg_poison: 'rg_trip', rg_pick: 'rg_backstab' };
-        const rep = o.type === 'card' ? (run.mods[o.k].cards.includes(OUT[o.card]) ? OUT[o.card] : run.mods[o.k].cards[0]) : null;
+        // 1番目が無ければ2番目（同じヒーローの2枚目を取ったとき）
+        const OUT = { sw_cleave: ['sw_lunge', 'sw_double'], sw_parry: ['sw_double', 'sw_lunge'], st_sanctum: ['st_bless', 'st_heal'], st_judge: ['st_heal', 'st_bless'], kn_charge: ['kn_taunt', 'kn_wall'], kn_stand: ['kn_taunt', 'kn_wall'], mg_frost: ['mg_thunder', 'mg_flame'], mg_meteor: ['mg_thunder', 'mg_flame'], rg_poison: ['rg_backstab', 'rg_trip'], rg_pick: ['rg_dagger', 'rg_trip'] };
+        const rep = o.type === 'card' ? (OUT[o.card].find((c) => run.mods[o.k].cards.includes(c)) || run.mods[o.k].cards[0]) : null;
         E.applyReward(run, o, rep);
         rec.rewards.push({ type: kind(o), what: o.what || null, card: o.card || null, rep, hero: o.k != null ? run.heroes[o.k] : null });
       }
